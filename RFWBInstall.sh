@@ -52,6 +52,7 @@ chmod 700 /root/RFWB/*
 
 
 clear
+dnf -y remove git 
 cat <<EOF
  *********************************************
 
