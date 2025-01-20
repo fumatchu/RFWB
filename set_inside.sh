@@ -77,15 +77,15 @@ fi
 
 firewall-cmd --reload
 
-# Ask user if they want to set this connection to the Trusted zone
-read -p "Do you want to set this connection to the 'Trusted' zone in firewalld? (y/n): " user_confirm
+# Ask user if they want to set this connection to the 'Internal' zone
+read -p "Do you want to set this connection to the 'Internal' zone in firewalld? (y/n): " user_confirm
 
 selected_zone=""
 
 if [[ "$user_confirm" == "y" ]]; then
-  selected_zone="trusted"
-  echo -e "${GREEN}Setting $device to the 'trusted' zone...${TEXTRESET}"
-  firewall-cmd --zone=trusted --change-interface="$device" --permanent
+  selected_zone="internal"
+  echo -e "${GREEN}Setting $device to the 'internal' zone...${TEXTRESET}"
+  firewall-cmd --zone=internal --change-interface="$device" --permanent
 else
   echo -e "${YELLOW}Available firewalld zones:${TEXTRESET}"
   available_zones=$(firewall-cmd --get-zones)
