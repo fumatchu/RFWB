@@ -1,1 +1,1 @@
-test
+dnf -y install wget && cd /root &&  bash <(wget -qO- https://raw.githubusercontent.com/fumatchu/RFWB/main/RFWBInstall.sh)
