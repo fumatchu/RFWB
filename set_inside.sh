@@ -109,7 +109,7 @@ else
 fi
 
 firewall-cmd --reload
-
+systemctl restart NetworkManager
 # Display current zone configuration for the interface
 echo -e "${YELLOW}Current firewalld zone configuration for $device:${TEXTRESET}"
 firewall-cmd --get-active-zones | grep -A1 "$device"
