@@ -52,6 +52,7 @@ chmod 700 /root/RFWB/*
 
 
 clear
+echo ${RED}"Removing Git${TEXTRESET}"
 dnf -y remove git 
 cat <<EOF
  *********************************************
