@@ -51,8 +51,7 @@ if [ "${#zones[@]}" -ne 2 ]; then
   exit 1
 fi
 
-echo -e "${GREEN}Zones associated with interfaces: ${interfaces[0]} is in zone ${zones[0]}, ${interfaces[1]} is in zone ${zones[1]}${TE
-XTRESET}"
+echo -e "${GREEN}Zones associated with interfaces: ${interfaces[0]} is in zone ${zones[0]}, ${interfaces[1]} is in zone ${zones[1]}${TEXTRESET}"
 
 # Enable masquerade for each zone
 for zone in "${zones[@]}"; do
