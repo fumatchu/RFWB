@@ -36,8 +36,7 @@ echo -e "${GREEN}Outside interface: $outside_interface${TEXTRESET}"
 # Construct the firewall commands
 cmd1="firewall-cmd --permanent --direct --add-rule ipv4 nat POSTROUTING 0 -o $outside_interface -j MASQUERADE"
 cmd2="firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i $inside_interface -o $outside_interface -j ACCEPT"
-cmd3="firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i $outside_interface -o $inside_interface -m state --state RE
-LATED,ESTABLISHED -j ACCEPT"
+cmd3="firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i $outside_interface -o $inside_interface -m state --state RELATED,ESTABLISHED -j ACCEPT"
 
 # Present the commands to the user
 echo -e "${YELLOW}The following commands will be executed:${TEXTRESET}"
