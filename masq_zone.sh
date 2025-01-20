@@ -78,4 +78,14 @@ for zone in "${zones[@]}"; do
   fi
 done
 
+# Check if IP forwarding is enabled
+ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)
+if [ "$ip_forward" -ne 1 ]; then
+  echo -e "${RED}IP forwarding is not enabled. Please enable it by running 'echo 1 > /proc/sys/net/ipv4/ip_forward' and try again.${TEX
+TRESET}"
+  exit 1
+else
+  echo -e "${GREEN}IP forwarding is enabled.${TEXTRESET}"
+fi
+
 echo -e "${GREEN}Completed masquerade configuration for zones.${TEXTRESET}"
