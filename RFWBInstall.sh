@@ -48,7 +48,7 @@ mkdir /root/RFWB
 
 git clone https://github.com/fumatchu/RFWB.git /root/RFWB
 
-chmod 700 /root/RFWB/i*
+chmod 700 /root/RFWB/*
 
 
 clear
