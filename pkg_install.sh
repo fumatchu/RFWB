@@ -352,6 +352,66 @@ install_ntopng() {
     echo -e "${YELLOW}Reloading firewalld to recognize the new service...${TEXTRESET}"
     sudo firewall-cmd --reload
 }
+# Prompt user to install ntopng
+echo -e "${YELLOW}Do you want to install ntopng? (yes/no)${TEXTRESET}"
+read -p "Your choice: " user_choice
 
+if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
+    install_webmin
+else
+    echo -e "${YELLOW}Skipping ntopng installation.${TEXTRESET}"
+fi
+
+# Continue with the rest of the script
+echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+
+# Get the network interface associated with a connection name ending in '-inside'
+inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+# Check if we found the inside interface
+if [ -z "$inside_interface" ]; then
+  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+  exit 1
+fi
+
+echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+inside_zone=""
+while IFS= read -r line; do
+  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+    current_zone="${BASH_REMATCH[1]}"
+  fi
+
+  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+    inside_zone="$current_zone"
+    break
+  fi
+done < <(firewall-cmd --list-all-zones)
+
+# Check if we found the zone
+if [ -z "$inside_zone" ]; then
+  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+  exit 1
+fi
+
+echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+# Add the Webmin service to this zone
+echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
+if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
+  echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
+else
+  echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
+  exit 1
+fi
+
+# Reload the firewall to apply changes
+echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+firewall-cmd --reload
+
+# Display the services in the zone
+echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+firewall-cmd --list-services --zone="$inside_zone"
 
 
