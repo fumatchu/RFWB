@@ -352,12 +352,13 @@ install_ntopng() {
     echo -e "${YELLOW}Reloading firewalld to recognize the new service...${TEXTRESET}"
     sudo firewall-cmd --reload
 }
+
 # Prompt user to install ntopng
 echo -e "${YELLOW}Do you want to install ntopng? (yes/no)${TEXTRESET}"
 read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
-    install_webmin
+    install_ntopng
 else
     echo -e "${YELLOW}Skipping ntopng installation.${TEXTRESET}"
 fi
@@ -400,7 +401,7 @@ echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone$
 # Add the Webmin service to this zone
 echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
 if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
-  echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
+  echo -e "${GREEN}Webmin service added to zone $inside_zone.${TEXTRESET}"
 else
   echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
   exit 1
@@ -413,5 +414,3 @@ firewall-cmd --reload
 # Display the services in the zone
 echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
 firewall-cmd --list-services --zone="$inside_zone"
-
-
