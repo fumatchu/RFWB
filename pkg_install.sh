@@ -311,5 +311,47 @@ firewall-cmd --reload
 echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
 firewall-cmd --list-services --zone="$inside_zone"
 
+# Function to install NTOPNG
+install_ntopng() {
+    echo -e "${GREEN}Installing ntopng...${TEXTRESET}"
+    curl https://packages.ntop.org/centos-stable/ntop.repo > /etc/yum.repos.d/ntop.repo
+    dnf -y config-manager --set-enabled crb
+    dnf -y install epel-release
+    dnf -y clean all
+    dnf -y update
+    dnf -y install pfring-dkms n2disk nprobe ntopng cento ntap
+    echo -e "${GREEN}Enabling ntopng at boot up${TEXTRESET}"
+    systemctl enable ntopng 
+    # Path to the configuration file
+    CONFIG_FILE="/etc/ntopng/ntopng.conf"
+
+    # Check if the configuration file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
+    exit 1
+    fi
+
+    # Modify the line in the configuration file
+    echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
+    sed -i 's|^-G=/var/tmp/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
+
+    # Verify the change
+    if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
+    echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
+    else
+    echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
+    fi
+    echo -e "${GREEN}starting ntopng...${TEXTRESET}"
+    systemctl start ntopng
+    echo -e "${GREEN}Adding port 3000 to firewalld services${TEXTRESET}"
+    #Add to Firewalld
+    firewall-cmd --permanent --new-service=ntopng
+    firewall-cmd --permanent --service=ntopng --set-description=ntopng
+    firewall-cmd --permanent --service=ntopng --add-port=3000/tcp
+    # Reload firewalld to recognize the new service
+    echo -e "${YELLOW}Reloading firewalld to recognize the new service...${TEXTRESET}"
+    sudo firewall-cmd --reload
+}
+
 
 
