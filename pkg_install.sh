@@ -20,62 +20,61 @@ read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
     install_bind
+
+    # Get the network interface associated with a connection name ending in '-inside'
+    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    # Check if we found the inside interface
+    if [ -z "$inside_interface" ]; then
+      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+    inside_zone=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+        current_zone="${BASH_REMATCH[1]}"
+      fi
+
+      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+        inside_zone="$current_zone"
+        break
+      fi
+    done < <(firewall-cmd --list-all-zones)
+
+    # Check if we found the zone
+    if [ -z "$inside_zone" ]; then
+      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+    # Add the DNS service to this zone
+    echo -e "${YELLOW}Adding DNS service to zone $inside_zone...${TEXTRESET}"
+    if firewall-cmd --zone="$inside_zone" --add-service=dns --permanent; then
+      echo -e "${GREEN}DNS service added to zone $inside_zone.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to add DNS service to zone $inside_zone.${TEXTRESET}"
+      exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+    firewall-cmd --reload
+
+    # Display the services in the zone
+    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+    firewall-cmd --list-services --zone="$inside_zone"
 else
-    echo -e "${YELLOW}Skipping BIND installation.${TEXTRESET}"
+    echo -e "${YELLOW}Skipping BIND installation and firewall configuration.${TEXTRESET}"
 fi
 
 # Continue with the rest of the script
 echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
-# Get the network interface associated with a connection name ending in '-inside'
-inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-# Check if we found the inside interface
-if [ -z "$inside_interface" ]; then
-  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-
-# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-inside_zone=""
-while IFS= read -r line; do
-  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-    current_zone="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-    inside_zone="$current_zone"
-    break
-  fi
-done < <(firewall-cmd --list-all-zones)
-
-# Check if we found the zone
-if [ -z "$inside_zone" ]; then
-  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
-
-# Add the DNS service to this zone
-echo -e "${YELLOW}Adding DNS service to zone $inside_zone...${TEXTRESET}"
-if firewall-cmd --zone="$inside_zone" --add-service=dns --permanent; then
-  echo -e "${GREEN}DNS service added to zone $inside_zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add DNS service to zone $inside_zone.${TEXTRESET}"
-  exit 1
-fi
-
-# Reload the firewall to apply changes
-echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-firewall-cmd --reload
-
-# Display the services in the zone
-echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-firewall-cmd --list-services --zone="$inside_zone"
-
 
 
 
@@ -95,62 +94,61 @@ read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
     install_isc_kea
+
+    # Get the network interface associated with a connection name ending in '-inside'
+    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    # Check if we found the inside interface
+    if [ -z "$inside_interface" ]; then
+      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+    inside_zone=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+        current_zone="${BASH_REMATCH[1]}"
+      fi
+
+      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+        inside_zone="$current_zone"
+        break
+      fi
+    done < <(firewall-cmd --list-all-zones)
+
+    # Check if we found the zone
+    if [ -z "$inside_zone" ]; then
+      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+    # Add the DHCP service to this zone
+    echo -e "${YELLOW}Adding DHCP service to zone $inside_zone...${TEXTRESET}"
+    if firewall-cmd --zone="$inside_zone" --add-service=dhcp --permanent; then
+      echo -e "${GREEN}DHCP service added to zone $inside_zone.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to add DHCP service to zone $inside_zone.${TEXTRESET}"
+      exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+    firewall-cmd --reload
+
+    # Display the services in the zone
+    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+    firewall-cmd --list-services --zone="$inside_zone"
 else
-    echo -e "${YELLOW}Skipping ISC KEA installation.${TEXTRESET}"
+    echo -e "${YELLOW}Skipping ISC KEA installation and firewall configuration.${TEXTRESET}"
 fi
 
 # Continue with the rest of the script
 echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
-# Get the network interface associated with a connection name ending in '-inside'
-inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-# Check if we found the inside interface
-if [ -z "$inside_interface" ]; then
-  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-
-# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-inside_zone=""
-while IFS= read -r line; do
-  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-    current_zone="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-    inside_zone="$current_zone"
-    break
-  fi
-done < <(firewall-cmd --list-all-zones)
-
-# Check if we found the zone
-if [ -z "$inside_zone" ]; then
-  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
-
-# Add the DHCP service to this zone
-echo -e "${YELLOW}Adding DHCP service to zone $inside_zone...${TEXTRESET}"
-if firewall-cmd --zone="$inside_zone" --add-service=dhcp --permanent; then
-  echo -e "${GREEN}DHCP service added to zone $inside_zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add DHCP service to zone $inside_zone.${TEXTRESET}"
-  exit 1
-fi
-
-# Reload the firewall to apply changes
-echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-firewall-cmd --reload
-
-# Display the services in the zone
-echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-firewall-cmd --list-services --zone="$inside_zone"
-
 
 
 # Function to install COCKPIT
@@ -160,68 +158,74 @@ install_cockpit() {
     echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
 }
 
+# Function to install COCKPIT
+install_cockpit() {
+    echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
+    dnf -y install cockpit
+    echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
+}
+
 # Prompt user to install COCKPIT
 echo -e "${YELLOW}Do you want to install Cockpit? (yes/no)${TEXTRESET}"
 read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
     install_cockpit
+
+    # Get the network interface associated with a connection name ending in '-inside'
+    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    # Check if we found the inside interface
+    if [ -z "$inside_interface" ]; then
+      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+    inside_zone=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+        current_zone="${BASH_REMATCH[1]}"
+      fi
+
+      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+        inside_zone="$current_zone"
+        break
+      fi
+    done < <(firewall-cmd --list-all-zones)
+
+    # Check if we found the zone
+    if [ -z "$inside_zone" ]; then
+      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+    # Add the Cockpit service to this zone
+    echo -e "${YELLOW}Adding Cockpit service to zone $inside_zone...${TEXTRESET}"
+    if firewall-cmd --zone="$inside_zone" --add-service=cockpit --permanent; then
+      echo -e "${GREEN}Cockpit service added to zone $inside_zone.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to add Cockpit service to zone $inside_zone.${TEXTRESET}"
+      exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+    firewall-cmd --reload
+
+    # Display the services in the zone
+    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+    firewall-cmd --list-services --zone="$inside_zone"
 else
-    echo -e "${YELLOW}Skipping Cockpit installation.${TEXTRESET}"
+    echo -e "${YELLOW}Skipping Cockpit installation and firewall configuration.${TEXTRESET}"
 fi
 
 # Continue with the rest of the script
 echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
-# Get the network interface associated with a connection name ending in '-inside'
-inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-# Check if we found the inside interface
-if [ -z "$inside_interface" ]; then
-  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-
-# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-inside_zone=""
-while IFS= read -r line; do
-  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-    current_zone="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-    inside_zone="$current_zone"
-    break
-  fi
-done < <(firewall-cmd --list-all-zones)
-
-# Check if we found the zone
-if [ -z "$inside_zone" ]; then
-  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
-
-# Add the DNS service to this zone
-echo -e "${YELLOW}Adding Cockpit service to zone $inside_zone...${TEXTRESET}"
-if firewall-cmd --zone="$inside_zone" --add-service=cockpit --permanent; then
-  echo -e "${GREEN}Cockpit service added to zone $inside_zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add DNS service to zone $inside_zone.${TEXTRESET}"
-  exit 1
-fi
-
-# Reload the firewall to apply changes
-echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-firewall-cmd --reload
-
-# Display the services in the zone
-echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-firewall-cmd --list-services --zone="$inside_zone"
-
 
 # Function to install WEBMIN
 install_webmin() {
@@ -232,6 +236,7 @@ install_webmin() {
     echo -e "${GREEN}Enabling Webmin at boot up${TEXTRESET}"
     systemctl enable webmin 
     echo -e "${GREEN}Adding port 10000 to firewalld services${TEXTRESET}"
+    
     # Define the service XML content
     WEBMIN_SERVICE_XML="<?xml version=\"1.0\" encoding=\"utf-8\"?>
     <service>
@@ -255,61 +260,61 @@ read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
     install_webmin
+
+    # Get the network interface associated with a connection name ending in '-inside'
+    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    # Check if we found the inside interface
+    if [ -z "$inside_interface" ]; then
+      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+    inside_zone=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+        current_zone="${BASH_REMATCH[1]}"
+      fi
+
+      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+        inside_zone="$current_zone"
+        break
+      fi
+    done < <(firewall-cmd --list-all-zones)
+
+    # Check if we found the zone
+    if [ -z "$inside_zone" ]; then
+      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+    # Add the Webmin service to this zone
+    echo -e "${YELLOW}Adding Webmin service to zone $inside_zone...${TEXTRESET}"
+    if firewall-cmd --zone="$inside_zone" --add-service=webmin --permanent; then
+      echo -e "${GREEN}Webmin service added to zone $inside_zone.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to add Webmin service to zone $inside_zone.${TEXTRESET}"
+      exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+    firewall-cmd --reload
+
+    # Display the services in the zone
+    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+    firewall-cmd --list-services --zone="$inside_zone"
 else
-    echo -e "${YELLOW}Skipping Webmin installation.${TEXTRESET}"
+    echo -e "${YELLOW}Skipping Webmin installation and firewall configuration.${TEXTRESET}"
 fi
 
 # Continue with the rest of the script
 echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
-# Get the network interface associated with a connection name ending in '-inside'
-inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-# Check if we found the inside interface
-if [ -z "$inside_interface" ]; then
-  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-
-# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-inside_zone=""
-while IFS= read -r line; do
-  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-    current_zone="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-    inside_zone="$current_zone"
-    break
-  fi
-done < <(firewall-cmd --list-all-zones)
-
-# Check if we found the zone
-if [ -z "$inside_zone" ]; then
-  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
-
-# Add the Webmin service to this zone
-echo -e "${YELLOW}Adding Webmin service to zone $inside_zone...${TEXTRESET}"
-if firewall-cmd --zone="$inside_zone" --add-service=webmin --permanent; then
-  echo -e "${GREEN}Webmin service added to zone $inside_zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add Webmin service to zone $inside_zone.${TEXTRESET}"
-  exit 1
-fi
-
-# Reload the firewall to apply changes
-echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-firewall-cmd --reload
-
-# Display the services in the zone
-echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-firewall-cmd --list-services --zone="$inside_zone"
 
 # Function to install NTOPNG
 install_ntopng() {
@@ -321,44 +326,47 @@ install_ntopng() {
     dnf -y update
     dnf -y install pfring-dkms n2disk nprobe ntopng cento ntap
     echo -e "${GREEN}Enabling ntopng at boot up${TEXTRESET}"
-    systemctl enable ntopng 
+    systemctl enable ntopng
+    
     # Path to the configuration file
-CONFIG_FILE="/etc/ntopng/ntopng.conf"
+    CONFIG_FILE="/etc/ntopng/ntopng.conf"
 
-# Check if the configuration file exists
-if [ ! -f "$CONFIG_FILE" ]; then
-  echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
-  exit 1
-fi
+    # Check if the configuration file exists
+    if [ ! -f "$CONFIG_FILE" ]; then
+      echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
+      exit 1
+    fi
 
-# Modify the line in the configuration file
-echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
-sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
+    # Modify the line in the configuration file
+    echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
+    sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
 
-# Verify the change
-if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
-  echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
-else
-  echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
-  exit 1
-fi
+    # Verify the change
+    if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
+      echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
+    else
+      echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
+      exit 1
+    fi
+
     # Enable ntopng service
-echo -e "${GREEN}Enabling ntopng service...${TEXTRESET}"
-systemctl enable ntopng
+    echo -e "${GREEN}Enabling ntopng service...${TEXTRESET}"
+    systemctl enable ntopng
 
-# Start ntopng service
-echo -e "${GREEN}Starting ntopng service...${TEXTRESET}"
-systemctl start ntopng
+    # Start ntopng service
+    echo -e "${GREEN}Starting ntopng service...${TEXTRESET}"
+    systemctl start ntopng
 
-# Validate ntopng service is running
-if systemctl is-active --quiet ntopng; then
-  echo -e "${GREEN}ntopng service is running.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to start ntopng service. Please check the service status manually.${TEXTRESET}"
-  exit 1
-fi
+    # Validate ntopng service is running
+    if systemctl is-active --quiet ntopng; then
+      echo -e "${GREEN}ntopng service is running.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to start ntopng service. Please check the service status manually.${TEXTRESET}"
+      exit 1
+    fi
+
     echo -e "${GREEN}Adding port 3000 to firewalld services${TEXTRESET}"
-    #Add to Firewalld
+    # Add to Firewalld
     firewall-cmd --permanent --new-service=ntopng
     firewall-cmd --permanent --service=ntopng --set-description=ntopng
     firewall-cmd --permanent --service=ntopng --add-port=3000/tcp
@@ -373,58 +381,58 @@ read -p "Your choice: " user_choice
 
 if [[ "$user_choice" =~ ^[Yy][Ee][Ss]$ || "$user_choice" =~ ^[Yy]$ ]]; then
     install_ntopng
+
+    # Get the network interface associated with a connection name ending in '-inside'
+    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    # Check if we found the inside interface
+    if [ -z "$inside_interface" ]; then
+      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+
+    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
+    inside_zone=""
+    while IFS= read -r line; do
+      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
+        current_zone="${BASH_REMATCH[1]}"
+      fi
+
+      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
+        inside_zone="$current_zone"
+        break
+      fi
+    done < <(firewall-cmd --list-all-zones)
+
+    # Check if we found the zone
+    if [ -z "$inside_zone" ]; then
+      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
+      exit 1
+    fi
+
+    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+
+    # Add the ntopng service to this zone
+    echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
+    if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
+      echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
+    else
+      echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
+      exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
+    firewall-cmd --reload
+
+    # Display the services in the zone
+    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
+    firewall-cmd --list-services --zone="$inside_zone"
 else
-    echo -e "${YELLOW}Skipping ntopng installation.${TEXTRESET}"
+    echo -e "${YELLOW}Skipping ntopng installation and firewall configuration.${TEXTRESET}"
 fi
 
 # Continue with the rest of the script
 echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
-# Get the network interface associated with a connection name ending in '-inside'
-inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-# Check if we found the inside interface
-if [ -z "$inside_interface" ]; then
-  echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-
-# Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-inside_zone=""
-while IFS= read -r line; do
-  if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-    current_zone="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-    inside_zone="$current_zone"
-    break
-  fi
-done < <(firewall-cmd --list-all-zones)
-
-# Check if we found the zone
-if [ -z "$inside_zone" ]; then
-  echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-  exit 1
-fi
-
-echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
-
-# Add the Webmin service to this zone
-echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
-if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
-  echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
-  exit 1
-fi
-
-# Reload the firewall to apply changes
-echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-firewall-cmd --reload
-
-# Display the services in the zone
-echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-firewall-cmd --list-services --zone="$inside_zone"
