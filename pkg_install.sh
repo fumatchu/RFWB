@@ -323,26 +323,40 @@ install_ntopng() {
     echo -e "${GREEN}Enabling ntopng at boot up${TEXTRESET}"
     systemctl enable ntopng 
     # Path to the configuration file
-    CONFIG_FILE="/etc/ntopng/ntopng.conf"
+CONFIG_FILE="/etc/ntopng/ntopng.conf"
 
-    # Check if the configuration file exists
-    if [ ! -f "$CONFIG_FILE" ]; then
-    echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
-    exit 1
-    fi
+# Check if the configuration file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
+  exit 1
+fi
 
-    # Modify the line in the configuration file
-    echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
-    sed -i 's|^-G=/var/tmp/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
+# Modify the line in the configuration file
+echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
+sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
 
-    # Verify the change
-    if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
-    echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
-    else
-    echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
-    fi
-    echo -e "${GREEN}starting ntopng...${TEXTRESET}"
-    systemctl start ntopng
+# Verify the change
+if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
+  echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
+else
+  echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
+  exit 1
+fi
+    # Enable ntopng service
+echo -e "${GREEN}Enabling ntopng service...${TEXTRESET}"
+systemctl enable ntopng
+
+# Start ntopng service
+echo -e "${GREEN}Starting ntopng service...${TEXTRESET}"
+systemctl start ntopng
+
+# Validate ntopng service is running
+if systemctl is-active --quiet ntopng; then
+  echo -e "${GREEN}ntopng service is running.${TEXTRESET}"
+else
+  echo -e "${RED}Failed to start ntopng service. Please check the service status manually.${TEXTRESET}"
+  exit 1
+fi
     echo -e "${GREEN}Adding port 3000 to firewalld services${TEXTRESET}"
     #Add to Firewalld
     firewall-cmd --permanent --new-service=ntopng
