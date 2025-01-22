@@ -4,6 +4,21 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
+# Function to install REQUIRED
+install_required() {
+    echo -e "${GREEN}Installing Required packages...${TEXTRESET}"
+    dnf -y config-manager --set-enabled crb
+    dnf -y install epel-release
+    dnf -y clean all
+    dnf -y update 
+    dnf -y install ntsysv iptraf
+    echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
+# Function to install ddns
+install_ddclient() {
+    echo -e "${GREEN}Installing ddns client (ddclient)...${TEXTRESET}"
+    dnf -y install ddclient
+    echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
+
 # Function to install BIND
 install_bind() {
     echo -e "${GREEN}Installing BIND...${TEXTRESET}"
@@ -364,6 +379,8 @@ options=(
     3 "Install Cockpit" off
     4 "Install Webmin" off
     5 "Install ntopng" off
+    6 "Install DDNS Client" off
+    7 "Install required Packages" on
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -385,6 +402,12 @@ for choice in $choices; do
         ;;
     5)
         install_ntopng
+        ;;
+    6) 
+        install_ddclient
+        ;;
+    7)
+        install_required
         ;;
 
 
