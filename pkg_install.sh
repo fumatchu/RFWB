@@ -401,7 +401,7 @@ echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone$
 # Add the Webmin service to this zone
 echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
 if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
-  echo -e "${GREEN}Webmin service added to zone $inside_zone.${TEXTRESET}"
+  echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
 else
   echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
   exit 1
