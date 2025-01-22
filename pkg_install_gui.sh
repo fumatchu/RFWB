@@ -13,12 +13,13 @@ install_required() {
     dnf -y update 
     dnf -y install ntsysv iptraf
     echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
+}
 # Function to install ddns
 install_ddclient() {
     echo -e "${GREEN}Installing ddns client (ddclient)...${TEXTRESET}"
     dnf -y install ddclient
     echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
-
+}
 # Function to install BIND
 install_bind() {
     echo -e "${GREEN}Installing BIND...${TEXTRESET}"
