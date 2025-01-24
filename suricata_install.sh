@@ -188,5 +188,57 @@ else
     echo "$OUTPUT"
     exit 1
 fi
+# Start the Suricata service
+echo -e "${YELLOW}Starting Suricata service...${TEXTRESET}"
+sudo systemctl start suricata
 
+# Show the status of the Suricata service
+echo -e "${YELLOW}Checking Suricata service status...${TEXTRESET}"
+status_output=$(sudo systemctl status suricata)
+
+# Display the status output
+echo "$status_output"
+
+# Function to check for permission errors and fix them
+check_and_fix_permissions() {
+    # Check for permission denied errors in the logs
+    if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata//fast.log\": Permission denied|W: runmodes: output module \"fast
+\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata//eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: l
+ogopenfile: Error opening file: \"/var/log/suricata//stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+attempts=0
+max_attempts=3
+
+# Attempt to fix permissions up to three times
+while [ $attempts -lt $max_attempts ]; do
+    check_and_fix_permissions
+    if [ $? -eq 0 ]; then
+        echo -e "\n${GREEN}Suricata service is running without permission issues.${TEXTRESET}"
+        exit 0
+    else
+        echo -e "\n${RED}Warning: There are permission issues with Suricata log files.${TEXTRESET}"
+        echo -e "${YELLOW}Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
+        sudo chown -R suricata:suricata /var/log/suricata
+        echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
+        sudo systemctl restart suricata
+
+        # Check the Suricata log for any remaining errors
+        echo -e "${YELLOW}Validating Suricata log...${TEXTRESET}"
+        if sudo tail -n 50 /var/log/suricata/suricata.log | grep -q "Error: logopenfile"; then
+            echo -e "\n${RED}Error: logopenfile is still present in the log. Please check permissions and configurations.${TEXTRESET}"
+        else
+            echo -e "\n${GREEN}No 'logopenfile' errors found in the log. Suricata is running correctly.${TEXTRESET}"
+            exit 0
+        fi
+    fi
+    attempts=$((attempts + 1))
+done
+
+echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
+exit 1
 echo -e "${GREEN}Script completed successfully.${TEXTRESET}"
