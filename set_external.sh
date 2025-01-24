@@ -56,6 +56,7 @@ while true; do
       echo -e "${GREEN}You have chosen to apply the 'external' zone.${TEXTRESET}"
       firewall-cmd --zone=external --change-interface="$new_connection" --permanent
       firewall-cmd --reload
+      systemctl restart NetworkManager
     else
       echo -e "${YELLOW}Available firewalld zones:${TEXTRESET}"
       available_zones=$(firewall-cmd --get-zones)
@@ -73,6 +74,7 @@ while true; do
         echo -e "${GREEN}You have chosen the '$selected_zone' zone for $new_connection.${TEXTRESET}"
         firewall-cmd --zone="$selected_zone" --change-interface="$new_connection" --permanent
         firewall-cmd --reload
+        systemctl restart NetworkManager
       else
         echo -e "${RED}Invalid zone selected. No changes were made.${TEXTRESET}"
       fi
