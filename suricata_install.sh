@@ -181,7 +181,7 @@ SUCCESS_MESSAGE="Notice: suricata: Configuration provided was successfully loade
 # Check if the output contains the success message
 if echo "$OUTPUT" | grep -q "$SUCCESS_MESSAGE"; then
     echo -e "${GREEN}Success: Suricata configuration was loaded successfully.${TEXTRESET}"
-    exit 0
+    
 else
     echo -e "${RED}Error: Suricata configuration test failed.${TEXTRESET}"
     echo "Output:"
