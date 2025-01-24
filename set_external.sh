@@ -49,12 +49,13 @@ while true; do
       echo -e "${RED}Error: Could not find an active profile for $new_connection.${TEXTRESET}"
     fi
 
-    # Ask the user about applying the 'drop' zone
-    read -p "We suggest applying the 'drop' zone to this interface. Is this acceptable? (y/n): " user_confirm
+    # Ask the user about applying the 'external' zone
+    read -p "It's HIGHLY suggested applying the 'external' zone to this interface. Is this acceptable? (y/n): " user_confirm
 
     if [[ "$user_confirm" == "y" ]]; then
-      echo -e "${GREEN}You have chosen to apply the 'drop' zone.${TEXTRESET}"
-      # Note: The zone is not actually applied in this version.
+      echo -e "${GREEN}You have chosen to apply the 'external' zone.${TEXTRESET}"
+      firewall-cmd --zone=external --change-interface="$new_connection" --permanent
+      firewall-cmd --reload
     else
       echo -e "${YELLOW}Available firewalld zones:${TEXTRESET}"
       available_zones=$(firewall-cmd --get-zones)
@@ -70,7 +71,8 @@ while true; do
       # Validate the chosen zone
       if echo "$available_zones" | grep -qw "$selected_zone"; then
         echo -e "${GREEN}You have chosen the '$selected_zone' zone for $new_connection.${TEXTRESET}"
-        # Note: The zone is not actually applied in this version.
+        firewall-cmd --zone="$selected_zone" --change-interface="$new_connection" --permanent
+        firewall-cmd --reload
       else
         echo -e "${RED}Invalid zone selected. No changes were made.${TEXTRESET}"
       fi
@@ -87,33 +89,70 @@ echo -e "${GREEN}Connection Diagram:${TEXTRESET}"
 # Get all active zones with associated interfaces
 active_zones=$(firewall-cmd --get-active-zones)
 
+# Variables to store interface and zone information
+outside_iface=""
+inside_iface=""
+outside_zone=""
+inside_zone=""
+
+# Determine interfaces and zones
 while read -r zone; do
   if [[ -n "$zone" && "$zone" != "--" ]]; then
-    # Read the interfaces line associated with the zone
     read -r interfaces_line
-
-    # Extract interfaces from the line
     interfaces=$(echo "$interfaces_line" | awk '{for (i=2; i<=NF; i++) print $i}')
 
     for iface in $interfaces; do
       if [ -n "$iface" ]; then
-        echo "  +-------------------+"
-        echo "  |  $zone Network  |"
-        echo "  +-------------------+"
-        echo "           |"
-        echo "           |"
-        echo "       +--------+"
-        echo "       | $iface |"
-        echo "       +--------+"
-        echo "           |"
-        echo "           |"
-        echo "       +---------+"
-        echo "       | Firewall |"
-        echo "       +---------+"
-        echo
+        profile_name=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${iface}$" | cut -d: -f1)
+
+        if [[ "$profile_name" == *"-inside" ]]; then
+          inside_iface="$iface"
+          inside_zone="$zone"
+        elif [[ "$profile_name" == *"-outside" ]]; then
+          outside_iface="$iface"
+          outside_zone="$zone"
+        fi
       fi
     done
   fi
 done <<< "$active_zones"
+
+# Print the inverted ASCII diagram
+if [ -n "$outside_iface" ] && [ -n "$inside_iface" ]; then
+  echo "  +--------------------+"
+  echo "  | Unprotected Network |"
+  echo "  +--------------------+"
+  echo "           |"
+  echo "           |"
+  echo "   +-----------------+"
+  echo "   | $outside_zone Zone |"
+  echo "   +-----------------+"
+  echo "           |"
+  echo "           |"
+  echo "       +--------+"
+  echo "       | $outside_iface |"
+  echo "       +--------+"
+  echo "           |"
+  echo "           |"
+  echo "       +---------+"
+  echo "       | Firewall |"
+  echo "       +---------+"
+  echo "           |"
+  echo "           |"
+  echo "       +--------+"
+  echo "       | $inside_iface |"
+  echo "       +--------+"
+  echo "           |"
+  echo "           |"
+  echo "   +-----------------+"
+  echo "   | $inside_zone Zone |"
+  echo "   +-----------------+"
+  echo "           |"
+  echo "           |"
+  echo "  +--------------------+"
+  echo "  | Protected Network |"
+  echo "  +--------------------+"
+  echo
+fi
 
 echo -e "${GREEN}Completed configuration of network zones.${TEXTRESET}"
