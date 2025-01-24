@@ -156,3 +156,17 @@ if [ -n "$outside_iface" ] && [ -n "$inside_iface" ]; then
 fi
 
 echo -e "${GREEN}Completed configuration of network zones.${TEXTRESET}"
+# Set the default zone to 'drop' first
+echo -e "${YELLOW}Changing the default zone to 'drop'...${TEXTRESET}"
+firewall-cmd --set-default-zone=drop
+
+# Validate the default zone has been changed
+current_default_zone=$(firewall-cmd --get-default-zone)
+if [ "$current_default_zone" == "drop" ]; then
+  echo -e "${GREEN}Default zone successfully changed to 'drop'.${TEXTRESET}"
+else
+  echo -e "${RED}Failed to change the default zone to 'drop'. Current default zone: $current_default_zone${TEXTRESET}"
+  exit 1
+fi
+
+firewall-cmd --reload
