@@ -233,7 +233,7 @@ while [ $attempts -lt $max_attempts ]; do
             echo -e "\n${RED}Error: logopenfile is still present in the log. Please check permissions and configurations.${TEXTRESET}"
         else
             echo -e "\n${GREEN}No 'logopenfile' errors found in the log. Suricata is running correctly.${TEXTRESET}"
-            exit 0
+            
         fi
     fi
     attempts=$((attempts + 1))
