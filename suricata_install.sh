@@ -241,4 +241,28 @@ done
 
 echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
 exit 1
+
+# Inform the user about the test
+echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
+
+# Run the curl command and capture the response
+response=$(curl -s http://testmynids.org/uid/index.html)
+
+# Validate the response
+expected_response="uid=0(root) gid=0(root) groups=0(root)"
+if [ "$response" == "$expected_response" ]; then
+    echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
+    echo -e "${GREEN}$response${TEXTRESET}"
+
+    # Grep for the classification in the fast.log
+    if grep -q "\[Classification: Potentially Bad Traffic\]" /var/log/suricata/fast.log; then
+        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log.${TEXTRESET}"
+    else
+        echo -e "${RED}Suricata rule failed. The expected classification was not found in /var/log/suricata/fast.log.${TEXTRESET}"
+        exit 1
+    fi
+else
+    echo -e "${RED}Curl command failed. The expected response was not received.${TEXTRESET}"
+    exit 1
+fi
 echo -e "${GREEN}Script completed successfully.${TEXTRESET}"
