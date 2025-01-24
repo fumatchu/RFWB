@@ -36,8 +36,8 @@ echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRE
 nmcli connection modify "$name" connection.id "$new_profile_name"
 nmcli connection reload
 
-# Display ASCII representation of the connection
-echo -e "${GREEN}Connection Diagram:${TEXTRESET}"
+# Display initial ASCII representation of the connection
+echo -e "${GREEN}Initial Connection Diagram:${TEXTRESET}"
 echo "  +-------------------+"
 echo "  |  Internal Network |"
 echo "  +-------------------+"
@@ -66,18 +66,10 @@ else
   exit 1
 fi
 
-# Add SSH service to the 'drop' zone to prevent lockout
-echo -e "${YELLOW}Adding SSH service to the 'drop' zone...${TEXTRESET}"
-if firewall-cmd --zone=drop --add-service=ssh --permanent; then
-  echo -e "${GREEN}SSH service added to the 'drop' zone.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to add SSH service to the 'drop' zone.${TEXTRESET}"
-  exit 1
-fi
-
 firewall-cmd --reload
 
 # Ask user if they want to set this connection to the 'Internal' zone
+echo -e "It's HIGHLY suggested this interface be in the Firewall zone \"internal\""
 read -p "Do you want to set this connection to the 'Internal' zone in firewalld? (y/n): " user_confirm
 
 selected_zone=""
@@ -110,8 +102,31 @@ fi
 
 firewall-cmd --reload
 systemctl restart NetworkManager
+
 # Display current zone configuration for the interface
 echo -e "${YELLOW}Current firewalld zone configuration for $device:${TEXTRESET}"
 firewall-cmd --get-active-zones | grep -A1 "$device"
 
 echo -e "${GREEN}Completed configuration of network zones.${TEXTRESET}"
+
+# Display the updated ASCII representation of the connection with the zone applied
+echo -e "${GREEN}Updated Connection Diagram with Zone Applied:${TEXTRESET}"
+echo "  +-------------------+"
+echo "  |  Internal Network |"
+echo "  +-------------------+"
+echo "           |"
+echo "           |"
+echo "   +-----------------+"
+echo "   | $selected_zone Zone |"
+echo "   +-----------------+"
+echo "           |"
+echo "           |"
+echo "       +--------+"
+echo "       | $device |"
+echo "       +--------+"
+echo "           |"
+echo "           |"
+echo "       +---------+"
+echo "       | Firewall |"
+echo "       +---------+"
+echo
