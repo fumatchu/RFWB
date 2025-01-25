@@ -194,7 +194,7 @@ sudo systemctl start suricata
 
 # Show the status of the Suricata service
 echo -e "${YELLOW}Checking Suricata service status...${TEXTRESET}"
-status_output=$(sudo systemctl status suricata)
+status_output=$(sudo systemctl status suricata --no-pager)
 
 # Display the status output
 echo "$status_output"
@@ -205,9 +205,14 @@ check_and_fix_permissions() {
     status_output=$(sudo systemctl status suricata --no-pager)
 
     # Check for permission denied errors in the status output
-    if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed
-|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file:
-\"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+    if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": s
+etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile
+: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+        # Display the specific lines indicating permission errors
+        echo -e "${RED}Detected permission issues in the following log entries:${TEXTRESET}"
+        echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": s
+etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile
+: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
         return 1
     else
         return 0
@@ -250,7 +255,6 @@ if [ $attempts -eq $max_attempts ]; then
     echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
     exit 1
 fi
-
 
 
 # Inform the user about the test
