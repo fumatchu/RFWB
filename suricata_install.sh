@@ -232,7 +232,7 @@ while [ $attempts -lt $max_attempts ]; do
         sudo chown -R suricata:suricata /var/log/suricata
         echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
         sudo systemctl restart suricata
-
+        sleep 5
         # Check again after attempting to fix permissions
         echo -e "${YELLOW}Re-checking Suricata service status...${TEXTRESET}"
         check_and_fix_permissions
