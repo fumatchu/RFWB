@@ -201,32 +201,24 @@ echo "$status_output"
 
 # Function to check for permission errors and fix them
 check_and_fix_permissions() {
-    # Check for permission denied errors in the logs
-    if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata//fast.log\": Permission denied|W: runmodes: output module \"fast
-\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata//eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: l
-ogopenfile: Error opening file: \"/var/log/suricata//stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+    # Capture the status output from the Suricata service
+    status_output=$(sudo systemctl status suricata --no-pager)
+
+    # Check for permission denied errors in the status output
+    if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed
+|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file:
+\"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
         return 1
     else
         return 0
     fi
 }
 
-
 # Initialize attempt counter
 attempts=0
 
 # Define the maximum number of attempts
 max_attempts=3
-
-# Function to check and fix permissions
-check_and_fix_permissions() {
-    # Check if Suricata has the correct permissions
-    if sudo -u suricata test -w /var/log/suricata; then
-        return 0  # Permissions are correct
-    else
-        return 1  # Permissions need fixing
-    fi
-}
 
 while [ $attempts -lt $max_attempts ]; do
     check_and_fix_permissions
@@ -241,14 +233,14 @@ while [ $attempts -lt $max_attempts ]; do
         echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
         sudo systemctl restart suricata
 
-        # Check the Suricata log for any remaining errors
-        echo -e "${YELLOW}Validating Suricata log...${TEXTRESET}"
-        if sudo tail -n 50 /var/log/suricata/suricata.log | grep -q "Error: logopenfile"; then
-            echo -e "\n${RED}Error: logopenfile is still present in the log. Please check permissions and configurations.${TEXTRESET}"
-        else
-            echo -e "\n${GREEN}No 'logopenfile' errors found in the log. Suricata is running correctly.${TEXTRESET}"
-            # Proceed without exiting to continue the script
+        # Check again after attempting to fix permissions
+        echo -e "${YELLOW}Re-checking Suricata service status...${TEXTRESET}"
+        check_and_fix_permissions
+        if [ $? -eq 0 ]; then
+            echo -e "\n${GREEN}Permissions successfully fixed. Suricata service is running without issues.${TEXTRESET}"
             break
+        else
+            echo -e "\n${RED}Permission issues still exist after attempting to fix them.${TEXTRESET}"
         fi
     fi
     attempts=$((attempts + 1))
@@ -258,6 +250,8 @@ if [ $attempts -eq $max_attempts ]; then
     echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
     exit 1
 fi
+
+
 
 # Inform the user about the test
 echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
