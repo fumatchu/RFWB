@@ -181,7 +181,7 @@ SUCCESS_MESSAGE="Notice: suricata: Configuration provided was successfully loade
 # Check if the output contains the success message
 if echo "$OUTPUT" | grep -q "$SUCCESS_MESSAGE"; then
     echo -e "${GREEN}Success: Suricata configuration was loaded successfully.${TEXTRESET}"
-    
+
 else
     echo -e "${RED}Error: Suricata configuration test failed.${TEXTRESET}"
     echo "Output:"
@@ -211,15 +211,29 @@ ogopenfile: Error opening file: \"/var/log/suricata//stats.log\": Permission den
     fi
 }
 
+
+# Initialize attempt counter
 attempts=0
+
+# Define the maximum number of attempts
 max_attempts=3
 
-# Attempt to fix permissions up to three times
+# Function to check and fix permissions
+check_and_fix_permissions() {
+    # Check if Suricata has the correct permissions
+    if sudo -u suricata test -w /var/log/suricata; then
+        return 0  # Permissions are correct
+    else
+        return 1  # Permissions need fixing
+    fi
+}
+
 while [ $attempts -lt $max_attempts ]; do
     check_and_fix_permissions
     if [ $? -eq 0 ]; then
         echo -e "\n${GREEN}Suricata service is running without permission issues.${TEXTRESET}"
-        exit 0
+        # Proceed without exiting to continue the script
+        break
     else
         echo -e "\n${RED}Warning: There are permission issues with Suricata log files.${TEXTRESET}"
         echo -e "${YELLOW}Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
@@ -233,14 +247,23 @@ while [ $attempts -lt $max_attempts ]; do
             echo -e "\n${RED}Error: logopenfile is still present in the log. Please check permissions and configurations.${TEXTRESET}"
         else
             echo -e "\n${GREEN}No 'logopenfile' errors found in the log. Suricata is running correctly.${TEXTRESET}"
-            
+            # Proceed without exiting to continue the script
+            break
         fi
     fi
     attempts=$((attempts + 1))
 done
 
-echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
-exit 1
+if [ $attempts -eq $max_attempts ]; then
+    echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
+    exit 1
+fi
+
+# Inform the user about the test
+echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
+
+# Run the curl command and capture the response
+response=$(curl -s http://testmynids.org/uid/index.html)
 
 # Inform the user about the test
 echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
@@ -254,15 +277,20 @@ if [ "$response" == "$expected_response" ]; then
     echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
     echo -e "${GREEN}$response${TEXTRESET}"
 
-    # Grep for the classification in the fast.log
-    if grep -q "\[Classification: Potentially Bad Traffic\]" /var/log/suricata/fast.log; then
-        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log.${TEXTRESET}"
+    # Capture the last line of the fast.log
+    last_log_line=$(tail -n 1 /var/log/suricata/fast.log)
+    echo -e "${YELLOW}Last log line: ${last_log_line}${TEXTRESET}"  # Debug: Print the last line for verification
+
+    # Check the last line for the classification
+    if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
+        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the last log entry.${TEXTRESET}"
     else
-        echo -e "${RED}Suricata rule failed. The expected classification was not found in /var/log/suricata/fast.log.${TEXTRESET}"
+        echo -e "${RED}Suricata rule failed. The expected classification was not found in the last line of /var/log/suricata/fast.log.${TEXTRESET}"
         exit 1
     fi
 else
     echo -e "${RED}Curl command failed. The expected response was not received.${TEXTRESET}"
     exit 1
 fi
+
 echo -e "${GREEN}Script completed successfully.${TEXTRESET}"
