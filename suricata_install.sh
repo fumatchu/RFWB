@@ -199,6 +199,9 @@ status_output=$(sudo systemctl status suricata --no-pager)
 # Display the status output
 echo "$status_output"
 
+#Delay checking the log file for xseconds 
+sleep 10 
+
 # Function to check for permission errors and fix them
 check_and_fix_permissions() {
     # Capture the status output from the Suricata service
@@ -237,7 +240,7 @@ while [ $attempts -lt $max_attempts ]; do
         sudo chown -R suricata:suricata /var/log/suricata
         echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
         sudo systemctl restart suricata
-        sleep 5
+        sleep 10
         # Check again after attempting to fix permissions
         echo -e "${YELLOW}Re-checking Suricata service status...${TEXTRESET}"
         check_and_fix_permissions
