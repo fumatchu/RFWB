@@ -266,27 +266,25 @@ echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
 # Run the curl command and capture the response
 response=$(curl -s http://testmynids.org/uid/index.html)
 
-# Inform the user about the test
-echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
 
 # Run the curl command and capture the response
 response=$(curl -s http://testmynids.org/uid/index.html)
-
 # Validate the response
 expected_response="uid=0(root) gid=0(root) groups=0(root)"
 if [ "$response" == "$expected_response" ]; then
     echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
     echo -e "${GREEN}$response${TEXTRESET}"
+    sleep 5
+    # Capture the last line of the fast.log containing the specified ID
+    last_log_line=$(grep 2100498 /var/log/suricata/fast.log | tail -n 1)
+    echo -e "${YELLOW}Last log line with ID 2100498: ${last_log_line}${TEXTRESET}"  # Debug: Print the last line for verification
 
-    # Capture the last line of the fast.log
-    last_log_line=$(tail -n 1 /var/log/suricata/fast.log)
-    echo -e "${YELLOW}Last log line: ${last_log_line}${TEXTRESET}"  # Debug: Print the last line for verification
-
-    # Check the last line for the classification
+    # Check the log line for the classification
     if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
-        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the last log entry.${TEXTRESET}"
+        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TE
+XTRESET}"
     else
-        echo -e "${RED}Suricata rule failed. The expected classification was not found in the last line of /var/log/suricata/fast.log.${TEXTRESET}"
+        echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
         exit 1
     fi
 else
