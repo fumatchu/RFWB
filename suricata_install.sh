@@ -312,8 +312,7 @@ if [ "$response" == "$expected_response" ]; then
 
     # Check the log line for the classification
     if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
-        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TE
-XTRESET}"
+        echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TEXTRESET}"
     else
         echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
         exit 1
