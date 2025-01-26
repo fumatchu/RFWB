@@ -17,7 +17,7 @@ fi
 
 # Install essential packages
 echo -e "${YELLOW}Installing essential packages...${TEXTRESET}"
-if sudo dnf install -y yum-utils nano curl wget policycoreutils-python-utils; then
+if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
     echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
 else
     echo -e "${RED}Failed to install essential packages.${TEXTRESET}"
@@ -262,7 +262,38 @@ fi
 
 # Inform the user about the test
 echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
+echo -e "${YELLOW}Waiting for the engine to start...${TEXTRESET}"
+# Total duration for the progress bar
+duration=15
 
+# Total number of steps in the progress bar
+steps=30
+
+# Calculate the sleep duration between each step
+sleep_duration=$(echo "$duration/$steps" | bc -l)
+
+# Initialize the progress bar
+progress=""
+
+echo -e "Progress:"
+
+# Loop to update the progress bar
+for ((i=0; i<=steps; i++)); do
+    # Calculate percentage
+    percent=$((i * 100 / steps))
+
+    # Add a '#' to the progress bar for each step
+    progress+="#"
+
+    # Print the progress bar
+    printf "\r[%-30s] %d%%" "$progress" "$percent"
+
+    # Sleep for the calculated duration
+    sleep "$sleep_duration"
+done
+
+# Move to the next line after completion
+echo -e "\nDone!"
 # Run the curl command and capture the response
 response=$(curl -s http://testmynids.org/uid/index.html)
 
