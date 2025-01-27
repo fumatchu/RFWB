@@ -261,3 +261,59 @@ start_kibana_service
 check_kibana_status
 
 echo -e "${GREEN}Kibana setup and startup process completed successfully.${TEXTRESET}"
+
+# Function to display initial instructions
+display_instructions() {
+    echo -e "${GREEN}The Kibana Service is now running${TEXTRESET}"
+    echo -e "${YELLOW}The next step is to log in to the Elastic dashboard.${TEXTRESET}"
+    echo ""
+    echo "#1 - Open a browser (Leave this terminal open)"
+    echo ""
+    echo -e "#2 - In the address bar of your browser, navigate to ${GREEN}${private_ip}:5601${TEXTRESET}"
+    echo ""
+    echo "#3 - You will be asked for an enrollment token:"
+    echo -e "Token: $(cat /root/kibana_enrollment_token)"
+    echo ""
+    echo "#4 - Once you have input your enrollment token, the webpage will ask you for the verification code:"
+    echo ""
+}
+
+# Function to generate a new enrollment token
+generate_enrollment_token() {
+    echo -e "${YELLOW}Generating a new enrollment token...${TEXTRESET}"
+    token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
+    echo "$token" > /root/kibana_enrollment_token
+    echo -e "${GREEN}New token generated and saved to /root/kibana_enrollment_token.${TEXTRESET}"
+}
+
+# Function to get a verification code
+get_verification_code() {
+    echo -e "${YELLOW}Generating a verification code...${TEXTRESET}"
+    sudo /usr/share/kibana/bin/kibana-verification-code
+}
+
+# Main script execution
+display_instructions
+
+# Loop to manage enrollment token generation
+while true; do
+    read -p "Was the enrollment token successful? If it was you're being asked for a verification code (yes/no): " token_success
+    if [[ "$token_success" == "no" ]]; then
+        generate_enrollment_token
+    else
+        break
+    fi
+done
+
+# Prompt for verification code
+while true; do
+    read -p "Press Enter to get your Verification Code When Ready: "
+    get_verification_code
+
+    read -p "Do you need a new verification code? (yes/no): " code_needed
+    if [[ "$code_needed" == "no" ]]; then
+        break
+    fi
+done
+
+echo -e "${GREEN}Setup completed. You can now proceed with using Kibana.${TEXTRESET}"
