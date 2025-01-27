@@ -15,7 +15,7 @@ KIBANA_BIN_DIR="/usr/share/kibana/bin"
 # Function to copy Elasticsearch certificate to Kibana directory
 copy_certificate() {
     echo -e "${YELLOW}Copying Elasticsearch certificate to Kibana directory...${TEXTRESET}"
-    if sudo cp "$ELASTIC_CERT_PATH" "$KIBANA_DIR/"; then
+    if sudo cp "$ELASTIC_CERT_PATH" "$KIBANA_DIR/http_ca.crt"; then
         echo -e "${GREEN}Certificate copied successfully.${TEXTRESET}"
     else
         echo -e "${RED}Failed to copy the certificate. Please check the paths and permissions.${TEXTRESET}"
@@ -43,16 +43,62 @@ generate_encryption_keys() {
 update_kibana_config() {
     local keys="$1"
     echo -e "${YELLOW}Updating Kibana configuration...${TEXTRESET}"
+
+    # Add encryption keys to the configuration file
     if echo -e "\n$keys" | sudo tee -a "$KIBANA_CONFIG" > /dev/null; then
-        echo -e "${GREEN}Kibana configuration updated successfully.${TEXTRESET}"
+        echo -e "${GREEN}Kibana configuration updated with encryption keys.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to update Kibana configuration.${TEXTRESET}"
+        echo -e "${RED}Failed to update Kibana configuration with encryption keys.${TEXTRESET}"
         exit 1
     fi
 
     # Ensure no extraneous lines are left in the file
     sudo sed -i '/Generating Kibana encryption keys.../d' "$KIBANA_CONFIG"
     sudo sed -i '/Encryption keys generated successfully./d' "$KIBANA_CONFIG"
+
+    # Append telemetry settings to the configuration file
+    if echo -e "\ntelemetry.optIn: false" | sudo tee -a "$KIBANA_CONFIG" > /dev/null && \
+       echo "telemetry.allowChangingOptInStatus: false" | sudo tee -a "$KIBANA_CONFIG" > /dev/null; then
+        echo -e "${GREEN}Telemetry settings added to Kibana configuration.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to add telemetry settings to Kibana configuration.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Update the elasticsearch.ssl.certificateAuthorities setting
+    if sudo sed -i 's|^#*\(elasticsearch\.ssl\.certificateAuthorities:\).*|\1 [ "/etc/kibana/http_ca.crt" ]|' "$KIBANA_CONFIG"; then
+        echo -e "${GREEN}Updated elasticsearch.ssl.certificateAuthorities in Kibana configuration.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to update elasticsearch.ssl.certificateAuthorities in Kibana configuration.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Function to validate Kibana configuration changes
+validate_config_changes() {
+    echo -e "${YELLOW}Validating Kibana configuration changes...${TEXTRESET}"
+
+    # Validate encryption keys
+    for key in xpack.encryptedSavedObjects.encryptionKey xpack.reporting.encryptionKey xpack.security.encryptionKey; do
+        if ! grep -q "$key" "$KIBANA_CONFIG"; then
+            echo -e "${RED}Missing $key in Kibana configuration.${TEXTRESET}"
+            exit 1
+        fi
+    done
+
+    # Validate telemetry settings
+    if ! grep -q "telemetry.optIn: false" "$KIBANA_CONFIG" || ! grep -q "telemetry.allowChangingOptInStatus: false" "$KIBANA_CONFIG"; then
+        echo -e "${RED}Telemetry settings are not properly configured.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Validate certificate authorities setting
+    if ! grep -q 'elasticsearch.ssl.certificateAuthorities: \[ "/etc/kibana/http_ca.crt" \]' "$KIBANA_CONFIG"; then
+        echo -e "${RED}elasticsearch.ssl.certificateAuthorities is not properly configured.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}All Kibana configuration changes validated successfully.${TEXTRESET}"
 }
 
 # Main script execution
@@ -60,6 +106,7 @@ main() {
     copy_certificate
     keys=$(generate_encryption_keys)
     update_kibana_config "$keys"
+    validate_config_changes
 }
 
 # Run the main function
