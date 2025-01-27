@@ -161,3 +161,54 @@ private_ip=$(find_private_ip)
 configure_kibana "$private_ip"
 
 echo "Kibana has been configured to use the private IP address: $private_ip"
+
+# Define the file path to store the enrollment token
+TOKEN_FILE="/root/kibana_enrollment_token"
+
+# Function to generate the enrollment token
+generate_enrollment_token() {
+    echo -e "${YELLOW}Generating Kibana enrollment token...${TEXTRESET}"
+    token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
+
+    if [ -z "$token" ]; then
+        echo -e "${RED}Error: Failed to generate enrollment token.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Enrollment token generated successfully.${TEXTRESET}"
+    echo "$token" > "$TOKEN_FILE"
+    echo -e "${GREEN}Enrollment token stored in ${TOKEN_FILE}.${TEXTRESET}"
+}
+
+# Function to start and enable the Kibana service
+start_kibana_service() {
+    echo -e "${YELLOW}Starting and enabling Kibana service...${TEXTRESET}"
+    sudo systemctl enable kibana --now
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Failed to start and enable Kibana service.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Kibana service started and enabled.${TEXTRESET}"
+}
+
+# Function to check the status of the Kibana service
+check_kibana_status() {
+    echo -e "${YELLOW}Checking Kibana service status...${TEXTRESET}"
+    sudo systemctl status kibana --no-pager
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Kibana service is not running.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Kibana service is running.${TEXTRESET}"
+}
+
+# Main script execution
+generate_enrollment_token
+start_kibana_service
+check_kibana_status
+
+echo -e "${GREEN}Kibana setup and startup process completed successfully.${TEXTRESET}"
