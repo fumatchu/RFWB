@@ -269,7 +269,7 @@ display_instructions() {
     echo ""
     echo "#1 - Open a browser (Leave this terminal open)"
     echo ""
-    echo -e "#2 - In the address bar of your browser, navigate to ${GREEN}${private_ip}:5601${TEXTRESET}"
+    echo -e "#2 - In the address bar of your browser, navigate to ${GREEN}http://${private_ip}:5601${TEXTRESET}"
     echo ""
     echo "#3 - You will be asked for an enrollment token:"
     echo -e "Token: $(cat /root/kibana_enrollment_token)"
