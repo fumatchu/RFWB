@@ -162,6 +162,55 @@ configure_kibana "$private_ip"
 
 echo "Kibana has been configured to use the private IP address: $private_ip"
 
+# Define the file path
+FILE_PATH="/etc/kibana/kibana.yml"
+
+# Function to check and set the group of the file
+check_and_set_group() {
+    current_group=$(stat -c "%G" "$FILE_PATH")
+
+    if [ "$current_group" != "kibana" ]; then
+        echo -e "${YELLOW}Current group of $FILE_PATH is $current_group. Changing it to 'kibana'...${TEXTRESET}"
+        sudo chgrp kibana "$FILE_PATH"
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Group changed to 'kibana'.${TEXTRESET}"
+        else
+            echo -e "${RED}Error: Failed to change group to 'kibana'.${TEXTRESET}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}Group is already set to 'kibana'.${TEXTRESET}"
+    fi
+}
+
+# Function to check and set the permissions of the file
+check_and_set_permissions() {
+    current_permissions=$(stat -c "%a" "$FILE_PATH")
+
+    # Extract the group permissions (second digit in the octal representation)
+    group_permissions=$(( (current_permissions / 10) % 10 ))
+
+    if (( group_permissions != 6 )); then
+        echo -e "${YELLOW}Current group permissions of $FILE_PATH are not 'rw'. Changing permissions...${TEXTRESET}"
+        sudo chmod g+rw "$FILE_PATH"
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Permissions changed to allow group 'kibana' read and write access.${TEXTRESET}"
+        else
+            echo -e "${RED}Error: Failed to change permissions.${TEXTRESET}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}Permissions are already correct for group 'kibana'.${TEXTRESET}"
+    fi
+}
+
+# Main script execution
+check_and_set_group
+check_and_set_permissions
+
+echo -e "${GREEN}Validation and correction of group and permissions completed successfully.${TEXTRESET}"
 # Define the file path to store the enrollment token
 TOKEN_FILE="/root/kibana_enrollment_token"
 
