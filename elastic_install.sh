@@ -143,7 +143,7 @@ main() {
 
 # Run the main function
 main
-#Set FW Rules 
+#Set FW Rules
 # Function to find the network interface
 find_interface() {
     # Find the interface with a connection ending in -inside
