@@ -111,3 +111,53 @@ main() {
 
 # Run the main function
 main
+
+# Function to locate the server's private IP address using nmcli
+find_private_ip() {
+    # Find the interface ending with -inside
+    interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "Error: No interface ending with '-inside' found."
+        exit 1
+    fi
+
+    # Extract the private IP address for the found interface
+    ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
+
+    if [ -z "$ip" ]; then
+        echo -e "Error: No IP address found for the interface $interface."
+        exit 1
+    fi
+
+    echo "$ip"
+}
+
+# Function to configure Kibana
+configure_kibana() {
+    local private_ip="$1"
+    local kibana_yml="/etc/kibana/kibana.yml"  # Path to your Kibana config
+
+    echo "Backing up the original Kibana configuration..."
+    # Backup the original Kibana configuration file
+    sudo cp "$kibana_yml" "${kibana_yml}.bak"
+
+    echo "Updating the Kibana configuration..."
+    # Use awk to insert the server.host line below the specified comments
+    sudo awk -v ip="$private_ip" '
+    BEGIN {inserted=0}
+    {
+        print $0
+        if (!inserted && $0 ~ /^#server.host: "localhost"$/) {
+            print "server.host: \"" ip "\""
+            inserted=1
+        }
+    }
+    ' "$kibana_yml" > /tmp/kibana.yml && sudo mv /tmp/kibana.yml "$kibana_yml"
+}
+
+# Main execution
+private_ip=$(find_private_ip)
+configure_kibana "$private_ip"
+
+echo "Kibana has been configured to use the private IP address: $private_ip"
