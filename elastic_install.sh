@@ -319,7 +319,7 @@ EOF
         echo -e "${YELLOW}The Password is:${TEXTRESET}"
         echo -e "$password"
         echo -e "${RED}you will need this apssword for the next step.${TEXTRESET}"
-        red -p "Press Enter Once you have it written down"
+        read -p "Press Enter Once you have it written down"
     else
         echo -e "${RED}Failed to reset password for the elastic user.${TEXTRESET}"
         exit 1
