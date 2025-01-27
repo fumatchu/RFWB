@@ -316,4 +316,5 @@ while true; do
     fi
 done
 
-echo -e "${GREEN}Setup completed. You can now proceed with using Kibana.${TEXTRESET}"
+echo -e "${GREEN}Kibana Setup completed...${TEXTRESET}"
+
