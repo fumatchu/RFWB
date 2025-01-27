@@ -57,7 +57,7 @@ if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
     echo -e "${GREEN}System meets the minimum requirements.${RESET}"
     sleep 2
 else
-    echo -e "${RED}System does not meet the minimum requirements.${RESET}"
+    echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
     [ "$ram_status" -ne 0 ] && echo -e "${YELLOW}Please add more RAM.${RESET}"
     [ "$cpu_status" -ne 0 ] && echo -e "${YELLOW}Please add more CPUs.${RESET}"
     sleep 2
