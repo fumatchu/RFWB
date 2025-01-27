@@ -286,7 +286,7 @@ main() {
     check_status
 
     # Continue with further steps if needed
-    echo -e "${GREEN}Elasticsearch is running. Proceeding with further actions...${TEXTRESET}"
+    echo -e "${GREEN}Elasticsearch is running. Proceeding...${TEXTRESET}"
     # Add additional script actions here
 }
 
