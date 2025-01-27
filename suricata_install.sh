@@ -7,6 +7,7 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 RESET='\033[0m' # Text Reset
 echo -e "${YELLOW}Checking Hardware Requirements...${TEXTRESET}"
+dnf -y install bc
 # Function to check if the system has at least 8 GB of RAM
 check_ram() {
     # Get the total memory in KB
