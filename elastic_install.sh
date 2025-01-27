@@ -241,3 +241,136 @@ main() {
 
 # Run the main function
 main
+
+# Function to reload systemd daemon
+reload_daemon() {
+    echo -e "${YELLOW}Reloading systemd daemon...${TEXTRESET}"
+    if sudo systemctl daemon-reload; then
+        echo -e "${GREEN}Systemd daemon reloaded successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to reload systemd daemon.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Function to enable and start Elasticsearch service
+enable_start_elasticsearch() {
+    echo -e "${YELLOW}Enabling and starting Elasticsearch service...${TEXTRESET}"
+    if sudo systemctl enable elasticsearch --now; then
+        echo -e "${GREEN}Elasticsearch service enabled and start command issued.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to enable and start Elasticsearch service.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Function to check the status of Elasticsearch service
+check_status() {
+    echo -e "${YELLOW}Checking Elasticsearch service status...${TEXTRESET}"
+    while true; do
+        status=$(sudo systemctl is-active elasticsearch)
+        if [ "$status" == "active" ]; then
+            echo -e "${GREEN}Elasticsearch service is active and running.${TEXTRESET}"
+            break
+        else
+            echo -e "${YELLOW}Waiting for Elasticsearch service to start...${TEXTRESET}"
+            sleep 5
+        fi
+    done
+}
+
+# Main script execution
+main() {
+    reload_daemon
+    enable_start_elasticsearch
+    check_status
+
+    # Continue with further steps if needed
+    echo -e "${GREEN}Elasticsearch is running. Proceeding with further actions...${TEXTRESET}"
+    # Add additional script actions here
+}
+
+# Run the main function
+main
+
+
+echo -e "${GREEN}Generating Password for the elastic account.${TEXTRESET}"
+echo -e "${Yellow}This will be forced to reset when first logging in.${TEXTRESET}"
+# Function to generate a random password
+generate_password() {
+    # Generate a 6-character password with upper and lowercase letters
+    tr -dc 'A-Za-z' </dev/urandom | head -c 6
+}
+
+# Function to reset the password for the elastic user
+reset_elastic_password() {
+    local password="$1"
+    echo -e "${YELLOW}Resetting password for the elastic user...${TEXTRESET}"
+
+    # Use here-document to provide input to the password reset command
+    sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i <<EOF
+y
+$password
+$password
+EOF
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Password for the elastic user successfully reset.${TEXTRESET}"
+        echo -e "${YELLOW}The Password is:${TEXTRESET}"
+        echo -e "$password"
+        echo -e "${RED}you will need this apssword for the next step.${TEXTRESET}"
+        red -p "Press Enter Once you have it written down"
+    else
+        echo -e "${RED}Failed to reset password for the elastic user.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Main script execution
+main() {
+    # Generate a password
+    password=$(generate_password)
+    echo -e "${GREEN}Generated password: $password${TEXTRESET}"
+
+    # Reset the password
+    reset_elastic_password "$password"
+
+    # Store the password in a file
+    echo "$password" | sudo tee /root/elastic_password > /dev/null
+    echo -e "${GREEN}Password stored in /root/elastic_password.${TEXTRESET}"
+}
+
+# Run the main function
+main
+
+# Function to test Elasticsearch response
+test_elasticsearch() {
+    local cert_path="/etc/elasticsearch/certs/http_ca.crt"
+    local url="https://localhost:9200"
+
+    echo -e "${YELLOW}Testing Elasticsearch response...${TEXTRESET}"
+
+    # Prompt for the password of the elastic user
+    read -sp "Enter password for elastic user: " password
+    echo
+
+    # Perform the query using curl
+    response=$(sudo curl --cacert "$cert_path" -u elastic:"$password" "$url" 2>/dev/null)
+
+    # Check if the response contains expected data
+    if echo "$response" | grep -q '"tagline" : "You Know, for Search"'; then
+        echo -e "${GREEN}Elasticsearch is responding to queries.${TEXTRESET}"
+        echo "$response"
+    else
+        echo -e "${RED}Failed to get a valid response from Elasticsearch.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Main script execution
+main() {
+    test_elasticsearch
+}
+
+# Run the main function
+main
