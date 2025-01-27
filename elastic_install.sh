@@ -50,14 +50,6 @@ fi
 
 echo -e "${GREEN}Installation process completed successfully.${TEXTRESET}"
 
-#!/bin/bash
-
-# Define color codes for pretty output
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-TEXTRESET="\033[0m"
-
 # Define the Elasticsearch configuration paths
 ELASTIC_YML="/etc/elasticsearch/elasticsearch.yml"
 JVM_OPTIONS_DIR="/etc/elasticsearch/jvm.options.d"
