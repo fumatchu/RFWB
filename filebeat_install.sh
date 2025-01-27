@@ -11,6 +11,7 @@ SOURCE_CERT_PATH="/etc/elasticsearch/certs/http_ca.crt"
 DEST_CERT_DIR="/etc/filebeat"
 DEST_CERT_PATH="$DEST_CERT_DIR/http_ca.crt"
 FILEBEAT_YML="/etc/filebeat/filebeat.yml"
+SURICATA_MODULE_YML="/etc/filebeat/modules.d/suricata.yml"
 ELASTIC_PASSWORD_FILE="/root/elastic_password"
 
 # Function to locate the server's private IP address using nmcli
@@ -118,8 +119,33 @@ configure_filebeat() {
     ' "$FILEBEAT_YML" > /tmp/filebeat.yml && sudo mv /tmp/filebeat.yml "$FILEBEAT_YML"
 }
 
-# Verify Elasticsearch connection
-verify_elasticsearch_connection() {
+# Modify Suricata module configuration
+configure_suricata_module() {
+    echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
+    sudo awk '
+    BEGIN {in_eve=0}
+    {
+        if ($0 ~ /^- module: suricata$/) {
+            in_eve=0
+        }
+        if ($0 ~ /^  eve:$/) {
+            in_eve=1
+        }
+        if (in_eve && $0 ~ /^    #enabled: false$/) {
+            print "    enabled: true"
+            next
+        }
+        if (in_eve && $0 ~ /^    #var.paths:/) {
+            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
+            next
+        }
+        print $0
+    }
+    ' "$SURICATA_MODULE_YML" > /tmp/suricata.yml && sudo mv /tmp/suricata.yml "$SURICATA_MODULE_YML"
+}
+
+# Verify Elasticsearch connection and enable Suricata module
+verify_and_enable_module() {
     local private_ip="$1"
 
     if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
@@ -135,6 +161,15 @@ verify_elasticsearch_connection() {
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Elasticsearch connection verified successfully.${TEXTRESET}"
+        echo -e "${YELLOW}Enabling Suricata module in Filebeat...${TEXTRESET}"
+        sudo filebeat modules enable suricata
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
+            configure_suricata_module
+        else
+            echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
+        fi
     else
         echo -e "${RED}Error: Failed to verify Elasticsearch connection.${TEXTRESET}"
     fi
@@ -145,6 +180,6 @@ install_filebeat
 copy_certificate_locally
 private_ip=$(find_private_ip)
 configure_filebeat "$private_ip"
-verify_elasticsearch_connection "$private_ip"
+verify_and_enable_module "$private_ip"
 
 echo -e "${GREEN}Filebeat setup and configuration completed successfully.${TEXTRESET}"
