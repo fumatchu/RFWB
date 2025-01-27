@@ -143,3 +143,101 @@ main() {
 
 # Run the main function
 main
+#Set FW Rules 
+# Function to find the network interface
+find_interface() {
+    # Find the interface with a connection ending in -inside
+    interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface with a connection ending in '-inside' found.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$interface"
+}
+
+# Function to find the zone associated with the interface
+find_zone() {
+    local interface="$1"
+    # Get the active zones and find the one associated with the interface
+    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
+        {
+            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
+        }
+        /^  interfaces:/ {
+            if ($0 ~ iface) { print current_zone }
+        }
+    ')
+
+    if [ -z "$zone" ]; then
+        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$zone"
+}
+
+# Function to configure firewall rules
+configure_firewall() {
+    local interface="$1"
+    local zone="$2"
+
+    echo -e "${YELLOW}Configuring firewall for interface: $interface in zone: $zone...${TEXTRESET}"
+
+    # Change the interface to the appropriate zone
+    if sudo firewall-cmd --permanent --zone="$zone" --change-interface="$interface"; then
+        echo -e "${GREEN}Interface $interface changed to the zone $zone.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to change interface $interface to the zone $zone.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Add services to the zone
+    if sudo firewall-cmd --permanent --zone="$zone" --add-service=elasticsearch; then
+        echo -e "${GREEN}Elasticsearch service added to the zone $zone.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to add Elasticsearch service to the zone $zone.${TEXTRESET}"
+        exit 1
+    fi
+
+    if sudo firewall-cmd --permanent --zone="$zone" --add-service=kibana; then
+        echo -e "${GREEN}Kibana service added to the zone $zone.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to add Kibana service to the zone $zone.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Open port 5601 for Kibana
+    if sudo firewall-cmd --permanent --zone="$zone" --add-port=5601/tcp; then
+        echo -e "${GREEN}Port 5601/tcp opened for Kibana.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to open port 5601/tcp for Kibana.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Reload the firewall to apply changes
+    if sudo firewall-cmd --reload; then
+        echo -e "${GREEN}Firewall reloaded successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to reload the firewall.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Main script execution
+main() {
+    echo -e "${YELLOW}Locating the network interface...${TEXTRESET}"
+    interface=$(find_interface)
+
+    echo -e "${YELLOW}Determining the zone for interface $interface...${TEXTRESET}"
+    zone=$(find_zone "$interface")
+
+    echo -e "${YELLOW}Starting firewall configuration...${TEXTRESET}"
+    configure_firewall "$interface" "$zone"
+
+    echo -e "${GREEN}Firewall configuration complete.${TEXTRESET}"
+}
+
+# Run the main function
+main
