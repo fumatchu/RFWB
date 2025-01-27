@@ -118,10 +118,33 @@ configure_filebeat() {
     ' "$FILEBEAT_YML" > /tmp/filebeat.yml && sudo mv /tmp/filebeat.yml "$FILEBEAT_YML"
 }
 
+# Verify Elasticsearch connection
+verify_elasticsearch_connection() {
+    local private_ip="$1"
+
+    if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
+        echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
+        exit 1
+    fi
+
+    local elastic_password
+    elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
+
+    echo -e "${YELLOW}Verifying Elasticsearch connection...${TEXTRESET}"
+    curl -v --cacert "$DEST_CERT_PATH" "https://$private_ip:9200" -u elastic:"$elastic_password"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Elasticsearch connection verified successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to verify Elasticsearch connection.${TEXTRESET}"
+    fi
+}
+
 # Main script execution
 install_filebeat
 copy_certificate_locally
 private_ip=$(find_private_ip)
 configure_filebeat "$private_ip"
+verify_elasticsearch_connection "$private_ip"
 
 echo -e "${GREEN}Filebeat setup and configuration completed successfully.${TEXTRESET}"
