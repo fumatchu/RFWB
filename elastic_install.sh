@@ -58,71 +58,96 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 
-# Function to find the private IP address and zone for the interface ending with -inside
-find_interface_details() {
-    # Get the list of interfaces with their IP addresses using nmcli
-    interfaces=$(nmcli device status | awk '/-inside/ {print $1}')
+# Define the Elasticsearch configuration paths
+ELASTIC_YML="/etc/elasticsearch/elasticsearch.yml"
+JVM_OPTIONS_DIR="/etc/elasticsearch/jvm.options.d"
+JVM_HEAP_OPTIONS="$JVM_OPTIONS_DIR/jvm-heap.options"
 
-    # Loop through interfaces to find the IP address and zone
-    for interface in $interfaces; do
-        # Get IP address for the interface
-        ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
-        
-        # Get the zone associated with the interface
-        zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
-            {zone=$1} 
-            /^  interfaces:/{ 
-                if ($3 == iface) print zone
-            }')
+# Function to locate the server's private IP address using nmcli
+find_private_ip() {
+    # Find the interface ending with -inside
+    interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
-        # Check if the IP address and zone are found
-        if [ -n "$ip" ] && [ -n "$zone" ]; then
-            echo "$interface:$ip:$zone"
-            return
-        fi
-    done
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
+        exit 1
+    fi
 
-    # If no IP or zone is found, print an error and exit
-    echo -e "${RED}No interface with '-inside' found, or no IP address or zone assigned. Exiting.${TEXTRESET}"
-    exit 1
+    # Extract the private IP address for the found interface
+    ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
+
+    if [ -z "$ip" ]; then
+        echo -e "${RED}Error: No IP address found for the interface $interface.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$ip"
 }
 
-# Get the private IP address, interface, and zone
-interface_details=$(find_interface_details)
-interface_name=$(echo "$interface_details" | awk -F: '{print $1}' | sed 's/-inside//')
-private_ip=$(echo "$interface_details" | awk -F: '{print $2}')
-zone=$(echo "$interface_details" | awk -F: '{print $3}')
+# Function to configure Elasticsearch
+configure_elasticsearch() {
+    local private_ip="$1"
 
-echo -e "${GREEN}Found private IP: $private_ip on interface: $interface_name in zone: $zone${TEXTRESET}"
+    echo -e "${YELLOW}Backing up the original Elasticsearch configuration...${TEXTRESET}"
+    # Backup the original Elasticsearch configuration file
+    sudo cp "$ELASTIC_YML" "${ELASTIC_YML}.bak"
 
-# Update elasticsearch.yml file
-echo -e "${YELLOW}Configuring Elasticsearch...${TEXTRESET}"
-elasticsearch_yml="/etc/elasticsearch/elasticsearch.yml"
+    echo -e "${YELLOW}Updating the Elasticsearch configuration...${TEXTRESET}"
+    # Use awk to insert the network.bind_host line below the specified comments
+    sudo awk -v ip="$private_ip" '
+    BEGIN {inserted=0}
+    {
+        print $0
+        if (!inserted && $0 ~ /^#network.host: 192.168.0.1$/) {
+            print "network.bind_host: [\"127.0.0.1\", \"" ip "\"]"
+            inserted=1
+        }
+    }
+    ' "$ELASTIC_YML" > /tmp/elasticsearch.yml && sudo mv /tmp/elasticsearch.yml "$ELASTIC_YML"
 
-sudo sed -i "/#network.host: 192.168.0.1/a network.bind_host: [\"127.0.0.1\", \"$private_ip\"]" "$elasticsearch_yml"
+    # Check if discovery.type: single-node is present, if not, append it
+    if ! grep -q "^discovery.type: single-node" "$ELASTIC_YML"; then
+        echo "discovery.type: single-node" | sudo tee -a "$ELASTIC_YML" > /dev/null
+    fi
 
-# Append security and discovery configuration
-echo -e "\ndiscovery.type: single-node" | sudo tee -a "$elasticsearch_yml" > /dev/null
-sudo sed -i "s/^cluster.initial_master_nodes/#cluster.initial_master_nodes/" "$elasticsearch_yml"
+    # Comment out the initial master nodes setting if present
+    sudo sed -i 's/^cluster.initial_master_nodes:.*$/#&/' "$ELASTIC_YML" || {
+        echo -e "${RED}Error: Failed to comment out initial master nodes setting.${TEXTRESET}"
+        exit 1
+    }
+}
 
-echo -e "${GREEN}Elasticsearch configuration updated successfully.${TEXTRESET}"
+# Function to set JVM heap size
+configure_jvm_heap() {
+    echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+    # Create the JVM options directory if it doesn't exist
+    sudo mkdir -p "$JVM_OPTIONS_DIR"
 
-# Configure JVM heap size
-echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
-jvm_options="/etc/elasticsearch/jvm.options.d/jvm-heap.options"
-sudo mkdir -p /etc/elasticsearch/jvm.options.d
-echo -e "-Xms3g\n-Xmx3g" | sudo tee "$jvm_options" > /dev/null
+    # Write the JVM heap configuration
+    echo "-Xms3g" | sudo tee "$JVM_HEAP_OPTIONS" > /dev/null
+    echo "-Xmx3g" | sudo tee -a "$JVM_HEAP_OPTIONS" > /dev/null
+}
 
-echo -e "${GREEN}JVM heap size configured successfully.${TEXTRESET}"
+# Main script execution
+main() {
+    echo -e "${YELLOW}Locating the server's private IP address...${TEXTRESET}"
+    private_ip=$(find_private_ip)
 
-# Configure firewall rules
-echo -e "${YELLOW}Configuring firewall rules...${TEXTRESET}"
-sudo firewall-cmd --permanent --zone="$zone" --change-interface="$interface_name"
-sudo firewall-cmd --permanent --zone="$zone" --add-service=elasticsearch
-sudo firewall-cmd --permanent --zone="$zone" --add-service=kibana
-sudo firewall-cmd --permanent --zone="$zone" --add-port=5601/tcp
-sudo firewall-cmd --reload
+    if [ -z "$private_ip" ]; then
+        echo -e "${RED}Error: Unable to determine the private IP address.${TEXTRESET}"
+        exit 1
+    fi
 
-echo -e "${GREEN}Firewall rules configured successfully.${TEXTRESET}"
+    echo -e "${GREEN}Private IP identified as: $private_ip${TEXTRESET}"
 
-echo -e "${GREEN}Setup completed. Please review configurations and start Elasticsearch when ready.${TEXTRESET}"
+    echo -e "${YELLOW}Configuring Elasticsearch...${TEXTRESET}"
+    configure_elasticsearch "$private_ip"
+
+    echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+    configure_jvm_heap
+
+    echo -e "${GREEN}Configuration complete. Please restart the Elasticsearch service to apply changes.${TEXTRESET}"
+}
+
+# Run the main function
+main
