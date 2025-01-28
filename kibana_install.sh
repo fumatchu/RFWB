@@ -265,7 +265,9 @@ echo -e "${GREEN}Kibana setup and startup process completed successfully.${TEXTR
 # Function to display initial instructions
 display_instructions() {
     echo -e "${GREEN}The Kibana Service is now running${TEXTRESET}"
-    echo -e "${YELLOW}The next step is to log in to the Elastic dashboard.${TEXTRESET}"
+    echo -e "${YELLOW}The next step is to enable the Elastic dashboard/services.${TEXTRESET}"
+    echo -e "${RED}PLEASE DO NOT LOGIN TO THE DASHBOARD YET${TEXTRESET}"
+    echo -e "We are only starting the elasdtic service and we must provide an enrollment token and Verification code"
     echo ""
     echo "#1 - Open a browser (Leave this terminal open)"
     echo ""
