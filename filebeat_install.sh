@@ -182,4 +182,116 @@ private_ip=$(find_private_ip)
 configure_filebeat "$private_ip"
 verify_and_enable_module "$private_ip"
 
+# Spinner function for animation
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    while [ "$(ps a | awk '{print $1}' | grep "$pid")" ]; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
+# Enable the Filebeat Suricata module
+enable_suricata_module() {
+    echo -e "${YELLOW}Enabling Filebeat Suricata module...${TEXTRESET}"
+    sudo filebeat modules enable suricata
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Edit the Suricata module configuration
+edit_suricata_config() {
+    local config_file="/etc/filebeat/modules.d/suricata.yml"
+
+    echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
+    sudo awk '
+    BEGIN {in_eve=0}
+    {
+        if ($0 ~ /^- module: suricata$/) {
+            in_eve=0
+        }
+        if ($0 ~ /^  eve:$/) {
+            in_eve=1
+        }
+        if (in_eve && $0 ~ /^    #enabled: false$/) {
+            print "    enabled: true"
+            next
+        }
+        if (in_eve && $0 ~ /^    #var.paths:/) {
+            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
+            next
+        }
+        print $0
+    }
+    ' "$config_file" > /tmp/suricata.yml && sudo mv /tmp/suricata.yml "$config_file"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Suricata module configuration updated successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to update Suricata module configuration.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Setup Filebeat (load dashboards and pipelines)
+setup_filebeat() {
+    echo -e "${YELLOW}Setting up Filebeat...${TEXTRESET}"
+
+    # Start the spinner in the background
+    sudo filebeat setup & spinner $!
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Filebeat setup failed.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Start and enable the Filebeat service
+start_filebeat_service() {
+    echo -e "${YELLOW}Starting and enabling Filebeat service...${TEXTRESET}"
+    sudo systemctl enable filebeat --now
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat service started and enabled successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to start and enable Filebeat service.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Check the status of the Filebeat service
+check_filebeat_status() {
+    echo -e "${YELLOW}Checking Filebeat service status...${TEXTRESET}"
+    sudo systemctl status filebeat --no-pager
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat service is running.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Filebeat service is not running.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Main script execution
+enable_suricata_module
+edit_suricata_config
+setup_filebeat
+start_filebeat_service
+check_filebeat_status
+
+echo -e "${GREEN}Filebeat Suricata module setup and configuration completed successfully.${TEXTRESET}"
+
 echo -e "${GREEN}Filebeat setup and configuration completed successfully.${TEXTRESET}"
