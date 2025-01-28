@@ -224,7 +224,7 @@ edit_suricata_config() {
         if ($0 ~ /^  eve:$/) {
             in_eve=1
         }
-        if (in_eve && $0 ~ /^    #enabled: false$/) {
+        if (in_eve && $0 ~ /^    enabled: false$/) {
             print "    enabled: true"
             next
         }
@@ -293,5 +293,3 @@ start_filebeat_service
 check_filebeat_status
 
 echo -e "${GREEN}Filebeat Suricata module setup and configuration completed successfully.${TEXTRESET}"
-
-echo -e "${GREEN}Filebeat setup and configuration completed successfully.${TEXTRESET}"
