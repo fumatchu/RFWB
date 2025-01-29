@@ -129,8 +129,8 @@ fi
 # Provide final results summary
 echo
 echo "===== TEST RESULTS ====="
-echo "DNS Resolution for google.com: $(if check_dns_resolution "google.com"; then echo "${GREEN}Passed"${TEXTRESET}; else echo "${RED}Failed"${TEXTRESET}; fi)"
-echo "Ping to 8.8.8.8: $(if ping_address "8.8.8.8"; then echo "${GREEN}Passed"${TEXTRESET}; else echo "${RED}Failed"${TEXTRESET}; fi)"
+echo -e "DNS Resolution for google.com: $(if check_dns_resolution "google.com"; then echo "${GREEN}Passed"${TEXTRESET}; else echo -e "${RED}Failed"${TEXTRESET}; fi)"
+echo -e "Ping to 8.8.8.8: $(if ping_address "8.8.8.8"; then echo "${GREEN}Passed"${TEXTRESET}; else echo -e "${RED}Failed"${TEXTRESET}; fi)"
 echo "========================"
 echo
 
