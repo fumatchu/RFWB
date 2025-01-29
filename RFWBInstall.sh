@@ -1,5 +1,5 @@
 #!/bin/bash
-#DC-Installer.sh #Bootstrap to GIT REPO
+#Bootstrap to GIT REPO
 TEXTRESET=$(tput sgr0)
 RED=$(tput setaf 1)
 YELLOW=$(tput setaf 3)
@@ -63,7 +63,18 @@ cat <<EOF
  1. The Rocky Firewall Builder based on firewalld
  
  What this script does:
- 1. Nothing yet
+ 1. Validates and upgrades the system
+ 2. Sets internal Interfaces with zones and (vlans)
+ 3. Configures and locks down external interface with user preferences
+ 4. Provides a set of applications that can be installed:
+     -Bind
+     -ISC-KEA
+     -Webmin
+     -Cockpit
+     -DDNS Client 
+     -Suricata (Standalone)
+     -Suricata with Elastic/Kibana/Filebeat for events and alerts
+     -ntop-ng
 
  *********************************************
  
