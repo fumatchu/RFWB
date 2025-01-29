@@ -301,6 +301,6 @@ and update the system.
 EOF
 
 read -p "Press Enter to install applications and services"
-/root/RFWB.pkg_installgui.sh
+/root/RFWB/pkg_install_gui.sh
 
 echo -e "Continue script"
