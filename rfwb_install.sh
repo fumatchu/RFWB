@@ -151,8 +151,14 @@ else
     # Continue with the script or exit as needed
 fi
 
+echo -e echo ${GREEN}"Updating system${TEXTRESET}"
+sleep 2
 dnf -y update 
+dnf -y install net-tools dmidecode ipcalc bind-utils
+HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cut -c16-)
+HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
 
+echo -e echo ${GREEN}"Checking for Virtualtization Platform${TEXTRESET}"
 #Checking for VM platform-Install client
 echo ${GREEN}"Installing VMGuest${TEXTRESET}"
 if [ "$HWKVM" = "KVM" ]; then
