@@ -54,7 +54,7 @@ chmod 700 /root/RFWB/*
 clear
 echo ${RED}"Removing Git${TEXTRESET}"
 dnf -y remove git
-
+clear
 cat <<EOF
  *********************************************
 
@@ -76,11 +76,11 @@ items=(1 "Install RFWB Setup"
 )
 
 while choice=$(dialog --title "$TITLE" \
-  --backtitle "Server Installer" \
+  --backtitle "RFWB Installer" \
   --menu "Please select the install type" 15 65 3 "${items[@]}" \
   2>&1 >/dev/tty); do
   case $choice in
-  1) /root/RFWB/install.sh ;;
+  1) /root/RFWB/rfwb_install.sh ;;
   esac
 done
 clear # clear after user pressed Cancel
