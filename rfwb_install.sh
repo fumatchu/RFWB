@@ -151,7 +151,7 @@ else
     # Continue with the script or exit as needed
 fi
 
-echo -e echo ${GREEN}"Updating system${TEXTRESET}"
+echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 dnf -y update 
 dnf -y install net-tools dmidecode ipcalc bind-utils
