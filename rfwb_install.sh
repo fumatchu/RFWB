@@ -158,11 +158,11 @@ dnf -y install net-tools dmidecode ipcalc bind-utils
 HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cut -c16-)
 HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
 
-echo -e echo ${GREEN}"Checking for Virtualtization Platform${TEXTRESET}"
+echo -e ${GREEN}"Checking for Virtualtization Platform${TEXTRESET}"
 #Checking for VM platform-Install client
 echo ${GREEN}"Installing VMGuest${TEXTRESET}"
 if [ "$HWKVM" = "KVM" ]; then
-  echo ${GREEN}"KVM Platform detected ${TEXTRESET}"
+  echo -e ${GREEN}"KVM Platform detected ${TEXTRESET}"
   echo "Installing qemu-guest-agent"
   sleep 1
   dnf -y install qemu-guest-agent
@@ -172,7 +172,7 @@ fi
 
 #Checking for VM platform-Install client
 if [ "$HWVMWARE" = "VMware" ]; then
-  echo ${GREEN}"VMWARE Platform detected ${TEXTRESET}"
+  echo -e ${GREEN}"VMWARE Platform detected ${TEXTRESET}"
   echo "Installing open-vm-tools"
   sleep 1
   dnf -y install open-vm-tools
