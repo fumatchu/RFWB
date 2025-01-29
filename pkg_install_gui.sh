@@ -1745,6 +1745,7 @@ options=(
     6 "Install DDNS Client" off
     7 "Install required Packages" on
     8 "Install Suricata" on
+    9 "Install Elastic/Kibana/Filebeat" on
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
