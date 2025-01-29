@@ -87,6 +87,8 @@ After that, the system will prompt you to reboot and you will be ready to go!
 
 read -p "Press Enter to start the installer"
 
+#Update the system
+dnf -y update 
 
 #Configure the ZONE for the inside interface
 # Ensure necessary commands are installed
