@@ -179,7 +179,7 @@ if [ "$HWVMWARE" = "VMware" ]; then
 else
   echo "Not VMware Platform"
 fi
-
+clear
 #Configure the ZONE for the inside interface
 # Ensure necessary commands are installed
 if ! command -v nmcli &> /dev/null; then
