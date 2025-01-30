@@ -155,6 +155,27 @@ echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 dnf -y update 
 dnf -y install net-tools dmidecode ipcalc bind-utils
+echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
+#!/usr/bin/env bash
+
+# Check if expect is installed
+if ! command -v expect &> /dev/null; then
+    echo -e ${YELLOW}"Expect is not installed. Installing now...${TEXTRESET}"
+    dnf -y install expect
+fi
+
+# Run the package installation script and install speedtest
+curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash
+dnf -y install speedtest
+
+# Create an expect script to automate the interaction with speedtest
+/usr/bin/expect <<EOF
+    spawn speedtest
+    expect "Do you accept the license? \\[type YES to accept\\]:"
+    send "YES\r"
+    expect eof
+EOF
+#!/bin/bash
 HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cut -c16-)
 HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
 
