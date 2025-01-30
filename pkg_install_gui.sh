@@ -1729,6 +1729,16 @@ start_filebeat_service
 check_filebeat_status
 
 echo -e "${GREEN}Filebeat Suricata module setup and configuration completed successfully.${TEXTRESET}"
+echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
+echo -e
+echo -e "Your generated password for this installation is located in the file /root/elastic_password"
+echo -e "The password is:"
+cat /root/elastic_password
+echo -e "If you wish to change this password you can do so using FW-Manager after the system is fully operational"
+echo -e "One last step to get your dashboards are to login to Kibana http://localhost:5601 (the dashboard you logged into earlier),"
+echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
+echo -e "[Filebeat Suricata] Alert Overview" to load the Suricata Dashboard- Go ahead and do that now"
+read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
 }
 
 
