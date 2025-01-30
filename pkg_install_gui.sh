@@ -8,6 +8,7 @@ RESET='\033[0m'
 # Function to install REQUIRED
 install_required() {
     echo -e "${GREEN}Installing Required packages...${TEXTRESET}"
+    sleep 2
     dnf -y config-manager --set-enabled crb
     dnf -y install epel-release
     dnf -y clean all
@@ -18,12 +19,14 @@ install_required() {
 # Function to install ddns
 install_ddclient() {
     echo -e "${GREEN}Installing ddns client (ddclient)...${TEXTRESET}"
+    sleep 2
     dnf -y install ddclient
     echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
 }
 # Function to install BIND
 install_bind() {
     echo -e "${GREEN}Installing BIND...${TEXTRESET}"
+    sleep 2
     dnf -y install bind
     echo -e "${GREEN}BIND installation complete.${TEXTRESET}"
 
@@ -85,6 +88,7 @@ echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 # Function to install ISC KEA
 install_isc_kea() {
     echo -e "${GREEN}Installing ISC KEA...${TEXTRESET}"
+    sleep 2
     dnf -y install epel-release
     curl -1sLf 'https://dl.cloudsmith.io/public/isc/kea-2-6/cfg/setup/bash.rpm.sh' | sudo bash
     sudo dnf -y update
@@ -145,6 +149,7 @@ install_isc_kea() {
     # Function to install COCKPIT
 install_cockpit() {
     echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
+    sleep 2
     dnf -y install cockpit cockpit-storaged tuned
     echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
     # Get the network interface associated with a connection name ending in '-inside'
@@ -200,6 +205,7 @@ install_cockpit() {
 # Function to install WEBMIN
 install_webmin() {
     echo -e "${GREEN}Installing Webmin...${TEXTRESET}"
+    sleep 2
     curl -o webmin-setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repos.sh
     yes y | sh webmin-setup-repos.sh
     dnf -y install webmin
@@ -265,6 +271,7 @@ install_webmin() {
 # Function to install NTOPNG
 install_ntopng() {
     echo -e "${GREEN}Installing ntopng...${TEXTRESET}"
+    sleep 2
     curl https://packages.ntop.org/centos-stable/ntop.repo > /etc/yum.repos.d/ntop.repo
     dnf -y config-manager --set-enabled crb
     dnf -y install epel-release
@@ -374,6 +381,7 @@ echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 # Function to install NTOPNG
 install_suricata() {
 echo -e "${YELLOW}Checking Hardware Requirements...${RESET}"
+sleep 2
 dnf -y install bc
 # Function to check if the system has at least 8 GB of RAM
 check_ram() {
@@ -442,6 +450,7 @@ fi
 
 # Install essential packages
 echo -e "${YELLOW}Installing essential packages...${TEXTRESET}"
+sleep 2
 if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
     echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
 else
@@ -451,7 +460,7 @@ fi
 
 # Install Suricata
 echo -e "${YELLOW}Installing Suricata...${TEXTRESET}"
-
+sleep 2
 # Enable copr command for dnf
 echo -e "${YELLOW}Enabling dnf copr command...${TEXTRESET}"
 if sudo dnf install -y 'dnf-command(copr)'; then
@@ -759,7 +768,7 @@ echo -e "${GREEN}Script completed successfully.${TEXTRESET}"
 install_elastic() {
 # Inform the user that the process is starting
 echo -e "${YELLOW}Starting the installation of Elasticsearch and Kibana...${TEXTRESET}"
-
+sleep 2
 # Step 1: Import the Elastic GPG key
 echo -e "${YELLOW}Importing the Elastic GPG key...${TEXTRESET}"
 if sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch; then
