@@ -6,7 +6,9 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 USER=$(whoami)
-
+INTERFACE=$(nmcli | grep "connected to" | cut -d " " -f4)
+DETECTIP=$(nmcli -f ipv4.method con show $INTERFACE)
+FQDN=$(hostname)
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
   echo -e "${GREEN}Running as root user.${RESET}"
