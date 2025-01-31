@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Define color codes
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+YELLOW="\033[1;33m"
+TEXTRESET="\033[0m"
+
 # Function to check if a domain name is in the correct format
 is_valid_domain() {
     local domain=$1
@@ -17,30 +23,26 @@ is_valid_email() {
 # Function to update the serial number in a zone file
 update_serial_number() {
     local zone_file=$1
-
-    # Extract the current serial number by searching the line after the SOA opening
     local current_serial=$(awk '/SOA/ {getline; print $1}' "$zone_file")
 
-    # Check if the current serial number is valid
     if [[ "$current_serial" =~ ^[0-9]+$ ]]; then
         local new_serial=$((current_serial + 1))
-        # Update the zone file with the new serial number
         sudo sed -i "s/$current_serial/$new_serial/" "$zone_file"
-        echo "Serial number updated from $current_serial to $new_serial in $zone_file."
+        echo -e "${GREEN}Serial number updated from $current_serial to $new_serial in $zone_file.${TEXTRESET}"
     else
-        echo "Failed to update serial number: could not find a valid serial number."
+        echo -e "${RED}Failed to update serial number: could not find a valid serial number.${TEXTRESET}"
     fi
 }
 
 # Function to configure BIND with rndc
 configure_rndc() {
-    echo "Generating rndc key..."
+    echo -e "${YELLOW}Generating rndc key...${TEXTRESET}"
     sudo rndc-confgen -a
 
     if grep -q 'include "/etc/rndc.key";' "$NAMED_CONF" && grep -q 'controls {' "$NAMED_CONF"; then
-        echo "rndc configuration already exists in $NAMED_CONF. Skipping addition."
+        echo -e "${YELLOW}rndc configuration already exists in $NAMED_CONF. Skipping addition.${TEXTRESET}"
     else
-        echo "Adding rndc configuration to $NAMED_CONF..."
+        echo -e "${YELLOW}Adding rndc configuration to $NAMED_CONF...${TEXTRESET}"
         sudo bash -c "cat >> $NAMED_CONF" <<EOF
 
 include "/etc/rndc.key";
@@ -51,22 +53,22 @@ controls {
 EOF
     fi
 
-    echo "Configuration updated for rndc in $NAMED_CONF."
+    echo -e "${GREEN}Configuration updated for rndc in $NAMED_CONF.${TEXTRESET}"
     sudo chown root:named /etc/rndc.key
     sudo chmod 640 /etc/rndc.key
     if selinuxenabled; then
         sudo restorecon /etc/rndc.key
     fi
 
-    echo "Updating firewall rules to allow rndc..."
+    echo -e "${YELLOW}Updating firewall rules to allow rndc...${TEXTRESET}"
     sudo firewall-cmd --add-port=953/tcp --permanent
     sudo firewall-cmd --reload
 
-    echo "Restarting BIND service..."
+    echo -e "${YELLOW}Restarting BIND service...${TEXTRESET}"
     sudo systemctl restart named
 
-    echo "Testing rndc status..."
-    sudo rndc status || echo "rndc status command failed. Please check the configuration."
+    echo -e "${YELLOW}Testing rndc status...${TEXTRESET}"
+    sudo rndc status || echo -e "${RED}rndc status command failed. Please check the configuration.${TEXTRESET}"
 }
 
 # Function to create a new forwarding zone
@@ -82,7 +84,7 @@ create_forwarding_zone() {
                     soa_email="${email_address//@/.}"
                     break
                 else
-                    echo "Invalid email address format. Please try again."
+                    echo -e "${RED}Invalid email address format. Please try again.${TEXTRESET}"
                 fi
             done
 
@@ -104,11 +106,11 @@ EOF
             sudo chmod 640 $zone_file
             sudo restorecon $zone_file
 
-            echo "Zone file $zone_file created and configured."
-            echo "Contents of the newly created zone file:"
+            echo -e "${GREEN}Zone file $zone_file created and configured.${TEXTRESET}"
+            echo -e "${YELLOW}Contents of the newly created zone file:${TEXTRESET}"
             cat $zone_file
 
-            echo "Adding the new zone configuration to the end of $NAMED_CONF..."
+            echo -e "${YELLOW}Adding the new zone configuration to the end of $NAMED_CONF...${TEXTRESET}"
             sudo bash -c "cat >> $NAMED_CONF" <<EOF
 
 zone "$domain_name" {
@@ -121,26 +123,43 @@ EOF
 
             break
         else
-            echo "Invalid domain name format. Please use the format subdomain.domain.int or domain.int."
+            echo -e "${RED}Invalid domain name format. Please use the format subdomain.domain.int or domain.int.${TEXTRESET}"
         fi
     done
+}
+
+# Function to update named.conf for crypto policy and logging
+update_named_conf() {
+    echo -e "${YELLOW}Updating $NAMED_CONF for crypto policy and logging...${TEXTRESET}"
+
+    # Backup the original named.conf
+    sudo cp "$NAMED_CONF" "${NAMED_CONF}.bak"
+
+    # Use sed to replace specific blocks
+    sudo sed -i '/\/\* https:\/\/fedoraproject.org\/wiki\/Changes\/CryptoPolicy \*\//,/}/c\/* https://fedoraproject.org/wiki/Changes/CryptoPolicy */\n\tinclude "/etc/crypto-policies/ba
+ck-ends/bind.config";\n\tforwarders {\n\t\t208.67.222.222;\n\t\t208.67.220.220;\n\t};\n\tforward only;' "$NAMED_CONF"
+
+    sudo sed -i '/logging {/,/};/c\logging {\n\tchannel default_debug {\n\t\tfile "data/named.run";\n\t\tseverity dynamic;\n\t};\n\n\tcategory lame-servers { null; };\n};' "$NAMED_CONF
+"
+
+    echo -e "${GREEN}Updated $NAMED_CONF for crypto policy and logging.${TEXTRESET}"
 }
 
 NAMED_CONF="/etc/named.conf"
 
 if [ -f "$NAMED_CONF" ]; then
-    echo "$NAMED_CONF found."
+    echo -e "${GREEN}$NAMED_CONF found.${TEXTRESET}"
 
     read -p "Do you want to configure BIND? (yes/no): " user_input
     user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]')
 
     if [ "$user_input" == "yes" ]; then
-        echo "Configuring BIND..."
+        echo -e "${YELLOW}Configuring BIND...${TEXTRESET}"
 
         sudo sed -i 's/listen-on port 53 { 127.0.0.1; };/listen-on port 53 { 127.0.0.1; any; };/' "$NAMED_CONF"
         sudo sed -i 's/allow-query[[:space:]]*{[[:space:]]*localhost;[[:space:]]*};/allow-query { localhost; any; };/' "$NAMED_CONF"
 
-        echo "Configuration updated in $NAMED_CONF."
+        echo -e "${GREEN}Configuration updated in $NAMED_CONF.${TEXTRESET}"
         configure_rndc
 
         read -p "Do you want to create a new forwarding zone? (yes/no): " create_zone
@@ -148,14 +167,16 @@ if [ -f "$NAMED_CONF" ]; then
         if [ "$create_zone" == "yes" ]; then
             create_forwarding_zone
         else
-            echo "Zone creation skipped."
+            echo -e "${YELLOW}Zone creation skipped.${TEXTRESET}"
         fi
 
+        update_named_conf
+
     elif [ "$user_input" == "no" ]; then
-        echo "BIND configuration skipped."
+        echo -e "${YELLOW}BIND configuration skipped.${TEXTRESET}"
     else
-        echo "Invalid input. Please answer 'yes' or 'no'."
+        echo -e "${RED}Invalid input. Please answer 'yes' or 'no'.${TEXTRESET}"
     fi
 else
-    echo "$NAMED_CONF not found. BIND might not be installed."
+    echo -e "${RED}$NAMED_CONF not found. BIND might not be installed.${TEXTRESET}"
 fi
