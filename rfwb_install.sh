@@ -275,7 +275,7 @@ After that, the system will prompt you to reboot and you will be ready to go!
 "
 
 read -p "Press Enter to start the installer"
-
+clear
 #Check for Network Connectivity
 echo "Checking for Internet Connectivity"
 echo " "
