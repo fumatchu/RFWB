@@ -67,7 +67,7 @@ validate_fqdn() {
   local fqdn=$1
   [[ $fqdn =~ ^([a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
 }
-
+clear
 if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
   while true; do
     echo -e "${RED}Interface $INTERFACE is using DHCP${TEXTRESET}"
