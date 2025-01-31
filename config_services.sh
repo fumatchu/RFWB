@@ -180,3 +180,78 @@ if [ -f "$NAMED_CONF" ]; then
 else
     echo -e "${RED}$NAMED_CONF not found. BIND might not be installed.${TEXTRESET}"
 fi
+
+#!/bin/bash
+
+# Define color codes
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+YELLOW="\033[1;33m"
+TEXTRESET="\033[0m"
+
+# Function to find the network interface
+find_interface() {
+    # Find the interface with a connection ending in -inside
+    interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface with a connection ending in '-inside' found.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$interface"
+}
+
+# Function to update the serial number in a zone file
+update_serial_number() {
+    local zone_file=$1
+    local current_serial=$(awk '/SOA/ {getline; print $1}' "$zone_file")
+
+    if [[ "$current_serial" =~ ^[0-9]+$ ]]; then
+        local new_serial=$((current_serial + 1))
+        sudo sed -i "s/$current_serial/$new_serial/" "$zone_file"
+        echo -e "${GREEN}Serial number updated from $current_serial to $new_serial in $zone_file.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to update serial number: could not find a valid serial number.${TEXTRESET}"
+    fi
+}
+
+# Main script logic
+read -p "Do you want to add an A record for the firewall? (yes/no): " add_a_record
+add_a_record=$(echo "$add_a_record" | tr '[:upper:]' '[:lower:]')
+
+if [ "$add_a_record" == "yes" ]; then
+    # Get the static hostname
+    hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
+
+    if [ -z "$hostname" ]; then
+        echo -e "${RED}Failed to determine the hostname.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Find the interface and get the IP address
+    interface=$(find_interface)
+    ip_address=$(ip -o -4 addr show dev "$interface" | awk '{print $4}' | cut -d/ -f1)
+
+    if [ -z "$ip_address" ]; then
+        echo -e "${RED}Failed to retrieve IP address for the interface $interface.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Locate the .hosts file
+    zone_file=$(find /var/named -type f -name "*.hosts" -print -quit)
+
+    if [ -z "$zone_file" ]; then
+        echo -e "${RED}No .hosts file found in /var/named.${TEXTRESET}"
+        exit 1
+    fi
+
+    # Add the A record to the zone file
+    sudo bash -c "echo '$hostname. IN A $ip_address' >> $zone_file"
+    echo -e "${GREEN}A record added: $hostname. IN A $ip_address${TEXTRESET}"
+
+    # Update the serial number
+    update_serial_number "$zone_file"
+else
+    echo -e "${YELLOW}A record addition skipped.${TEXTRESET}"
+fi
