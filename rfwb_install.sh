@@ -8,6 +8,7 @@ TEXTRESET="\033[0m"
 USER=$(whoami)
 INTERFACE=$(nmcli | grep "connected to" | cut -d " " -f4)
 DETECTIP=$(nmcli -f ipv4.method con show $INTERFACE)
+NMCLIIP=$(nmcli | grep inet4 | sed '$d'| cut -c7- |cut -d / -f1)
 FQDN=$(hostname)
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
@@ -133,15 +134,15 @@ done
     done
 
     clear
-    cat <<EOF
-The following changes to the system will be configured:
-IP address: ${GREEN}$IPADDR${TEXTRESET}
-Gateway: ${GREEN}$GW${TEXTRESET}
-DNS Search: ${GREEN}$DNSSEARCH${TEXTRESET}
-DNS Server: ${GREEN}$DNSSERVER${TEXTRESET}
-HOSTNAME: ${GREEN}$HOSTNAME${TEXTRESET}
 
-EOF
+echo -e "The following changes to the system will be configured:"
+echo -e "IP address: ${GREEN}$IPADDR${TEXTRESET}"
+echo -e "Gateway: ${GREEN}$GW${TEXTRESET}"
+echo -e "DNS Search: ${GREEN}$DNSSEARCH${TEXTRESET}"
+echo -e "DNS Server: ${GREEN}$DNSSERVER${TEXTRESET}"
+echo -e "HOSTNAME: ${GREEN}$HOSTNAME${TEXTRESET}"
+
+
 
     # Ask the user to confirm the changes
     read -p "Are these settings correct? (y/n): " CONFIRM
@@ -152,12 +153,12 @@ EOF
       nmcli con mod $INTERFACE ipv4.dns-search $DNSSEARCH
       nmcli con mod $INTERFACE ipv4.dns $DNSSERVER
       hostnamectl set-hostname $HOSTNAME
-      echo "/root/RFWB/rfwbinstall.sh" >>/root/.bash_profile
-      echo "The System must reboot for the changes to take effect."
-      echo "${RED}Please log back in as root.${TEXTRESET}"
-      echo "The installer will continue when you log back in."
-      echo "If using SSH, please use the IP Address: $IPADDR"
-      echo "${RED}Rebooting${TEXTRESET}"
+      echo -e "/root/RFWB/rfwb_install.sh" >>/root/.bash_profile
+      echo -e "The System must reboot for the changes to take effect."
+      echo -e "${RED}Please log back in as root.${TEXTRESET}"
+      echo -e "The installer will continue when you log back in."
+      echo -e "If using SSH, please use the IP Address: $IPADDR"
+      echo -e "${RED}Rebooting${TEXTRESET}"
       sleep 2
       reboot
       break
@@ -173,10 +174,9 @@ else
 fi
 clear
 if [ "$FQDN" = "localhost.localdomain" ]; then
-  cat <<EOF
-${RED}This system is still using the default hostname (localhost.localdomain)${TEXTRESET}
 
-EOF
+echo -e "${RED}This system is still using the default hostname (localhost.localdomain)${TEXTRESET}"
+
   # Validate HOSTNAME
     validate_fqdn() {
   local fqdn="$1"
@@ -210,16 +210,15 @@ while ! validate_fqdn "$HOSTNAME" || ! check_hostname_in_domain "$HOSTNAME"; do
 done
 
   hostnamectl set-hostname $HOSTNAME
-  cat <<EOF
-The System must reboot for the changes to take effect.
-${RED}Please log back in as root.${TEXTRESET}
-The installer will continue when you log back in.
-If using SSH, please use the IP Address: ${NMCLIIP}
 
-EOF
+echo -e "The System must reboot for the changes to take effect."
+echo -e "${RED}Please log back in as root.${TEXTRESET}"
+echo -e "The installer will continue when you log back in."
+echo -e "If using SSH, please use the IP Address: ${NMCLIIP}"
+
   read -p "Press Enter to Continue"
   clear
-  echo "/root/RFWB/rfwbinstall.sh" >>/root/.bash_profile
+  echo "/root/RFWB/rfwb_install.sh" >>/root/.bash_profile
   reboot
   exit
 
@@ -343,7 +342,7 @@ fi
 
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
-dnf -y update 
+dnf -y update
 dnf -y install net-tools dmidecode ipcalc bind-utils
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
 #!/usr/bin/env bash
