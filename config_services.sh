@@ -1,257 +1,295 @@
 #!/bin/bash
 
-# Define color codes
+# Define color codes for output
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 
-# Function to check if a domain name is in the correct format
-is_valid_domain() {
-    local domain=$1
-    local regex="^([a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*\.)?[a-zA-Z0-9]+\.[a-zA-Z]{2,}$"
-    [[ $domain =~ $regex ]]
-}
+# Define file paths
+NAMED_CONF="/etc/named.conf"
+ZONE_DIR="/var/named/"
+KEYS_FILE="/etc/named/keys.conf"
+KEA_CONF="/etc/kea/kea-dhcp4.conf"
 
-# Function to validate an email address format
-is_valid_email() {
-    local email=$1
-    local regex="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    [[ $email =~ $regex ]]
-}
-
-# Function to update the serial number in a zone file
-update_serial_number() {
-    local zone_file=$1
-    local current_serial=$(awk '/SOA/ {getline; print $1}' "$zone_file")
-
-    if [[ "$current_serial" =~ ^[0-9]+$ ]]; then
-        local new_serial=$((current_serial + 1))
-        sudo sed -i "s/$current_serial/$new_serial/" "$zone_file"
-        echo -e "${GREEN}Serial number updated from $current_serial to $new_serial in $zone_file.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to update serial number: could not find a valid serial number.${TEXTRESET}"
-    fi
-}
-
-# Function to configure BIND with rndc
-configure_rndc() {
-    echo -e "${YELLOW}Generating rndc key...${TEXTRESET}"
-    sudo rndc-confgen -a
-
-    if grep -q 'include "/etc/rndc.key";' "$NAMED_CONF" && grep -q 'controls {' "$NAMED_CONF"; then
-        echo -e "${YELLOW}rndc configuration already exists in $NAMED_CONF. Skipping addition.${TEXTRESET}"
-    else
-        echo -e "${YELLOW}Adding rndc configuration to $NAMED_CONF...${TEXTRESET}"
-        sudo bash -c "cat >> $NAMED_CONF" <<EOF
-
-include "/etc/rndc.key";
-
-controls {
-    inet 127.0.0.1 allow { localhost; } keys { "rndc-key"; };
-};
-EOF
-    fi
-
-    echo -e "${GREEN}Configuration updated for rndc in $NAMED_CONF.${TEXTRESET}"
-    sudo chown root:named /etc/rndc.key
-    sudo chmod 640 /etc/rndc.key
-    if selinuxenabled; then
-        sudo restorecon /etc/rndc.key
-    fi
-
-    echo -e "${YELLOW}Updating firewall rules to allow rndc...${TEXTRESET}"
-    sudo firewall-cmd --add-port=953/tcp --permanent
-    sudo firewall-cmd --reload
-
-    echo -e "${YELLOW}Restarting BIND service...${TEXTRESET}"
-    sudo systemctl restart named
-
-    echo -e "${YELLOW}Testing rndc status...${TEXTRESET}"
-    sudo rndc status || echo -e "${RED}rndc status command failed. Please check the configuration.${TEXTRESET}"
-}
-
-# Function to create a new forwarding zone
-create_forwarding_zone() {
-    while true; do
-        read -p "Enter the domain name for the new zone (e.g., example.int): " domain_name
-
-        if is_valid_domain "$domain_name"; then
-            while true; do
-                read -p "Enter the email address for the zone (e.g., admin@example.com): " email_address
-
-                if is_valid_email "$email_address"; then
-                    soa_email="${email_address//@/.}"
-                    break
-                else
-                    echo -e "${RED}Invalid email address format. Please try again.${TEXTRESET}"
-                fi
-            done
-
-            zone_file="/var/named/${domain_name}.hosts"
-            fqdn=$(hostname -f)
-
-            sudo bash -c "cat > $zone_file" <<EOF
-\$TTL 3600
-$domain_name.  IN  SOA  $fqdn. $soa_email. (
-            2025013000
-            3600
-            600
-            1209600
-            3600 )
-$domain_name.  IN  NS  $fqdn.
-EOF
-
-            sudo chown root:named $zone_file
-            sudo chmod 640 $zone_file
-            sudo restorecon $zone_file
-
-            echo -e "${GREEN}Zone file $zone_file created and configured.${TEXTRESET}"
-            echo -e "${YELLOW}Contents of the newly created zone file:${TEXTRESET}"
-            cat $zone_file
-
-            echo -e "${YELLOW}Adding the new zone configuration to the end of $NAMED_CONF...${TEXTRESET}"
-            sudo bash -c "cat >> $NAMED_CONF" <<EOF
-
-zone "$domain_name" {
-    type master;
-    file "$zone_file";
-};
-EOF
-
-            update_serial_number "$zone_file"
-
-            break
+# Function to install necessary packages if not already installed
+install_packages() {
+    echo -e "${YELLOW}Checking for necessary packages...${TEXTRESET}"
+    packages=("bind" "bind-utils" "isc-kea-dhcp4-server" "policycoreutils-python-utils")
+    for pkg in "${packages[@]}"; do
+        if ! rpm -q $pkg &> /dev/null; then
+            echo -e "${YELLOW}Installing $pkg...${TEXTRESET}"
+            sudo dnf install -y $pkg
         else
-            echo -e "${RED}Invalid domain name format. Please use the format subdomain.domain.int or domain.int.${TEXTRESET}"
+            echo -e "${GREEN}$pkg is already installed.${TEXTRESET}"
         fi
     done
 }
 
-# Function to update named.conf for crypto policy and logging
-update_named_conf() {
-    echo -e "${YELLOW}Updating $NAMED_CONF for crypto policy and logging...${TEXTRESET}"
+generate_tsig_key() {
+    echo -e "${YELLOW}Generating TSIG key using rndc-confgen...${TEXTRESET}"
 
-    # Backup the original named.conf
-    sudo cp "$NAMED_CONF" "${NAMED_CONF}.bak"
+    # Generate an rndc key using rndc-confgen
+    sudo rndc-confgen -a
 
-    # Use sed to replace specific blocks
-    sudo sed -i '/\/\* https:\/\/fedoraproject.org\/wiki\/Changes\/CryptoPolicy \*\//,/}/c\/* https://fedoraproject.org/wiki/Changes/CryptoPolicy */\n\tinclude "/etc/crypto-policies/ba
-ck-ends/bind.config";\n\tforwarders {\n\t\t208.67.222.222;\n\t\t208.67.220.220;\n\t};\n\tforward only;' "$NAMED_CONF"
+    # The key will be generated and stored in /etc/rndc.key by default
+    key_file="/etc/rndc.key"
 
-    sudo sed -i '/logging {/,/};/c\logging {\n\tchannel default_debug {\n\t\tfile "data/named.run";\n\t\tseverity dynamic;\n\t};\n\n\tcategory lame-servers { null; };\n};' "$NAMED_CONF
-"
+    # Extract the key secret
+    key_secret=$(grep secret $key_file | awk '{print $2}' | tr -d '";')
 
-    echo -e "${GREEN}Updated $NAMED_CONF for crypto policy and logging.${TEXTRESET}"
+    echo -e "${YELLOW}Key generated: $key_secret${TEXTRESET}"
+
+    # Append the key to keys.conf
+    sudo bash -c "cat > $KEYS_FILE" <<EOF
+key "Kea-DDNS" {
+    algorithm hmac-sha256;
+    secret "$key_secret";
+};
+EOF
+
 }
 
-NAMED_CONF="/etc/named.conf"
+configure_bind() {
+    # Extract domain and hostname
+    full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
 
-if [ -f "$NAMED_CONF" ]; then
-    echo -e "${GREEN}$NAMED_CONF found.${TEXTRESET}"
+    if [[ ! "$full_hostname" == *.* ]]; then
+        echo -e "${RED}Error: Hostname does not contain a domain part.${TEXTRESET}"
+        return 1
+    fi
 
-    read -p "Do you want to configure BIND? (yes/no): " user_input
-    user_input=$(echo "$user_input" | tr '[:upper:]' '[:lower:]')
+    hostname="${full_hostname%%.*}"
+    domain="${full_hostname#*.}"
 
-    if [ "$user_input" == "yes" ]; then
-        echo -e "${YELLOW}Configuring BIND...${TEXTRESET}"
+    # Get the server's IP address (IPv4 assumed here)
+    ip_address=$(hostname -I | awk '{print $1}')
 
-        sudo sed -i 's/listen-on port 53 { 127.0.0.1; };/listen-on port 53 { 127.0.0.1; any; };/' "$NAMED_CONF"
-        sudo sed -i 's/allow-query[[:space:]]*{[[:space:]]*localhost;[[:space:]]*};/allow-query { localhost; any; };/' "$NAMED_CONF"
+    if [[ -z "$ip_address" ]]; then
+        echo -e "${RED}Error: Unable to determine IP address.${TEXTRESET}"
+        return 1
+    fi
 
-        echo -e "${GREEN}Configuration updated in $NAMED_CONF.${TEXTRESET}"
-        configure_rndc
+    reverse_zone=$(echo $ip_address | awk -F. '{print $3"."$2"."$1}')
+    reverse_ip=$(echo $ip_address | awk -F. '{print $4}')
 
-        read -p "Do you want to create a new forwarding zone? (yes/no): " create_zone
+    # Check if variables are set correctly
+    if [[ -z "$domain" || -z "$reverse_zone" || -z "$reverse_ip" ]]; then
+        echo -e "${RED}Error: Domain or reverse zone information is missing.${TEXTRESET}"
+        return 1
+    fi
 
-        if [ "$create_zone" == "yes" ]; then
-            create_forwarding_zone
+    # Create forward and reverse zone files
+    forward_zone_file="${ZONE_DIR}db.${domain}"
+    reverse_zone_file="${ZONE_DIR}db.${reverse_zone}"
+
+    echo -e "${YELLOW}Configuring BIND with forward and reverse zones...${TEXTRESET}"
+
+    # Append new zone configurations to named.conf
+    sudo bash -c "cat >> $NAMED_CONF" <<EOF
+
+include "$KEYS_FILE";
+
+zone "$domain" {
+    type master;
+    file "$forward_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+
+zone "${reverse_zone}.in-addr.arpa" {
+    type master;
+    file "$reverse_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+EOF
+
+    # Modify existing configuration in named.conf
+    sudo sed -i '/listen-on port 53 {/s/{ 127.0.0.1; }/{ 127.0.0.1; any; }/' $NAMED_CONF
+    sudo sed -i 's/allow-query[[:space:]]*{[[:space:]]*localhost;[[:space:]]*};/allow-query { localhost; any; };/' $NAMED_CONF
+
+    # Create forward zone file
+    sudo bash -c "cat > $forward_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$hostname IN  A     $ip_address
+EOF
+
+    # Create reverse zone file
+    sudo bash -c "cat > $reverse_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$reverse_ip  IN  PTR   $full_hostname.
+EOF
+
+    # Set file permissions
+    sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+
+    echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
+}
+configure_kea() {
+    echo -e "${YELLOW}Configuring Kea DHCP server...${TEXTRESET}"
+
+    # Function to validate CIDR notation
+    validate_cidr() {
+        local cidr=$1
+        local ip="${cidr%/*}"
+        local prefix="${cidr#*/}"
+        local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+
+        # Check if IP and prefix are valid
+        [[ $ip =~ ^$n(\.$n){3}$ ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]
+    }
+
+    # Prompt user for network scheme until valid input is provided
+    while true; do
+        read -p "Enter the network scheme (e.g., 192.168.1.0/24): " network_scheme
+        if validate_cidr "$network_scheme"; then
+            break
         else
-            echo -e "${YELLOW}Zone creation skipped.${TEXTRESET}"
+            echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
         fi
+    done
 
-        update_named_conf
+    # Extract network address and prefix length
+    IFS='/' read -r network_address prefix_length <<< "$network_scheme"
 
-    elif [ "$user_input" == "no" ]; then
-        echo -e "${YELLOW}BIND configuration skipped.${TEXTRESET}"
-    else
-        echo -e "${RED}Invalid input. Please answer 'yes' or 'no'.${TEXTRESET}"
-    fi
-else
-    echo -e "${RED}$NAMED_CONF not found. BIND might not be installed.${TEXTRESET}"
-fi
+    # Calculate pool range based on the network scheme
+    IFS='.' read -r net1 net2 net3 net4 <<< "$network_address"
+    pool_start="${net1}.${net2}.${net3}.10"
+    pool_end="${net1}.${net2}.${net3}.100"
+    router_address="${net1}.${net2}.${net3}.1"
 
-#!/bin/bash
-
-# Define color codes
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-TEXTRESET="\033[0m"
-
-# Function to find the network interface
-find_interface() {
-    # Find the interface with a connection ending in -inside
-    interface=$(nmcli device status | awk '/-inside/ {print $1}')
-
-    if [ -z "$interface" ]; then
-        echo -e "${RED}Error: No interface with a connection ending in '-inside' found.${TEXTRESET}"
-        exit 1
+    # Check if Kea configuration directory exists, if not, create it
+    if [ ! -d "/etc/kea" ]; then
+        sudo mkdir /etc/kea
     fi
 
-    echo "$interface"
+    # Configure Kea DHCP4 server
+    sudo bash -c "cat > $KEA_CONF" <<EOF
+{
+    "Dhcp4": {
+        "interfaces-config": {
+            "interfaces": ["eth0"]
+        },
+        "lease-database": {
+            "type": "memfile",
+            "persist": true,
+            "name": "/var/lib/kea/kea-leases4.csv"
+        },
+        "ddns-send-updates": true,
+        "ddns-generated-prefix": "dhcp",
+        "ddns-override-client-update": true,
+        "ddns-qualifying-suffix": "$domain.",
+        "ddns-rev-suffix": "in-addr.arpa.",
+        "ddns-hostname": "my-dynamic-host",
+        "ddns-server": {
+            "ip-address": "127.0.0.1",
+            "port": 53
+        },
+        "tsig-keys": {
+            "Kea-DDNS": {
+                "algorithm": "HMAC-SHA256",
+                "secret": "your-generated-key-here"
+            }
+        },
+        "zones": [
+            {
+                "name": "$domain.",
+                "key": "Kea-DDNS"
+            },
+            {
+                "name": "${reverse_zone}.in-addr.arpa.",
+                "key": "Kea-DDNS"
+            }
+        ],
+        "subnet4": [
+            {
+                "subnet": "$network_scheme",
+                "pools": [
+                    {
+                        "pool": "$pool_start - $pool_end"
+                    }
+                ],
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "$router_address"
+                    }
+                ]
+            }
+        ]
+    }
+}
+EOF
+
+    echo -e "${GREEN}Kea DHCP server configuration complete.${TEXTRESET}"
 }
 
-# Function to update the serial number in a zone file
-update_serial_number() {
-    local zone_file=$1
-    local current_serial=$(awk '/SOA/ {getline; print $1}' "$zone_file")
+    # Set file permissions
+    sudo chown root:kea $KEA_CONF
+    sudo chmod 640 $KEA_CONF
 
-    if [[ "$current_serial" =~ ^[0-9]+$ ]]; then
-        local new_serial=$((current_serial + 1))
-        sudo sed -i "s/$current_serial/$new_serial/" "$zone_file"
-        echo -e "${GREEN}Serial number updated from $current_serial to $new_serial in $zone_file.${TEXTRESET}"
+    echo -e "${GREEN}Kea DHCP server configuration complete.${TEXTRESET}"
+
+
+# Function to configure SELinux
+configure_selinux() {
+    echo -e "${YELLOW}Configuring SELinux...${TEXTRESET}"
+
+    # Check if SELinux is enabled
+    if selinuxenabled; then
+        # Set appropriate SELinux contexts
+        sudo semanage fcontext -a -t named_zone_t "${ZONE_DIR}db.*"
+        sudo semanage fcontext -a -t named_conf_t "$NAMED_CONF"
+        sudo restorecon -Rv /etc/named /var/named
+
+        echo -e "${GREEN}SELinux configuration applied.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to update serial number: could not find a valid serial number.${TEXTRESET}"
+        echo -e "${YELLOW}SELinux is not enabled. Skipping SELinux configuration.${TEXTRESET}"
     fi
 }
 
-# Main script logic
-read -p "Do you want to add an A record for the firewall? (yes/no): " add_a_record
-add_a_record=$(echo "$add_a_record" | tr '[:upper:]' '[:lower:]')
-
-if [ "$add_a_record" == "yes" ]; then
-    # Get the static hostname
-    hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
-
-    if [ -z "$hostname" ]; then
-        echo -e "${RED}Failed to determine the hostname.${TEXTRESET}"
-        exit 1
+# Function to validate network scheme
+validate_network_scheme() {
+    local scheme=$1
+    local regex="^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$"
+    if [[ $scheme =~ $regex ]]; then
+        echo "valid"
+    else
+        echo "invalid"
     fi
+}
 
-    # Find the interface and get the IP address
-    interface=$(find_interface)
-    ip_address=$(ip -o -4 addr show dev "$interface" | awk '{print $4}' | cut -d/ -f1)
+# Main script execution
+install_packages
+generate_tsig_key
 
-    if [ -z "$ip_address" ]; then
-        echo -e "${RED}Failed to retrieve IP address for the interface $interface.${TEXTRESET}"
-        exit 1
-    fi
+# Extract reverse zone from network scheme
+IFS='.' read -r a b c d <<< "${network_scheme%/*}"
+reverse_zone="$c.$b.$a"
 
-    # Locate the .hosts file
-    zone_file=$(find /var/named -type f -name "*.hosts" -print -quit)
+configure_bind
+configure_kea
+configure_selinux
 
-    if [ -z "$zone_file" ]; then
-        echo -e "${RED}No .hosts file found in /var/named.${TEXTRESET}"
-        exit 1
-    fi
+# Restart services
+echo -e "${YELLOW}Restarting services...${TEXTRESET}"
+sudo systemctl restart named
+sudo systemctl restart kea-dhcp4-server
 
-    # Add the A record to the zone file
-    sudo bash -c "echo '$hostname. IN A $ip_address' >> $zone_file"
-    echo -e "${GREEN}A record added: $hostname. IN A $ip_address${TEXTRESET}"
-
-    # Update the serial number
-    update_serial_number "$zone_file"
-else
-    echo -e "${YELLOW}A record addition skipped.${TEXTRESET}"
-fi
+echo -e "${GREEN}Configuration and setup complete.${TEXTRESET}"
