@@ -152,7 +152,7 @@ EOF
       nmcli con mod $INTERFACE ipv4.dns-search $DNSSEARCH
       nmcli con mod $INTERFACE ipv4.dns $DNSSERVER
       hostnamectl set-hostname $HOSTNAME
-      echo "/root/RFWB/rfwbinstall.sh" >>/root/.bash_profile"
+      echo "/root/RFWB/rfwbinstall.sh" >>/root/.bash_profile
       echo "The System must reboot for the changes to take effect."
       echo "${RED}Please log back in as root.${TEXTRESET}"
       echo "The installer will continue when you log back in."
