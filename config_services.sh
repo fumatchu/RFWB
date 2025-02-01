@@ -1,16 +1,9 @@
 #!/bin/bash
 
-# Define color codes for output
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-TEXTRESET="\033[0m"
-
-# Define file paths
+# Define file paths and directories
 NAMED_CONF="/etc/named.conf"
-ZONE_DIR="/var/named/"
 KEYS_FILE="/etc/named/keys.conf"
-KEA_CONF="/etc/kea/kea-dhcp4.conf"
+ZONE_DIR="/var/named/"
 
 # Function to install necessary packages if not already installed
 install_packages() {
@@ -141,6 +134,19 @@ EOF
 
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
 }
+
+# Main execution block
+if [ -f "$NAMED_CONF" ]; then
+    echo -e "${GREEN}$NAMED_CONF found. Proceeding with configuration...${TEXTRESET}"
+    install_packages
+    generate_tsig_key
+    configure_bind
+else
+    echo -e "${RED}$NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
+fi
+
+# Continue with the rest of the script here
+# Add additional script logic that should execute regardless of the presence of /etc/named.conf
 configure_kea() {
     echo -e "${YELLOW}Configuring Kea DHCP server...${TEXTRESET}"
 
