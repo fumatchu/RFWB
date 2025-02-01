@@ -345,6 +345,7 @@ sleep 2
 dnf -y update
 dnf -y install net-tools dmidecode ipcalc bind-utils
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
+echo -e ${YELLOW}"The Installer will answer all questions for you ${RED}DO NOT type YES${TEXTRESET}"
 #!/usr/bin/env bash
 
 # Check if expect is installed
