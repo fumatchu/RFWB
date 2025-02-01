@@ -192,7 +192,8 @@ install_cockpit() {
       echo -e "${RED}Failed to add Cockpit service to zone $inside_zone.${TEXTRESET}"
       exit 1
     fi
-
+    #Enable cockpit.socket
+    systemctl enable --now cockpit.socket
     # Reload the firewall to apply changes
     echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
     firewall-cmd --reload
