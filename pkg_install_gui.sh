@@ -194,6 +194,7 @@ install_cockpit() {
     fi
     #Enable cockpit.socket
     systemctl enable --now cockpit.socket
+    systemctl start cockpit.socket
     # Reload the firewall to apply changes
     echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
     firewall-cmd --reload
