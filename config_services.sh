@@ -168,11 +168,31 @@ configure_kea() {
     # Extract network address and prefix length
     IFS='/' read -r network_address prefix_length <<< "$network_scheme"
 
-    # Calculate pool range based on the network scheme
+    # Calculate default pool range and router address based on the network scheme
     IFS='.' read -r net1 net2 net3 net4 <<< "$network_address"
-    pool_start="${net1}.${net2}.${net3}.10"
-    pool_end="${net1}.${net2}.${net3}.100"
-    router_address="${net1}.${net2}.${net3}.1"
+    default_pool_start="${net1}.${net2}.${net3}.10"
+    default_pool_end="${net1}.${net2}.${net3}.100"
+    default_router_address="${net1}.${net2}.${net3}.1"
+
+    # Prompt user to confirm or change the pool address range
+    echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
+    read -p "Is this range OK? (y/n): " confirm_pool
+    if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
+        read -p "Enter the desired pool start address: " pool_start
+        read -p "Enter the desired pool end address: " pool_end
+    else
+        pool_start="$default_pool_start"
+        pool_end="$default_pool_end"
+    fi
+
+    # Prompt user to confirm or change the router address
+    echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
+    read -p "Is this address OK? (y/n): " confirm_router
+    if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
+        read -p "Enter the desired router address: " router_address
+    else
+        router_address="$default_router_address"
+    fi
 
     # Check if Kea configuration directory exists, if not, create it
     if [ ! -d "/etc/kea" ]; then
@@ -195,7 +215,6 @@ configure_kea() {
         "ddns-generated-prefix": "dhcp",
         "ddns-override-client-update": true,
         "ddns-qualifying-suffix": "$domain.",
-        "ddns-rev-suffix": "in-addr.arpa.",
         "ddns-hostname": "my-dynamic-host",
         "ddns-server": {
             "ip-address": "127.0.0.1",
@@ -239,7 +258,6 @@ EOF
 
     echo -e "${GREEN}Kea DHCP server configuration complete.${TEXTRESET}"
 }
-
     # Set file permissions
     sudo chown root:kea $KEA_CONF
     sudo chmod 640 $KEA_CONF
