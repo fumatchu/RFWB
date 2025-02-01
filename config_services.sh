@@ -1,9 +1,11 @@
 #!/bin/bash
+
 # Define color codes for pretty output
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
+
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
@@ -129,7 +131,6 @@ EOF
 # Main execution block
 if [ -f "$NAMED_CONF" ]; then
     echo -e "${GREEN}$NAMED_CONF found. Proceeding with configuration...${TEXTRESET}"
-    install_packages
     generate_tsig_key
     configure_bind
 else
