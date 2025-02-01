@@ -13,7 +13,7 @@ install_required() {
     dnf -y install epel-release
     dnf -y clean all
     dnf -y update
-    dnf -y install ntsysv iptraf
+    dnf -y install ntsysv iptraf fail2ban
     echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
 }
 # Function to install ddns
