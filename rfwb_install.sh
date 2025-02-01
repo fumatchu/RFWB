@@ -379,7 +379,7 @@ if [ "$HWKVM" = "KVM" ]; then
   sleep 1
   dnf -y install qemu-guest-agent
 else
-  echo "Not KVM Platform"
+  echo " "
 fi
 
 #Checking for VM platform-Install client
@@ -389,7 +389,7 @@ if [ "$HWVMWARE" = "VMware" ]; then
   sleep 1
   dnf -y install open-vm-tools
 else
-  echo "Not VMware Platform"
+  echo " "
 fi
 clear
 #Configure the ZONE for the inside interface
