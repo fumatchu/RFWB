@@ -10,6 +10,7 @@ INTERFACE=$(nmcli | grep "connected to" | cut -d " " -f4)
 DETECTIP=$(nmcli -f ipv4.method con show $INTERFACE)
 NMCLIIP=$(nmcli | grep inet4 | sed '$d'| cut -c7- |cut -d / -f1)
 FQDN=$(hostname)
+clear
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
   echo -e "${GREEN}Running as root user.${RESET}"
