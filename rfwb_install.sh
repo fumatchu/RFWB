@@ -269,7 +269,7 @@ Your Internet facing interface ${YELLOW}SHOULD BE UNPLUGGED${RESET} right now
 
 We prep the inside interface then proceed to install the applications of your choice
 All downloads and configuration will happen through the inside interface
-After your applications have been installed and configured to listen on the inside interface, we will then configure the outside interface
+After your applications have been installed and configured to listen on the inside interface, we will then configure the outside interface.
 This is when you will plug the outside (internet facing) interface into the external connection, Cable modem, etc that you want to use.
 We will configure that outside interface and harden all communications on that outside interface.
 After that, the system will prompt you to reboot and you will be ready to go!
@@ -508,13 +508,14 @@ echo -e "${GREEN}The Inside interface has been configured.${TEXTRESET}"
 
 cat <<EOF
 Your inside interface should now have a static IP address and appropriate inside zone set.
-We will remove the Default-Gateway later in the installer as for now, we need to install services via this interface
-and the system is not ready to endure and Internet based connection (it's not locked down).
+We will remove the Default-Gateway later in the installer as for now, we need to install services via this interface.
+The system is not ready to endure an Internet based connection (it's not locked down- We will do that later).
 If you have multiple networks and want to use a router on a stick scenario, you will now be asked if you want VLANS. 
+The Installer will allow routing of all the INSIDE networks. No filtering will be put in place. Anything on the INSIDE interface is trusted.
 This is considered an advanced setup and you should have at least a basic understanding of how they work.
 Keep in mind that we are going to bind these VLANS (tags) to this interface. The IP address you provided will now be considered
 the "untagged" vlan. What you are going to create (if you are) with VLANS will all be tagged. Make sure the interface southbound
-of this device understand 802.1q. That being if you only have one IP address "network" you can say no when asked.
+of this device understands 802.1q. That all being said, if you only have one IP address "network" you can say no when asked.
 EOF
 
 #SET VLANS IF NEEDED
