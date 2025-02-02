@@ -394,12 +394,17 @@ fi
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
 # Copy default configuration to local configuration
-echo "Copying default Fail2ban configuration..."
-sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+echo -e "${YELLOW}Copying default Fail2ban configuration...${TEXTRESET}"
+if sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local; then
+    echo -e "${GREEN}Configuration copied successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to copy configuration.${TEXTRESET}"
+    exit 1
+fi
 
 # Configure Fail2ban
-echo "Configuring Fail2ban..."
-sudo bash -c 'cat <<EOL >> /etc/fail2ban/jail.local
+echo -e "${YELLOW}Configuring Fail2ban...${TEXTRESET}"
+if sudo bash -c 'cat <<EOL >> /etc/fail2ban/jail.local
 
 # Custom Fail2ban configuration
 [DEFAULT]
@@ -409,24 +414,44 @@ maxretry = 5
 
 [sshd]
 enabled = true
-EOL'
+EOL'; then
+    echo -e "${GREEN}Fail2ban configured successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to configure Fail2ban.${TEXTRESET}"
+    exit 1
+fi
 
 # Start Fail2ban service
-echo "Starting Fail2ban service..."
-sudo systemctl start fail2ban
+echo -e "${YELLOW}Starting Fail2ban service...${TEXTRESET}"
+if sudo systemctl start fail2ban; then
+    echo -e "${GREEN}Fail2ban service started successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to start Fail2ban service.${TEXTRESET}"
+    exit 1
+fi
 
 # Enable Fail2ban service to start on boot
-echo "Enabling Fail2ban to start on boot..."
-sudo systemctl enable fail2ban
+echo -e "${YELLOW}Enabling Fail2ban to start on boot...${TEXTRESET}"
+if sudo systemctl enable fail2ban; then
+    echo -e "${GREEN}Fail2ban enabled to start on boot successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to enable Fail2ban to start on boot.${TEXTRESET}"
+    exit 1
+fi
 
 # Check Fail2ban status
-echo "Checking Fail2ban status..."
-sudo systemctl status fail2ban
+echo -e "${YELLOW}Checking Fail2ban status...${TEXTRESET}"
+if sudo systemctl status fail2ban; then
+    echo -e "${GREEN}Fail2ban is active and running.${TEXTRESET}"
+else
+    echo -e "${RED}Fail2ban is not running properly.${TEXTRESET}"
+fi
 
 # Output the status of the SSH jail
-echo "Fail2ban SSH jail status:"
+echo -e "${YELLOW}Fail2ban SSH jail status:${TEXTRESET}"
 sudo fail2ban-client status sshd
 
-echo "Fail2ban installation and configuration complete."
+echo -e "${GREEN}Fail2ban installation and configuration complete.${TEXTRESET}"
 }
+
 
