@@ -390,3 +390,43 @@ if [ -f "$KEA_CONF" ]; then
     else
     echo -e "${RED}$KEA_CONF not found. Skipping KEA-DHCP configuration.${TEXTRESET}"
 fi
+}
+configure_fail2ban() {
+    echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
+# Copy default configuration to local configuration
+echo "Copying default Fail2ban configuration..."
+sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+# Configure Fail2ban
+echo "Configuring Fail2ban..."
+sudo bash -c 'cat <<EOL >> /etc/fail2ban/jail.local
+
+# Custom Fail2ban configuration
+[DEFAULT]
+bantime  = 600
+findtime = 600
+maxretry = 5
+
+[sshd]
+enabled = true
+EOL'
+
+# Start Fail2ban service
+echo "Starting Fail2ban service..."
+sudo systemctl start fail2ban
+
+# Enable Fail2ban service to start on boot
+echo "Enabling Fail2ban to start on boot..."
+sudo systemctl enable fail2ban
+
+# Check Fail2ban status
+echo "Checking Fail2ban status..."
+sudo systemctl status fail2ban
+
+# Output the status of the SSH jail
+echo "Fail2ban SSH jail status:"
+sudo fail2ban-client status sshd
+
+echo "Fail2ban installation and configuration complete."
+}
+
