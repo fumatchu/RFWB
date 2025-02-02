@@ -492,6 +492,17 @@ else
     fi
 fi
 
+# Verify that the SSHD jail is running and functional
+echo -e "${YELLOW}Verifying SSHD jail status...${TEXTRESET}"
+sshd_status=$(fail2ban-client status sshd 2>&1)
+
+if echo "$sshd_status" | grep -q "ERROR   NOK: ('sshd',)"; then
+    echo -e "${RED}SSHD jail failed to start. Please check Fail2Ban configuration.${TEXTRESET}"
+elif echo "$sshd_status" | grep -q "Currently failed: 0"; then
+    echo -e "${GREEN}SSHD jail is active and functional.${TEXTRESET}"
+else
+    echo -e "${RED}SSHD jail is not functional or has current failures. Please check Fail2Ban configuration.${TEXTRESET}"
+fi
 echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
 }
 
