@@ -507,9 +507,14 @@ echo
 echo -e "${GREEN}The Inside interface has been configured.${TEXTRESET}"
 
 cat <<EOF
-Your inside interface can still be set to DHCP or if you have alrady statically assigend the interface, that's OK.
-We will come back later and setup vlans, and routing if needed. For now we will use the inside interface to deploy applications
-and update the system.
+Your inside interface should now have a static IP address and appropriate inside zone set.
+We will remove the Default-Gateway later in the installer as for now, we need to install services via this interface
+and the system is not ready to endure and Internet based connection (it's not locked down).
+If you have multiple networks and want to use a router on a stick scenario, you will now be asked if you want VLANS. 
+This is considered an advanced setup and you should have at least a basic understanding of how they work.
+Keep in mind that we are going to bind these VLANS (tags) to this interface. The IP address you provided will now be considered
+the "untagged" vlan. What you are going to create (if you are) with VLANS will all be tagged. Make sure the interface southbound
+of this device understand 802.1q. That being if you only have one IP address "network" you can say no when asked.
 EOF
 
 read -p "Press Enter to install applications and services"
