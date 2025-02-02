@@ -393,65 +393,106 @@ fi
 }
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
-# Copy default configuration to local configuration
-echo -e "${YELLOW}Copying default Fail2ban configuration...${TEXTRESET}"
-if sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local; then
-    echo -e "${GREEN}Configuration copied successfully.${TEXTRESET}"
-else
-    echo -e "${RED}Failed to copy configuration.${TEXTRESET}"
+# Define the original and new file paths
+ORIGINAL_FILE="/etc/fail2ban/jail.conf"
+JAIL_LOCAL_FILE="/etc/fail2ban/jail.local"
+SSHD_LOCAL_FILE="/etc/fail2ban/jail.d/sshd.local"
+
+# Copy the original jail.conf to jail.local
+echo -e "${YELLOW}Copying $ORIGINAL_FILE to $JAIL_LOCAL_FILE...${TEXTRESET}"
+cp -v "$ORIGINAL_FILE" "$JAIL_LOCAL_FILE"
+
+# Check if the copy was successful
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Failed to copy file. Exiting.${TEXTRESET}"
     exit 1
 fi
 
-# Configure Fail2ban
-echo -e "${YELLOW}Configuring Fail2ban...${TEXTRESET}"
-if sudo bash -c 'cat <<EOL >> /etc/fail2ban/jail.local
+# Use sed to modify the jail.local file
+echo -e "${YELLOW}Modifying $JAIL_LOCAL_FILE to enable SSH jail...${TEXTRESET}"
+sed -i '/^\[sshd\]/,/^$/ s/#mode.*normal/&\nenabled = true/' "$JAIL_LOCAL_FILE"
 
-# Custom Fail2ban configuration
-[DEFAULT]
-bantime  = 600
-findtime = 600
-maxretry = 5
+# Check if the modification was successful
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Failed to modify $JAIL_LOCAL_FILE. Exiting.${TEXTRESET}"
+    exit 1
+fi
 
+# Create or overwrite the sshd.local file with the desired content
+echo -e "${YELLOW}Creating or modifying $SSHD_LOCAL_FILE...${TEXTRESET}"
+cat <<EOL > "$SSHD_LOCAL_FILE"
 [sshd]
 enabled = true
-EOL'; then
-    echo -e "${GREEN}Fail2ban configured successfully.${TEXTRESET}"
-else
-    echo -e "${RED}Failed to configure Fail2ban.${TEXTRESET}"
+maxretry = 5
+findtime = 300
+bantime = 3600
+bantime.increment = true
+bantime.factor = 2
+EOL
+
+# Check if the file creation was successful
+if [[ $? -ne 0 ]]; then
+    echo -e "${RED}Failed to create or modify $SSHD_LOCAL_FILE. Exiting.${TEXTRESET}"
     exit 1
 fi
 
-# Start Fail2ban service
-echo -e "${YELLOW}Starting Fail2ban service...${TEXTRESET}"
-if sudo systemctl start fail2ban; then
-    echo -e "${GREEN}Fail2ban service started successfully.${TEXTRESET}"
+# Enable and start the Fail2Ban service
+echo -e "${YELLOW}Enabling Fail2Ban service...${TEXTRESET}"
+systemctl enable fail2ban
+
+echo -e "${YELLOW}Starting Fail2Ban service...${TEXTRESET}"
+systemctl start fail2ban
+
+# Check the status of the Fail2Ban service
+echo -e "${YELLOW}Checking Fail2Ban service status...${TEXTRESET}"
+if systemctl status fail2ban | grep -q "active (running)"; then
+    echo -e "${GREEN}Fail2Ban is running.${TEXTRESET}"
 else
-    echo -e "${RED}Failed to start Fail2ban service.${TEXTRESET}"
-    exit 1
+    echo -e "${RED}Fail2Ban is not running. Checking SELinux configuration...${TEXTRESET}"
+
+    # Check SELinux status
+    selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
+
+    if [ "$selinux_status" == "enabled" ]; then
+        echo -e "${YELLOW}SELinux is enabled.${TEXTRESET}"
+
+        # Restore SELinux context for /etc/fail2ban/jail.local
+        echo -e "${YELLOW}Restoring SELinux context for /etc/fail2ban/jail.local...${TEXTRESET}"
+        restorecon -v /etc/fail2ban/jail.local
+
+        # Check SELinux denials for fail2ban-server
+        echo -e "${YELLOW}Checking SELinux denials for fail2ban-server...${TEXTRESET}"
+        denials=$(ausearch -m avc -ts recent | grep "fail2ban-server" | wc -l)
+
+        if [ "$denials" -gt 0 ]; then
+            echo -e "${RED}SELinux denials found for fail2ban-server. Creating a local policy module...${TEXTRESET}"
+
+            # Generate and install a local policy module to allow fail2ban access
+            ausearch -c 'fail2ban-server' --raw | audit2allow -M my-fail2banserver
+            semodule -X 300 -i my-fail2banserver.pp
+
+            echo -e "${GREEN}Custom SELinux policy module installed.${TEXTRESET}"
+        else
+            echo -e "${GREEN}No SELinux denials found for fail2ban-server.${TEXTRESET}"
+        fi
+    else
+        echo -e "${YELLOW}SELinux is not enabled.${TEXTRESET}"
+    fi
+
+    # Restart the Fail2Ban service after SELinux adjustments
+    echo -e "${YELLOW}Restarting Fail2Ban service...${TEXTRESET}"
+    systemctl restart fail2ban
+
+    # Check the Fail2Ban service status again
+    echo -e "${YELLOW}Re-checking Fail2Ban service status...${TEXTRESET}"
+    if systemctl status fail2ban | grep -q "active (running)"; then
+        echo -e "${GREEN}Fail2Ban is now running after SELinux adjustments.${TEXTRESET}"
+    else
+        echo -e "${RED}Fail2Ban is still not running. Further investigation may be required.${TEXTRESET}"
+    fi
 fi
 
-# Enable Fail2ban service to start on boot
-echo -e "${YELLOW}Enabling Fail2ban to start on boot...${TEXTRESET}"
-if sudo systemctl enable fail2ban; then
-    echo -e "${GREEN}Fail2ban enabled to start on boot successfully.${TEXTRESET}"
-else
-    echo -e "${RED}Failed to enable Fail2ban to start on boot.${TEXTRESET}"
-    exit 1
-fi
-
-# Check Fail2ban status
-echo -e "${YELLOW}Checking Fail2ban status...${TEXTRESET}"
-if sudo systemctl status fail2ban; then
-    echo -e "${GREEN}Fail2ban is active and running.${TEXTRESET}"
-else
-    echo -e "${RED}Fail2ban is not running properly.${TEXTRESET}"
-fi
-
-# Output the status of the SSH jail
-echo -e "${YELLOW}Fail2ban SSH jail status:${TEXTRESET}"
-sudo fail2ban-client status sshd
-
-echo -e "${GREEN}Fail2ban installation and configuration complete.${TEXTRESET}"
+echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
 }
 
 
