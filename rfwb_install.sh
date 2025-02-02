@@ -74,7 +74,7 @@ if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
     echo -e "${RED}Interface $INTERFACE is using DHCP${TEXTRESET}"
 
     # Validate IPADDR
-    read -p "Please provide a static IP address in CIDR format (i.e 192.168.24.2/24): " IPADDR
+    read -p "Please provide a static IP address for the ${YELLOW}INSIDE INTERFACE${TEXTRESET} in CIDR format (i.e 192.168.24.2/24): " IPADDR
     while ! validate_cidr "$IPADDR"; do
       echo -e "${RED}The entry is not in valid CIDR notation. Please Try again${TEXTRESET}"
       read -p "Please provide a static IP address in CIDR format (i.e 192.168.24.2/24): " IPADDR
@@ -170,7 +170,7 @@ echo -e "HOSTNAME: ${GREEN}$HOSTNAME${TEXTRESET}"
     fi
   done
 else
-  echo -e "${GREEN}Interface $INTERFACE is using a static IP address${TEXTRESET}"
+  echo -e "${GREEN}INSIDE Interface $INTERFACE is using a static IP address${TEXTRESET}"
   sleep 2
 fi
 clear
