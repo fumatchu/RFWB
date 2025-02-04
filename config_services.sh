@@ -503,7 +503,7 @@ sshd_status=$(fail2ban-client status sshd 2>&1)
 
 if echo "$sshd_status" | grep -q "ERROR   NOK: ('sshd',)"; then
     echo -e "${RED}SSHD jail failed to start. Please check Fail2Ban configuration.${TEXTRESET}"
-elif echo "$sshd_status" | grep -q "Currently failed: 0"; then
+elif echo "$sshd_status" | grep -E0 "Banned IP list:"; then
     echo -e "${GREEN}SSHD jail is active and functional.${TEXTRESET}"
 else
     echo -e "${RED}SSHD jail is not functional or has current failures. Please check Fail2Ban configuration.${TEXTRESET}"
