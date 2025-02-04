@@ -69,7 +69,15 @@ configure_bind() {
 
     echo -e "${YELLOW}Configuring BIND with forward and reverse zones...${TEXTRESET}"
 
-    # Append new zone configurations to named.conf
+    # Insert forwarders configuration right after the crypto policy include line
+    sudo sed -i '/include "\/etc\/crypto-policies\/back-ends\/bind.config";/a \
+forwarders {\n\
+    208.67.222.222;\n\
+    208.67.220.220;\n\
+};\n\
+forward only;' $NAMED_CONF
+
+    # Append zone configurations at the bottom of named.conf
     sudo bash -c "cat >> $NAMED_CONF" <<EOF
 
 include "$KEYS_FILE";
@@ -84,25 +92,6 @@ zone "${reverse_zone}.in-addr.arpa" {
     type master;
     file "$reverse_zone_file";
     allow-update { key "Kea-DDNS"; };
-};
-
-// Forwarders configuration
-include "/etc/crypto-policies/back-ends/bind.config";
-
-forwarders {
-    208.67.222.222;
-    208.67.220.220;
-};
-
-forward only;
-
-// Logging configuration
-logging {
-    channel default_debug {
-        file "data/named.run";
-        severity dynamic;
-    };
-    category lame-servers { null; };
 };
 EOF
 
@@ -154,8 +143,6 @@ else
     echo -e "${RED}$NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
 fi
 
-# Continue with the rest of the script here
-# Define file paths and directories
 KEA_CONF="/etc/kea/kea-dhcp4.conf"
 # Function to find the network interface
 find_interface() {
