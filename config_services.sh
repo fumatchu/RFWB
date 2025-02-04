@@ -11,7 +11,6 @@ NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
 ZONE_DIR="/var/named/"
 
-
 generate_tsig_key() {
     echo -e "${YELLOW}Generating TSIG key using rndc-confgen...${TEXTRESET}"
 
@@ -33,7 +32,6 @@ key "Kea-DDNS" {
     secret "$key_secret";
 };
 EOF
-
 }
 
 configure_bind() {
@@ -86,6 +84,25 @@ zone "${reverse_zone}.in-addr.arpa" {
     type master;
     file "$reverse_zone_file";
     allow-update { key "Kea-DDNS"; };
+};
+
+// Forwarders configuration
+include "/etc/crypto-policies/back-ends/bind.config";
+
+forwarders {
+    208.67.222.222;
+    208.67.220.220;
+};
+
+forward only;
+
+// Logging configuration
+logging {
+    channel default_debug {
+        file "data/named.run";
+        severity dynamic;
+    };
+    category lame-servers { null; };
 };
 EOF
 
