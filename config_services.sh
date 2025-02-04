@@ -446,6 +446,7 @@ systemctl enable fail2ban
 
 echo -e "${YELLOW}Starting Fail2Ban service...${TEXTRESET}"
 systemctl start fail2ban
+sleep 5
 
 # Check the status of the Fail2Ban service
 echo -e "${YELLOW}Checking Fail2Ban service status...${TEXTRESET}"
@@ -509,5 +510,7 @@ else
 fi
 echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
 }
+# Call the configure_fail2ban function
+configure_fail2ban
 
 
