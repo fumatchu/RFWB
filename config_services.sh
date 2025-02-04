@@ -394,7 +394,7 @@ if [ -f "$KEA_CONF" ]; then
     else
     echo -e "${RED}$KEA_CONF not found. Skipping KEA-DHCP configuration.${TEXTRESET}"
 fi
-}
+
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
 # Define the original and new file paths
