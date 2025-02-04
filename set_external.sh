@@ -199,3 +199,147 @@ if [[ "$policy_confirm" == "y" ]]; then
 else
   echo -e "${YELLOW}Outbound policy not applied.${TEXTRESET}"
 fi
+#Lockdown the external interface by user service preference 
+# Function to find the outside interface
+find_outside_interface() {
+    # Find the interface with a connection ending in -outside
+    interface=$(nmcli device status | awk '/-outside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$interface"
+}
+
+# Function to find the zone associated with the interface
+find_zone() {
+    local interface="$1"
+    # Get the active zones and find the one associated with the interface
+    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
+        {
+            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
+        }
+        /^  interfaces:/ {
+            if ($0 ~ iface) { print current_zone }
+        }
+    ')
+
+    if [ -z "$zone" ]; then
+        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$zone"
+}
+
+# Function to list services for a given zone
+list_services() {
+    local zone="$1"
+    echo -e "${YELLOW}Services open in zone '$zone':${TEXTRESET}"
+    services=$(sudo firewall-cmd --zone="$zone" --list-services)
+
+    if [ -z "$services" ]; then
+        echo -e "${GREEN}No open services.${TEXTRESET}"
+        return 1
+    else
+        echo "$services"
+        return 0
+    fi
+}
+
+# Function to remove a service from the zone
+remove_service() {
+    local zone="$1"
+    while true; do
+        list_services "$zone"
+        if [ $? -ne 0 ]; then
+            break
+        fi
+
+        echo -e "${YELLOW}Would you like to remove any of these services? (yes/no)${TEXTRESET}"
+        read -r answer
+
+        if [[ "$answer" =~ ^[Yy][Ee][Ss]$ || "$answer" =~ ^[Yy]$ ]]; then
+            services=($(sudo firewall-cmd --zone="$zone" --list-services))
+            echo -e "${YELLOW}Select a service to remove:${TEXTRESET}"
+
+            for i in "${!services[@]}"; do
+                echo "$i) ${services[$i]}"
+            done
+
+            read -p "Enter the number of the service to remove: " service_number
+
+            if [[ "$service_number" =~ ^[0-9]+$ ]] && (( service_number >= 0 && service_number < ${#services[@]} )); then
+                service_to_remove="${services[$service_number]}"
+                sudo firewall-cmd --zone="$zone" --remove-service="$service_to_remove" --permanent
+                sudo firewall-cmd --reload
+                echo -e "${GREEN}Service '$service_to_remove' removed.${TEXTRESET}"
+            else
+                echo -e "${RED}Invalid selection.${TEXTRESET}"
+            fi
+        else
+            break
+        fi
+    done
+}
+
+# Main execution block
+outside_interface=$(find_outside_interface)
+zone=$(find_zone "$outside_interface")
+remove_service "$zone"
+## disable icmp?
+# Function to find the outside interface
+find_outside_interface() {
+    # Find the interface with a connection ending in -outside
+    interface=$(nmcli device status | awk '/-outside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$interface"
+}
+
+# Function to find the zone associated with the interface
+find_zone() {
+    local interface="$1"
+    # Get the active zones and find the one associated with the interface
+    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
+        {
+            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
+        }
+        /^  interfaces:/ {
+            if ($0 ~ iface) { print current_zone }
+        }
+    ')
+
+    if [ -z "$zone" ]; then
+        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo "$zone"
+}
+
+# Function to disable ICMP in the specified zone
+disable_icmp() {
+    local zone="$1"
+    echo -e "${YELLOW}Would you like to disable ICMP on the zone '$zone'? (yes/no)${TEXTRESET}"
+    read -r answer
+
+    if [[ "$answer" =~ ^[Yy][Ee][Ss]$ || "$answer" =~ ^[Yy]$ ]]; then
+        sudo firewall-cmd --zone="$zone" --add-icmp-block=echo-request --permanent
+        sudo firewall-cmd --reload
+        echo -e "${GREEN}ICMP has been disabled on the zone '$zone'.${TEXTRESET}"
+    else
+        echo -e "${GREEN}ICMP remains enabled on the zone '$zone'.${TEXTRESET}"
+    fi
+}
+
+# Main execution block
+outside_interface=$(find_outside_interface)
+zone=$(find_zone "$outside_interface")
+disable_icmp "$zone"
