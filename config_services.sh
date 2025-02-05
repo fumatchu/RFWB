@@ -134,11 +134,29 @@ EOF
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
 }
 
+start_and_enable_service() {
+    local service_name="$1"
+
+    echo -e "${YELLOW}Enabling and starting the $service_name service...${TEXTRESET}"
+
+    sudo systemctl enable "$service_name"
+    sudo systemctl start "$service_name"
+
+    # Check if the service is running
+    if sudo systemctl status "$service_name" | grep -q "running"; then
+        echo -e "${GREEN}$service_name service is running.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to start $service_name service.${TEXTRESET}"
+        exit 1
+    fi
+}
+
 # Main execution block
 if [ -f "$NAMED_CONF" ]; then
     echo -e "${GREEN}$NAMED_CONF found. Proceeding with configuration...${TEXTRESET}"
     generate_tsig_key
     configure_bind
+    start_and_enable_service "named"
 else
     echo -e "${RED}$NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
 fi
