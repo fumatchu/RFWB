@@ -423,11 +423,16 @@ IFS=: read -r name device type state <<< "$active_connection"
 
 echo -e "${GREEN}Active internal network connection found:${TEXTRESET} $device ($name)"
 
-# Update the connection profile name to include '-inside'
-new_profile_name="${name}-inside"
-echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
-nmcli connection modify "$name" connection.id "$new_profile_name"
-nmcli connection reload
+# Check if the connection profile name already has the '-inside' suffix
+if [[ "$name" == *-inside ]]; then
+    echo -e "${YELLOW}The connection profile name already has the '-inside' suffix. No modification needed.${TEXTRESET}"
+else
+    # Update the connection profile name to include '-inside'
+    new_profile_name="${name}-inside"
+    echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
+    nmcli connection modify "$name" connection.id "$new_profile_name"
+    nmcli connection reload
+fi
 
 # Display initial ASCII representation of the connection
 echo -e "${GREEN}Initial Connection Diagram:${TEXTRESET}"
