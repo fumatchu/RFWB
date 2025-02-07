@@ -337,7 +337,36 @@ else
     sleep 3
     # Continue with the script or exit as needed
 fi
+#Check SElinux
+check_and_enable_selinux() {
+    # Check current SELinux status
+    current_status=$(getenforce)
 
+    if [ "$current_status" == "Enforcing" ]; then
+        echo -e "${GREEN}SELinux is already enabled and enforcing.${TEXTRESET}"
+    else
+        echo -e "${YELLOW}SELinux is not enabled. Enabling SELinux...${TEXTRESET}"
+
+        # Modify SELinux configuration to enable it
+        sudo sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
+
+        # Set SELinux to enforcing mode temporarily
+        sudo setenforce 1
+
+        # Verify and provide feedback
+        if [ "$(getenforce)" == "Enforcing" ]; then
+            echo -e "${GREEN}SELinux has been successfully enabled and is now enforcing.${TEXTRESET}"
+        else
+            echo -e "${RED}Failed to enable SELinux. Please check the configuration.${TEXTRESET}"
+            exit 1
+        fi
+    fi
+}
+
+# Execute the function
+check_and_enable_selinux
+sleep 3
+clear
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 dnf -y update
