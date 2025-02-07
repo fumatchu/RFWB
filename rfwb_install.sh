@@ -230,7 +230,6 @@ echo -e "If using SSH, please use the IP Address: ${NMCLIIP}"
 
 fi
 clear
-clear
 echo -e "${GREEN}
                                .*((((((((((((((((*
                          .(((((((((((((((((((((((((((/
@@ -272,13 +271,6 @@ The process of this program is the following:
 #2-The ${YELLOW}FIRST, connected interface${RESET} will be designated as your inside interface (This interface you are probably SSH'd into)
 Your Internet facing interface ${YELLOW}SHOULD BE UNPLUGGED${RESET} right now
 
-We prep the inside interface then proceed to install the applications of your choice
-All downloads and configuration will happen through the inside interface
-After your applications have been installed and configured to listen on the inside interface, we will then configure the outside interface.
-This is when you will plug the outside (internet facing) interface into the external connection, Cable modem, etc that you want to use.
-We will configure that outside interface and harden all communications on that outside interface.
-After that, the system will prompt you to reboot and you will be ready to go!
-"
 
 read -p "Press Enter to start the installer"
 clear
