@@ -1764,8 +1764,8 @@ options=(
     5 "Install ntopng" off
     6 "Install DDNS Client" off
     7 "Install required Packages" on
-    8 "Install Suricata" off
-    9 "Install Elastic/Kibana/Filebeat" off
+    8 "Install Suricata (Only Suricata Engine)" off
+    9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
