@@ -508,7 +508,7 @@ echo "       | Firewall |"
 echo "       +---------+"
 echo
 echo -e "${GREEN}The Inside interface has been configured.${TEXTRESET}"
-sleep 3
+read -p "Press Enter to proceed"
 clear
 cat <<EOF
 Your inside interface should now have a static IP address and appropriate inside zone set.
