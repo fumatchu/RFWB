@@ -544,7 +544,7 @@ add_subnet() {
                 "name": "domain-name",
                 "data": "$domain"
             }
-        ##ENDSUBNET-$description
+         ##ENDSUBNET-$description
                 ]
             }
         ]
@@ -586,15 +586,19 @@ if [ ! -f "$KEA_DHCP4_CONF" ]; then
 else
     echo -e "${GREEN}$KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
 
-    # Ask user if they want to add another DHCP subnet
-    read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
-
-    if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
-        add_subnet
-    else
-        echo -e "${YELLOW}Skipping DHCP subnet addition.${TEXTRESET}"
-    fi
+    # Loop to repeatedly ask the user if they want to add another subnet
+    while true; do
+        read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
+        if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
+            add_subnet
+        else
+            echo -e "${YELLOW}No more subnets will be added.${TEXTRESET}"
+            break
+        fi
+    done
 fi
+
+# Add additional script logic here if needed
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
 # Define the original and new file paths
