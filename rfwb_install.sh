@@ -335,8 +335,8 @@ if $test_failed; then
 else
     echo "All tests passed successfully."
     sleep 3
-    # Continue with the script or exit as needed
 fi
+clear
 #Check SElinux
 check_and_enable_selinux() {
     # Check current SELinux status
