@@ -412,7 +412,189 @@ if [ -f "$KEA_CONF" ]; then
     else
     echo -e "${RED}$KEA_CONF not found. Skipping KEA-DHCP configuration.${TEXTRESET}"
 fi
+#Add additional Scopes if needed 
+# Path to the KEA DHCP4 configuration file
+KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
 
+# Function to validate CIDR notation
+validate_cidr() {
+    local cidr=$1
+    local ip="${cidr%/*}"
+    local prefix="${cidr#*/}"
+    local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+
+    # Check if IP and prefix are valid
+    [[ $ip =~ ^$n(\.$n){3}$ ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]
+}
+
+# Extract domain name from hostnamectl
+domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
+
+# Function to add a new subnet to the KEA DHCP4 configuration
+add_subnet() {
+    local description
+    local network_scheme
+    local pool_start
+    local pool_end
+    local router_address
+
+    while true; do
+        # Prompt user for network scheme until valid input is provided
+        while true; do
+            read -p "Enter the network scheme for the new subnet (e.g., 192.168.2.0/24): " network_scheme
+            if validate_cidr "$network_scheme"; then
+                break
+            else
+                echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
+            fi
+        done
+
+        # Extract network address and prefix length
+        IFS='/' read -r network_address prefix_length <<< "$network_scheme"
+
+        # Calculate default pool range and router address based on the network scheme
+        IFS='.' read -r net1 net2 net3 net4 <<< "$network_address"
+        default_pool_start="${net1}.${net2}.${net3}.10"
+        default_pool_end="${net1}.${net2}.${net3}.100"
+        default_router_address="${net1}.${net2}.${net3}.1"
+
+        # Prompt user for a friendly name for the subnet
+        read -p "Please provide a friendly name for this subnet: " description
+
+        # Prompt user to confirm or change the pool address range
+        echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
+        read -p "Is this range OK? (y/n): " confirm_pool
+        if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
+            read -p "Enter the desired pool start address: " pool_start
+            read -p "Enter the desired pool end address: " pool_end
+        else
+            pool_start="$default_pool_start"
+            pool_end="$default_pool_end"
+        fi
+
+        # Prompt user to confirm or change the router address
+        echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
+        read -p "Is this address OK? (y/n): " confirm_router
+        if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
+            read -p "Enter the desired router address: " router_address
+        else
+            router_address="$default_router_address"
+        fi
+
+        # Display the information for review
+        echo -e "\n${YELLOW}Review the settings:${TEXTRESET}"
+        echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
+        echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
+        echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
+        echo -e "Router Address: ${GREEN}$router_address${TEXTRESET}"
+        echo -e "NTP Server: ${GREEN}$dns_server_ip${TEXTRESET}"
+        echo -e "DNS Server: ${GREEN}$dns_server_ip${TEXTRESET}"
+        echo -e "Client suffix: ${GREEN}$domain${TEXTRESET}"
+        echo -e "Client Search Domain: ${GREEN}$domain${TEXTRESET}"
+
+        # Ask if the settings are correct
+        read -p "Are these settings correct? (y/n): " confirm_settings
+        if [[ "$confirm_settings" =~ ^[Yy]$ ]]; then
+            # If settings are correct, proceed with the script
+            break
+        else
+            # If settings are not correct, loop and ask again
+            echo -e "\n${RED}Let's try again.${TEXTRESET}\n"
+        fi
+    done
+
+    # Read the current configuration file into a variable
+    config_content=$(sudo cat /etc/kea/kea-dhcp4.conf)
+
+    # Extract the last ID used and increment for the new subnet
+    last_id=$(echo "$config_content" | grep '"id":' | tail -n 1 | grep -o '[0-9]\+')
+    new_id=$((last_id + 1))
+
+    # Format the new subnet entry
+    new_subnet_entry=$(cat <<EOF
+        ]
+    },
+    {
+        ##BEGINSUBNET-$description
+        "id": $new_id,
+        "subnet": "$network_scheme",
+        "pools": [
+            {
+                "pool": "$pool_start - $pool_end"
+            }
+        ],
+        "option-data": [
+            {
+                "name": "routers",
+                "data": "$router_address"
+            },
+            {
+                "name": "domain-name-servers",
+                "data": "$dns_server_ip"
+            },
+            {
+                "name": "ntp-servers",
+                "data": "$dns_server_ip"
+            },
+            {
+                "name": "domain-search",
+                 "data": "$domain"
+            },
+            {
+                "name": "domain-name",
+                "data": "$domain"
+            }
+        ##ENDSUBNET-$description
+                ]
+            }
+        ]
+    }
+}
+EOF
+)
+
+    # Create a temporary file to store the updated configuration
+    tmpfile=$(mktemp)
+
+    # Use awk to insert the new subnet entry after the last ##ENDSUBNET and delete lines below
+    awk -v new_subnet="$new_subnet_entry" '
+    {
+        if (/##ENDSUBNET/) last_endsubnet = NR
+        lines[NR] = $0
+    }
+    END {
+        for (i = 1; i <= last_endsubnet; i++) {
+            print lines[i]
+        }
+        print new_subnet
+    }' /etc/kea/kea-dhcp4.conf > "$tmpfile"
+
+    # Replace the original configuration file with the updated one
+    sudo mv "$tmpfile" /etc/kea/kea-dhcp4.conf
+
+    # Set file permissions
+    echo -e "${YELLOW}Setting permissions for configuration files...${TEXTRESET}"
+    sudo chown root:kea /etc/kea/kea-dhcp4.conf
+    sudo chmod 640 /etc/kea/kea-dhcp4.conf
+
+    echo -e "${GREEN}New subnet added to Kea DHCP server configuration.${TEXTRESET}"
+}
+
+# Check if the KEA_DHCP4_CONF file exists
+if [ ! -f "$KEA_DHCP4_CONF" ]; then
+    echo -e "${RED}$KEA_DHCP4_CONF not found. Skipping subnet addition.${TEXTRESET}"
+else
+    echo -e "${GREEN}$KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
+
+    # Ask user if they want to add another DHCP subnet
+    read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
+
+    if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
+        add_subnet
+    else
+        echo -e "${YELLOW}Skipping DHCP subnet addition.${TEXTRESET}"
+    fi
+fi
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
 # Define the original and new file paths
