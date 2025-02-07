@@ -315,8 +315,8 @@ done
             "ncr-format": "JSON"
         },
         "subnet4": [
+            ##BEGINSUBNET-$description
             {
-                ##BEGINSUBNET-$description
                 "id": 1,
                 "subnet": "$network_scheme",
                 "pools": [
