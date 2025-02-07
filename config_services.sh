@@ -597,7 +597,29 @@ else
         fi
     done
 fi
+start_and_enable_service() {
+    local service_name="$1"
 
+    # Check for the configuration file
+    if [ -f "/etc/kea/kea-dhcp4.conf" ]; then
+        echo -e "${YELLOW}Configuration file found. Enabling and starting the $service_name service...${TEXTRESET}"
+
+        sudo systemctl enable "$service_name"
+        sudo systemctl start "$service_name"
+
+        # Check if the service is running
+        if sudo systemctl status "$service_name" | grep -q "running"; then
+            echo -e "${GREEN}$service_name service is running.${TEXTRESET}"
+        else
+            echo -e "${RED}Failed to start $service_name service.${TEXTRESET}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}Configuration file /etc/kea/kea-dhcp4.conf not found. Cannot enable and start $service_name service.${TEXTRESET}"
+        exit 1
+    fi
+}
+start_and_enable_service "kea-dhcp4"
 # Add additional script logic here if needed
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
