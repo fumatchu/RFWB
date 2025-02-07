@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Define color codes for pretty output
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-TEXTRESET="\033[0m"
-
 # Check if dialog is installed
 if ! command -v dialog &> /dev/null; then
     echo -e "${RED}Dialog is not installed. Please install it to use this script.${TEXTRESET}"
@@ -44,14 +38,38 @@ enable_and_start_service() {
     fi
 }
 
+# Display a starting banner
+dialog --infobox "Enabling and Starting services..." 5 50
+sleep 3
+
 # Main script execution
-for service in bind isc-kea-dhcp4 cockpit webmin ntopng suricata filebeat kibana elasticsearch; do
+for service in webmin ntopng suricata filebeat kibana elasticsearch; do
     if check_package_installed "$service"; then
         enable_and_start_service "$service"
     else
         show_infobox "$service is not installed. Skipping..."
     fi
 done
+
+# Special handling for bind
+if check_package_installed "bind"; then
+    enable_and_start_service "named"
+else
+    show_infobox "bind is not installed. Skipping..."
+fi
+# Special handling for Cockpit
+if check_package_installed "cockpit"; then
+    enable_and_start_service "cockpit.socket"
+else
+    show_infobox "cockpit is not installed. Skipping..."
+fi
+
+# Special handling for Kea
+if check_package_installed "isc-kea-dhcp4"; then
+    enable_and_start_service "kea-dhcp4"
+else
+    show_infobox "cockpit is not installed. Skipping..."
+fi
 
 if check_package_installed "ddclient"; then
     show_infobox "ddclient is installed. Please manually configure it for your DDNS requirements."
