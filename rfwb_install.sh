@@ -343,7 +343,6 @@ sleep 2
 dnf -y update
 dnf -y install net-tools dmidecode ipcalc bind-utils
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
-echo -e ${YELLOW}"The Installer will answer all questions for you ${RED}DO NOT type YES${TEXTRESET}"
 sleep 4
 #!/usr/bin/env bash
 
@@ -356,7 +355,8 @@ fi
 # Run the package installation script and install speedtest
 curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash
 dnf -y install speedtest
-
+echo -e ${YELLOW}"The Installer will answer all questions for you ${RED}DO NOT type YES${TEXTRESET}"
+sleep 4
 # Create an expect script to automate the interaction with speedtest
 /usr/bin/expect <<EOF
     spawn speedtest
@@ -364,7 +364,7 @@ dnf -y install speedtest
     send "YES\r"
     expect eof
 EOF
-#!/bin/bash
+clear
 HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cut -c16-)
 HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
 
@@ -508,7 +508,8 @@ echo "       | Firewall |"
 echo "       +---------+"
 echo
 echo -e "${GREEN}The Inside interface has been configured.${TEXTRESET}"
-
+sleep 3
+clear
 cat <<EOF
 Your inside interface should now have a static IP address and appropriate inside zone set.
 We will remove the Default-Gateway later in the installer as for now, we need to install services via this interface.
@@ -519,6 +520,7 @@ This is considered an advanced setup and you should have at least a basic unders
 Keep in mind that we are going to bind these VLANS (tags) to this interface. The IP address you provided will now be considered
 the "untagged" vlan. What you are going to create (if you are) with VLANS will all be tagged. Make sure the interface southbound
 of this device understands 802.1q. That all being said, if you only have one IP address "network" you can say no when asked.
+
 EOF
 
 #SET VLANS IF NEEDED
