@@ -446,7 +446,7 @@ enable_nftables() {
 # Main script execution
 disable_firewalld
 enable_nftables
-#set the inside interface 
+#set the inside interface
 # Get all active connections managed by NetworkManager
 active_connection=$(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active | grep ":802-3-ethernet:" | grep ":activated")
 
@@ -497,19 +497,18 @@ function validate_ip() {
 
 # Function to display a graphical representation of mapped VLANs
 function display_vlan_map() {
-  echo -e "${GREEN}Existing VLAN Mappings:${TEXTRESET}"
-  nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | while IFS=: read -r con_name con_type con_iface; do
-    vlan_id=$(nmcli connection show "$con_name" | grep "802-1Q.id:" | awk '{print $2}')
-    ip_address=$(nmcli connection show "$con_name" | grep "ipv4.addresses:" | awk '{print $2}')
-    zone=$(firewall-cmd --get-zone-of-interface="$con_iface")
-    echo "  +-------------------+"
-    echo "  |  Interface: $con_iface  |"
-    echo "  |  VLAN ID: $vlan_id     |"
-    echo "  |  IP: $ip_address  |"
-    echo "  |  Zone: $zone  |"
-    echo "  +-------------------+"
-    echo
-  done
+    echo -e "${GREEN}Existing VLAN Mappings:${TEXTRESET}"
+    nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | sort | uniq | while IFS=: read -r con_name con_type con_iface; do
+        # Extract VLAN ID from the interface name
+        vlan_id="${con_iface##*.}"
+        ip_address=$(nmcli connection show "$con_name" | awk '/ipv4.addresses:/ {print $2}')
+        echo "  +-------------------+"
+        echo "  |  Interface: $con_iface  |"
+        echo "  |  VLAN ID: $vlan_id     |"
+        echo "  |  IP: $ip_address  |"
+        echo "  +-------------------+"
+        echo
+    done
 }
 
 # Start the VLAN configuration loop
@@ -579,6 +578,7 @@ while true; do
       nmcli connection add type vlan con-name "$vlan_connection" dev "$selected_interface" id "$vlan_id" ip4 "$ip_address"
       nmcli connection up "$vlan_connection"
       echo -e "${GREEN}VLAN $vlan_id configured on $selected_interface with IP $ip_address.${TEXTRESET}"
+    fi
 
     # Display updated VLAN mappings
     display_vlan_map
@@ -594,7 +594,8 @@ while true; do
   fi
 done
 
-#ADD SSH TO THE INTERNAL INTERFACE
+
+#ADD SSH TO THE INTERNAL INTERFACE(S)
 # Function to locate the server's private IP address using nmcli
 find_private_ip() {
     # Find the interface ending with -inside
@@ -608,7 +609,7 @@ find_private_ip() {
     echo -e "${GREEN}Inside interface found: $interface${TEXTRESET}"
 }
 
-# Function to set up nftables rule for SSH on the inside interface
+# Function to set up nftables rule for SSH on the inside interface and its sub-interfaces
 setup_nftables() {
     # Ensure the nftables service is enabled and started
     sudo systemctl enable nftables
@@ -624,15 +625,20 @@ setup_nftables() {
         sudo nft add chain inet filter input { type filter hook input priority 0 \; }
     fi
 
-    # Add a rule to allow SSH on the inside interface, if not already present
-    if ! sudo nft list chain inet filter input | grep -q "iifname \"$interface\" tcp dport 22 accept"; then
-        sudo nft add rule inet filter input iifname "$interface" tcp dport 22 accept
-        echo -e "${GREEN}Rule added: Allow SSH on interface $interface${TEXTRESET}"
-    else
-        echo -e "${YELLOW}Rule already exists: Allow SSH on interface $interface${TEXTRESET}"
-    fi
+    # Add a rule to allow SSH on the inside interface and any sub-interfaces
+    # Find all interfaces related to the main inside interface
+    all_interfaces=$(nmcli device status | awk -v intf="$interface" '$1 ~ intf {print $1}')
 
-    # Show the added rule in the input chain
+    for iface in $all_interfaces; do
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 22 accept
+            echo -e "${GREEN}Rule added: Allow SSH on interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface${TEXTRESET}"
+        fi
+    done
+
+    # Show the added rules in the input chain
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
 }
@@ -640,7 +646,6 @@ setup_nftables() {
 # Main script execution
 find_private_ip
 setup_nftables
-
 
 read -p "Press Enter to install applications and services"
 /root/RFWB/pkg_install_gui.sh
