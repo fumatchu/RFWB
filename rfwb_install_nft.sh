@@ -648,10 +648,10 @@ find_private_ip
 setup_nftables
 
 read -p "Press Enter to install applications and services"
-/root/RFWB/pkg_install_gui.sh
-/root/RFWB/config_services.sh
-/root/RFWB/enable_start_service_gui.sh
-/root/RFWB/set_external.sh
+#/root/RFWB/pkg_install_gui.sh
+#/root/RFWB/config_services.sh
+#/root/RFWB/enable_start_service_gui.sh
+#/root/RFWB/set_external.sh
 
 
 
