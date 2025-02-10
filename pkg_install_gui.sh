@@ -32,13 +32,19 @@ install_bind() {
 
     # Function to locate the inside interface and its sub-interfaces
     find_inside_interfaces() {
-        # Find all active interfaces with a connection name ending in '-inside'
-        inside_interfaces=$(nmcli device status | awk '/-inside/ {print $1}')
+        # Find the main interface with a connection name ending in '-inside'
+        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
-        if [ -z "$inside_interfaces" ]; then
+        if [ -z "$main_interface" ]; then
             echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
             exit 1
         fi
+
+        # Find all sub-interfaces (e.g., VLANs) associated with the main interface
+        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
+
+        # Combine main interface and sub-interfaces into a single list
+        inside_interfaces="$main_interface $sub_interfaces"
 
         echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
     }
@@ -87,7 +93,6 @@ install_bind() {
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
-
 # Function to install ISC KEA
 install_isc_kea() {
     echo -e "${GREEN}Installing ISC KEA...${TEXTRESET}"
