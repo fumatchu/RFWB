@@ -280,7 +280,7 @@ find_interface() {
 
     echo "$interface"
 }
-
+#Add MASQ and forwarding with connection, related
 # Find inside and outside interfaces
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
