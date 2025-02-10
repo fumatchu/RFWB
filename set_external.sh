@@ -249,23 +249,11 @@ list_interfaces_and_ports() {
     # Close table
     echo "-------------------------------------------------------------"
 }
-# Function to save the current nftables ruleset
-save_ruleset() {
-    echo -e "${YELLOW}Appending current nftables ruleset to $RULESET_PATH...${TEXTRESET}"
-    sudo nft list ruleset > $RULESET_PATH
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Ruleset appended successfully to $RULESET_PATH.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to append ruleset.${TEXTRESET}"
-        exit 1
-    fi
-}
 
 # Main script execution
 find_outside_interface
 setup_nftables
 add_additional_ports
-save_ruleset
 list_interfaces_and_ports
 
 # Function to find the network interface based on connection name ending
