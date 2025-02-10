@@ -637,7 +637,9 @@ setup_nftables() {
     # Ensure the nftables service is enabled and started
     sudo systemctl enable nftables
     sudo systemctl start nftables
-
+    #Initialize Conf
+    nft list ruleset >/etc/sysconfig/nftables.conf
+    sudo systemctl restart nftables
     # Create a filter table if it doesn't exist
     if ! sudo nft list tables | grep -q 'inet filter'; then
         sudo nft add table inet filter
@@ -664,10 +666,17 @@ setup_nftables() {
         fi
     done
 
+    # Save the current ruleset
+    echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+    sudo nft list ruleset > /etc/sysconfig/nftables.conf
+
     # Show the added rules in the input chain
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
+
 }
+
+
 # Restart nftables to apply the changes
     echo "Restarting nftables service..."
     sudo systemctl restart nftables
