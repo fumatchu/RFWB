@@ -159,7 +159,11 @@ install_isc_kea() {
                 echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
             fi
         done
-
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -217,7 +221,11 @@ install_cockpit() {
                 echo -e "${YELLOW}Rule already exists: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
             fi
         done
-
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -282,7 +290,11 @@ install_webmin() {
                 echo -e "${YELLOW}Rule already exists: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
             fi
         done
-
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -383,7 +395,11 @@ install_ntopng() {
                 echo -e "${YELLOW}Rule already exists: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
             fi
         done
-
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -961,7 +977,11 @@ configure_nftables() {
     else
         echo -e "${YELLOW}Rule already exists: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
     fi
-
+    # Save the current nftables configuration
+    sudo nft list ruleset > /etc/sysconfig/nftables.conf
+    # Restart the nftables service to apply changes
+    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+    sudo systemctl restart nftables
     # Show the added rules in the input chain
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
