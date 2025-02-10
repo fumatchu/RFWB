@@ -268,166 +268,51 @@ add_additional_ports
 save_ruleset
 list_interfaces_and_ports
 
-#Add the Masquerade and established related connections between inside and outside 
-# Ensure nmcli and nftables are installed
-if ! command -v nmcli &> /dev/null; then
-    echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
-    exit 1
-fi
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    interface=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}')
 
-if ! command -v nft &> /dev/null; then
-    echo -e "${RED}nftables is not installed. Please install it and try again.${TEXTRESET}"
-    exit 1
-fi
-
-if ! systemctl is-active --quiet nftables; then
-    echo -e "${RED}nftables is not running. Please start it and try again.${TEXTRESET}"
-    exit 1
-fi
-
-# Function to find interfaces ending with -inside and -outside
-find_interfaces() {
-    inside_interface=$(nmcli device status | awk '/-inside/ {print $1}')
-    outside_interface=$(nmcli device status | awk '/-outside/ {print $1}')
-
-    if [ -z "$inside_interface" ]; then
-        echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface with a connection ending in '$suffix' found.${TEXTRESET}"
         exit 1
     fi
 
-    if [ -z "$outside_interface" ]; then
-        echo -e "${RED}Error: No interface ending with '-outside' found.${TEXTRESET}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
-    echo -e "${GREEN}Outside interface found: $outside_interface${TEXTRESET}"
+    echo "$interface"
 }
 
-# Function to find and handle VLAN interfaces
-handle_vlans() {
-    vlans=$(nmcli device status | awk '/\./ {print $1}')
+# Find inside and outside interfaces
+INSIDE_INTERFACE=$(find_interface "-inside")
+OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-    if [ -n "$vlans" ]; then
-        echo -e "${YELLOW}VLAN interfaces found:${TEXTRESET}"
-        echo "$vlans"
+echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
+echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
 
-        for vlan in $vlans; do
-            read -p "Do you want to enable internet access for VLAN $vlan? (yes/no): " enable_vlan
+# Enable IP forwarding
+echo -e "${YELLOW}Enabling IP forwarding...${TEXTRESET}"
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 
-            if [[ "$enable_vlan" == "yes" ]]; then
-                # Validate if the VLAN is enabled or can be enabled
-                vlan_state=$(nmcli device status | grep "^$vlan" | awk '{print $3}')
-                if [ "$vlan_state" == "connected" ]; then
-                    echo -e "${GREEN}Internet access is already enabled for VLAN $vlan.${TEXTRESET}"
-                else
-                    nmcli connection up "$vlan" && echo -e "${GREEN}Enabled internet access for VLAN $vlan.${TEXTRESET}" || echo -e "${RED}Failed to enable internet access for VLAN $vlan.${TEXTRESET}"
-                fi
-            fi
-        done
-    else
-        echo -e "${YELLOW}No VLAN interfaces found.${TEXTRESET}"
-    fi
-}
+# Apply nftables ruleset directly
+echo -e "${YELLOW}Applying nftables ruleset...${TEXTRESET}"
+sudo nft add table inet filter
+sudo nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }
+sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; }
+sudo nft add rule inet filter forward ct state established,related accept
+sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
 
-# Function to configure nftables for NAT and forwarding
-setup_nftables() {
-    # Enable IP forwarding
-    echo "Enabling IP forwarding..."
-    sudo sysctl -w net.ipv4.ip_forward=1
-    sudo sed -i '/^#net.ipv4.ip_forward=1/c\net.ipv4.ip_forward=1' /etc/sysctl.conf
-    sudo sysctl -p
+sudo nft add table ip nat
+sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; }
+sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
-    # Configure nftables rules
-    echo "Configuring nftables rules..."
-    NFTABLES_CONF="/etc/sysconfig/nftables.conf"
+# Save the current ruleset
+echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+sudo nft list ruleset > /etc/sysconfig/nftables.conf
 
-    # Ensure the basic structure exists before appending
-    if ! grep -q "table inet filter" $NFTABLES_CONF; then
-        sudo tee -a $NFTABLES_CONF > /dev/null <<EOL
-table inet filter {
-    chain input {
-        type filter hook input priority 0; policy accept;
-    }
+# Enable and start nftables service to ensure configuration is loaded on boot
+echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"
+sudo systemctl enable nftables
+sudo systemctl start nftables
 
-    chain forward {
-        type filter hook forward priority 0; policy drop;
-    }
-}
-EOL
-    fi
-
-    if ! grep -q "table ip nat" $NFTABLES_CONF; then
-        sudo tee -a $NFTABLES_CONF > /dev/null <<EOL
-table ip nat {
-    chain prerouting {
-        type nat hook prerouting priority -100;
-    }
-
-    chain postrouting {
-        type nat hook postrouting priority 100;
-    }
-}
-EOL
-    fi
-
-    # Rules to be added
-    RULES=(
-        "ct state established,related accept"
-        "ct state invalid drop"
-        # Removed the line for port 22 on the outside interface
-        "iif \"$inside_interface\" oif \"$outside_interface\" ct state new,established,related accept"
-        "iif \"$outside_interface\" oif \"$inside_interface\" ct state established,related accept"
-        "oif \"$outside_interface\" masquerade"
-    )
-
-    for rule in "${RULES[@]}"; do
-        if ! sudo nft list ruleset | grep -q "$rule"; then
-            echo -e "${YELLOW}Adding rule: $rule${TEXTRESET}"
-            # Appending to the correct chain in the configuration file
-            if [[ $rule == *"masquerade"* ]]; then
-                sudo sed -i "/chain postrouting {/a\\        $rule" $NFTABLES_CONF
-            elif [[ $rule == *"forward"* ]]; then
-                sudo sed -i "/chain forward {/a\\        $rule" $NFTABLES_CONF
-            else
-                sudo sed -i "/chain input {/a\\        $rule" $NFTABLES_CONF
-            fi
-        else
-            echo -e "${GREEN}Rule already exists: $rule${TEXTRESET}"
-        fi
-    done
-
-    # Restart nftables to apply the changes
-    echo "Restarting nftables service..."
-    sudo systemctl restart nftables
-
-    echo "nftables configuration completed successfully."
-}
-
-# Function to display current nftables configuration
-show_nftables_config() {
-    echo -e "${YELLOW}Current nftables configuration:${TEXTRESET}"
-    sudo nft list ruleset || echo -e "${RED}Failed to retrieve nftables configuration. Please check your nftables setup.${TEXTRESET}"
-}
-
-# Function to save the current nftables ruleset
-save_ruleset() {
-    echo -e "${YELLOW}Appending current nftables ruleset to $RULESET_PATH...${TEXTRESET}"
-    sudo nft list ruleset > $RULESET_PATH
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Ruleset appended successfully to $RULESET_PATH.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to append ruleset.${TEXTRESET}"
-        exit 1
-    fi
-}
-
-# Define the path for the ruleset
-RULESET_PATH="/etc/sysconfig/nftables.conf"
-
-# Main script execution
-find_interfaces
-handle_vlans
-setup_nftables
-show_nftables_config
-save_ruleset
+echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}"
