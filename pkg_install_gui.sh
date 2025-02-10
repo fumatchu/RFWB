@@ -100,8 +100,8 @@ install_isc_kea() {
 
     # Function to locate the inside interfaces
     find_inside_interfaces() {
-        # Find all active interfaces with a name ending in '-inside'
-        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+        # Find all active interfaces with a connection name ending in '-inside'
+        inside_interfaces=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if [ -z "$inside_interfaces" ]; then
             echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
