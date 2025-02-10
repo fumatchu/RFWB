@@ -80,7 +80,11 @@ install_bind() {
                 echo -e "${YELLOW}Rule already exists: Allow DNS (TCP) on interface $iface${TEXTRESET}"
             fi
         done
-
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
