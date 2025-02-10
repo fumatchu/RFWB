@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Colors for output
+# Define color codes for pretty output
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
@@ -8,8 +8,19 @@ TEXTRESET="\033[0m"
 
 # Ensure nmcli is installed
 if ! command -v nmcli &> /dev/null; then
-  echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
-  exit 1
+    echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
+    exit 1
+fi
+
+# Ensure nftables is installed and running
+if ! command -v nft &> /dev/null; then
+    echo -e "${RED}nftables is not installed. Please install it and try again.${TEXTRESET}"
+    exit 1
+fi
+
+if ! systemctl is-active --quiet nftables; then
+    echo -e "${RED}nftables is not running. Please start it and try again.${TEXTRESET}"
+    exit 1
 fi
 
 # Get all connections managed by NetworkManager
@@ -19,48 +30,37 @@ connections=$(nmcli -t -f NAME,DEVICE,TYPE connection show)
 echo -e "${YELLOW}Checking the following network interfaces for autoconnect settings:${TEXTRESET}"
 
 while IFS=: read -r name device type; do
-  # Only show valid ethernet or wifi connections
-  if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
-    echo -e "${YELLOW}- $device ($name): Type $type${TEXTRESET}"
-  fi
+    # Only show valid ethernet or wifi connections
+    if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
+        echo -e "${YELLOW}- $device ($name): Type $type${TEXTRESET}"
+    fi
 done <<< "$connections"
 
 # Check and modify autoconnect settings
 echo -e "\n${YELLOW}Modifying interfaces that are not set to autoconnect...${TEXTRESET}"
 
 while IFS=: read -r name device type; do
-  # Process valid ethernet or wifi connections
-  if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
-    # Check if the connection is set to autoconnect
-    autoconnect=$(nmcli -g connection.autoconnect connection show "$name")
+    # Process valid ethernet or wifi connections
+    if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
+        # Check if the connection is set to autoconnect
+        autoconnect=$(nmcli -g connection.autoconnect connection show "$name")
 
-    if [ "$autoconnect" != "yes" ]; then
-      echo -e "${RED}Connection $name (Device: $device) is not set to autoconnect. Enabling autoconnect...${TEXTRESET}"
-      nmcli connection modify "$name" connection.autoconnect yes
+        if [ "$autoconnect" != "yes" ]; then
+            echo -e "${RED}Connection $name (Device: $device) is not set to autoconnect. Enabling autoconnect...${TEXTRESET}"
+            nmcli connection modify "$name" connection.autoconnect yes
 
-      if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Autoconnect enabled for $name (Device: $device).${TEXTRESET}"
-      else
-        echo -e "${RED}Failed to enable autoconnect for $name (Device: $device).${TEXTRESET}"
-      fi
-    else
-      echo -e "${GREEN}Connection $name (Device: $device) is already set to autoconnect.${TEXTRESET}"
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}Autoconnect enabled for $name (Device: $device).${TEXTRESET}"
+            else
+                echo -e "${RED}Failed to enable autoconnect for $name (Device: $device).${TEXTRESET}"
+            fi
+        else
+            echo -e "${GREEN}Connection $name (Device: $device) is already set to autoconnect.${TEXTRESET}"
+        fi
     fi
-  fi
 done <<< "$connections"
 
 echo -e "${GREEN}Completed checking and updating autoconnect settings.${TEXTRESET}"
-
-# Ensure necessary commands are installed
-if ! command -v nmcli &> /dev/null; then
-  echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
-  exit 1
-fi
-
-if ! systemctl is-active --quiet firewalld; then
-  echo -e "${RED}firewalld is not running. Please start it and try again.${TEXTRESET}"
-  exit 1
-fi
 
 # Get currently connected interfaces
 existing_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
@@ -72,319 +72,186 @@ echo -e "${YELLOW}Waiting for a new interface to come up...${TEXTRESET}"
 
 # Monitor for a new connection
 while true; do
-  # Get current connected devices
-  current_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
+    # Get current connected devices
+    current_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
 
-  # Find the new connection, excluding 'lo'
-  new_connection=$(comm -13 <(echo "$existing_connections" | sort) <(echo "$current_connections" | sort) | grep -v "^lo$")
+    # Find the new connection, excluding 'lo'
+    new_connection=$(comm -13 <(echo "$existing_connections" | sort) <(echo "$current_connections" | sort) | grep -v "^lo$")
 
-  if [ -n "$new_connection" ]; then
-    echo -e "${GREEN}Detected a new connection: $new_connection${TEXTRESET}"
+    if [ -n "$new_connection" ]; then
+        echo -e "${GREEN}Detected a new connection: $new_connection${TEXTRESET}"
 
-    # Get the current profile name associated with the new connection
-    current_profile=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${new_connection}$" | cut -d: -f1)
+        # Get the current profile name associated with the new connection
+        current_profile=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${new_connection}$" | cut -d: -f1)
 
-    if [ -n "$current_profile" ]; then
-      # Update the connection profile name to include '-outside'
-      new_profile_name="${new_connection}-outside"
-      echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
-      nmcli connection modify "$current_profile" connection.id "$new_profile_name"
-      nmcli connection reload
-    else
-      echo -e "${RED}Error: Could not find an active profile for $new_connection.${TEXTRESET}"
+        if [ -n "$current_profile" ]; then
+            # Update the connection profile name to include '-outside'
+            new_profile_name="${new_connection}-outside"
+            echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
+            nmcli connection modify "$current_profile" connection.id "$new_profile_name"
+            nmcli connection reload
+        else
+            echo -e "${RED}Error: Could not find an active profile for $new_connection.${TEXTRESET}"
+        fi
+        break
     fi
 
-    # Ask the user about applying the 'external' zone
-    read -p "It's HIGHLY suggested applying the 'external' zone to this interface. Is this acceptable? (y/n): " user_confirm
-
-    if [[ "$user_confirm" == "y" ]]; then
-      echo -e "${GREEN}You have chosen to apply the 'external' zone.${TEXTRESET}"
-      firewall-cmd --zone=external --change-interface="$new_connection" --permanent
-      firewall-cmd --reload
-      systemctl restart NetworkManager
-    else
-      echo -e "${YELLOW}Available firewalld zones:${TEXTRESET}"
-      available_zones=$(firewall-cmd --get-zones)
-
-      # List available zones
-      for zone in $available_zones; do
-        echo -e "${YELLOW}- $zone${TEXTRESET}"
-      done
-
-      # Ask user to choose a different zone
-      read -p "Please enter the zone you would like to use for $new_connection: " selected_zone
-
-      # Validate the chosen zone
-      if echo "$available_zones" | grep -qw "$selected_zone"; then
-        echo -e "${GREEN}You have chosen the '$selected_zone' zone for $new_connection.${TEXTRESET}"
-        firewall-cmd --zone="$selected_zone" --change-interface="$new_connection" --permanent
-        firewall-cmd --reload
-        systemctl restart NetworkManager
-      else
-        echo -e "${RED}Invalid zone selected. No changes were made.${TEXTRESET}"
-      fi
-    fi
-    break
-  fi
-
-  sleep 0.5  # Check every 0.5 seconds
+    sleep 0.5  # Check every 0.5 seconds
 done
 
-# Display a graphical representation of the configured interfaces
-echo -e "${GREEN}Connection Diagram:${TEXTRESET}"
-
-# Get all active zones with associated interfaces
-active_zones=$(firewall-cmd --get-active-zones)
-
-# Variables to store interface and zone information
-outside_iface=""
-inside_iface=""
-outside_zone=""
-inside_zone=""
-
-# Determine interfaces and zones
-while read -r zone; do
-  if [[ -n "$zone" && "$zone" != "--" ]]; then
-    read -r interfaces_line
-    interfaces=$(echo "$interfaces_line" | awk '{for (i=2; i<=NF; i++) print $i}')
-
-    for iface in $interfaces; do
-      if [ -n "$iface" ]; then
-        profile_name=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${iface}$" | cut -d: -f1)
-
-        if [[ "$profile_name" == *"-inside" ]]; then
-          inside_iface="$iface"
-          inside_zone="$zone"
-        elif [[ "$profile_name" == *"-outside" ]]; then
-          outside_iface="$iface"
-          outside_zone="$zone"
-        fi
-      fi
-    done
-  fi
-done <<< "$active_zones"
-
-# Print the inverted ASCII diagram
-if [ -n "$outside_iface" ] && [ -n "$inside_iface" ]; then
-  echo "  +--------------------+"
-  echo "  | Unprotected Network |"
-  echo "  +--------------------+"
-  echo "           |"
-  echo "           |"
-  echo "   +-----------------+"
-  echo "   | $outside_zone Zone |"
-  echo "   +-----------------+"
-  echo "           |"
-  echo "           |"
-  echo "       +--------+"
-  echo "       | $outside_iface |"
-  echo "       +--------+"
-  echo "           |"
-  echo "           |"
-  echo "       +---------+"
-  echo "       | Firewall |"
-  echo "       +---------+"
-  echo "           |"
-  echo "           |"
-  echo "       +--------+"
-  echo "       | $inside_iface |"
-  echo "       +--------+"
-  echo "           |"
-  echo "           |"
-  echo "   +-----------------+"
-  echo "   | $inside_zone Zone |"
-  echo "   +-----------------+"
-  echo "           |"
-  echo "           |"
-  echo "  +--------------------+"
-  echo "  | Protected Network |"
-  echo "  +--------------------+"
-  echo
-fi
-
-echo -e "${GREEN}Completed configuration of network zones.${TEXTRESET}"
-# Set the default zone to 'drop' first
-echo -e "${YELLOW}Changing the default zone to 'drop'...${TEXTRESET}"
-firewall-cmd --set-default-zone=drop
-
-# Validate the default zone has been changed
-current_default_zone=$(firewall-cmd --get-default-zone)
-if [ "$current_default_zone" == "drop" ]; then
-  echo -e "${GREEN}Default zone successfully changed to 'drop'.${TEXTRESET}"
-else
-  echo -e "${RED}Failed to change the default zone to 'drop'. Current default zone: $current_default_zone${TEXTRESET}"
-  exit 1
-fi
-
-firewall-cmd --reload
-# Ask user if they want to apply outbound policy for internet connections
-read -p "Do you want to apply the outbound policy for internet connectivity now? (y/n): " policy_confirm
-
-if [[ "$policy_confirm" == "y" ]]; then
-  echo -e "${GREEN}Applying outbound policy...${TEXTRESET}"
-
-  # Apply the outbound policy
-  firewall-cmd --new-policy=internal-external --permanent
-  firewall-cmd --reload
-  firewall-cmd --policy=internal-external --add-ingress-zone=internal --permanent
-  firewall-cmd --policy=internal-external --add-egress-zone=external --permanent
-  firewall-cmd --policy=internal-external --set-target=ACCEPT --permanent
-  firewall-cmd --reload
-  firewall-cmd --runtime-to-permanent
-
-  # Restart firewalld service
-  systemctl restart firewalld
-
-  # Validate that firewalld is running
-  if systemctl is-active --quiet firewalld; then
-    echo -e "${GREEN}firewalld is running with the outbound policy applied.${TEXTRESET}"
-  else
-    echo -e "${RED}firewalld failed to start. Please check the configuration.${TEXTRESET}"
-  fi
-else
-  echo -e "${YELLOW}Outbound policy not applied.${TEXTRESET}"
-fi
-#Lockdown the external interface by user service preference 
 # Function to find the outside interface
 find_outside_interface() {
     # Find the interface with a connection ending in -outside
-    interface=$(nmcli device status | awk '/-outside/ {print $1}')
+    outside_interface=$(nmcli device status | awk '/-outside/ {print $1}')
 
-    if [ -z "$interface" ]; then
+    if [ -z "$outside_interface" ]; then
         echo -e "${RED}Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
         exit 1
     fi
 
-    echo "$interface"
+    echo "$outside_interface"
 }
 
-# Function to find the zone associated with the interface
-find_zone() {
-    local interface="$1"
-    # Get the active zones and find the one associated with the interface
-    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
-        {
-            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
-        }
-        /^  interfaces:/ {
-            if ($0 ~ iface) { print current_zone }
-        }
-    ')
-
-    if [ -z "$zone" ]; then
-        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
-        exit 1
+# Function to set up nftables rules (SSH rule removed)
+setup_nftables() {
+    # Create a filter table if it doesn't exist
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
     fi
 
-    echo "$zone"
-}
-
-# Function to list services for a given zone
-list_services() {
-    local zone="$1"
-    echo -e "${YELLOW}Services open in zone '$zone':${TEXTRESET}"
-    services=$(sudo firewall-cmd --zone="$zone" --list-services)
-
-    if [ -z "$services" ]; then
-        echo -e "${GREEN}No open services.${TEXTRESET}"
-        return 1
-    else
-        echo "$services"
-        return 0
+    # Create an input chain if it doesn't exist
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
     fi
+
+    # Display rules in a table format
+    list_interfaces_and_ports
 }
 
-# Function to remove a service from the zone
-remove_service() {
-    local zone="$1"
+# Function to save the current nftables configuration
+save_nftables_config() {
+    sudo nft list ruleset > /etc/nftables.conf
+    echo -e "${GREEN}Configuration saved to /etc/nftables.conf${TEXTRESET}"
+}
+
+# Function to prompt for additional ports
+add_additional_ports() {
     while true; do
-        list_services "$zone"
-        if [ $? -ne 0 ]; then
+        read -p "Do you want to open additional ports on the outside interface? (yes/no): " answer
+        if [[ "$answer" != "yes" ]]; then
             break
         fi
 
-        echo -e "${YELLOW}Would you like to remove any of these services? (yes/no)${TEXTRESET}"
-        read -r answer
+        read -p "Enter the port numbers (e.g., 80,82 or 80-89): " port_input
+        read -p "Will all ports use the same protocol? (yes/no): " same_protocol
 
-        if [[ "$answer" =~ ^[Yy][Ee][Ss]$ || "$answer" =~ ^[Yy]$ ]]; then
-            services=($(sudo firewall-cmd --zone="$zone" --list-services))
-            echo -e "${YELLOW}Select a service to remove:${TEXTRESET}"
-
-            for i in "${!services[@]}"; do
-                echo "$i) ${services[$i]}"
+        if [[ "$same_protocol" == "yes" ]]; then
+            protocol=""
+            while [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; do
+                read -p "Enter the protocol (tcp/udp): " protocol
+                if [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; then
+                    echo -e "${RED}Invalid protocol. Please enter 'tcp' or 'udp'.${TEXTRESET}"
+                fi
             done
-
-            read -p "Enter the number of the service to remove: " service_number
-
-            if [[ "$service_number" =~ ^[0-9]+$ ]] && (( service_number >= 0 && service_number < ${#services[@]} )); then
-                service_to_remove="${services[$service_number]}"
-                sudo firewall-cmd --zone="$zone" --remove-service="$service_to_remove" --permanent
-                sudo firewall-cmd --reload
-                echo -e "${GREEN}Service '$service_to_remove' removed.${TEXTRESET}"
-            else
-                echo -e "${RED}Invalid selection.${TEXTRESET}"
-            fi
-        else
-            break
         fi
+
+        # Process each port or range of ports
+        IFS=',' read -ra PORTS <<< "$port_input"
+        for port in "${PORTS[@]}"; do
+            if [[ $port == *"-"* ]]; then
+                # Handle range of ports
+                IFS='-' read start_port end_port <<< "$port"
+                for (( p=start_port; p<=end_port; p++ )); do
+                    if [[ $p -ge 0 && $p -le 65535 ]]; then
+                        if [[ "$same_protocol" == "no" ]]; then
+                            protocol=""
+                            while [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; do
+                                read -p "Enter the protocol for port $p (tcp/udp): " protocol
+                                if [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; then
+                                    echo -e "${RED}Invalid protocol. Please enter 'tcp' or 'udp'.${TEXTRESET}"
+                                fi
+                            done
+                        fi
+                        add_nft_rule "$protocol" "$p"
+                    else
+                        echo -e "${RED}Invalid port number $p. Please enter a port between 0 and 65535.${TEXTRESET}"
+                    fi
+                done
+            else
+                # Handle single port
+                if [[ $port -ge 0 && $port -le 65535 ]]; then
+                    if [[ "$same_protocol" == "no" ]]; then
+                        protocol=""
+                        while [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; do
+                            read -p "Enter the protocol for port $port (tcp/udp): " protocol
+                            if [[ "$protocol" != "tcp" && "$protocol" != "udp" ]]; then
+                                echo -e "${RED}Invalid protocol. Please enter 'tcp' or 'udp'.${TEXTRESET}"
+                            fi
+                        done
+                    fi
+                    add_nft_rule "$protocol" "$port"
+                else
+                    echo -e "${RED}Invalid port number $port. Please enter a port between 0 and 65535.${TEXTRESET}"
+                 fi
+            fi
+        done
+
+        # Display updated rules in a table format
+        list_interfaces_and_ports
     done
 }
 
-# Main execution block
-outside_interface=$(find_outside_interface)
-zone=$(find_zone "$outside_interface")
-remove_service "$zone"
-## disable icmp?
-# Function to find the outside interface
-find_outside_interface() {
-    # Find the interface with a connection ending in -outside
-    interface=$(nmcli device status | awk '/-outside/ {print $1}')
+# Function to add a rule to nftables
+add_nft_rule() {
+    local protocol=$1
+    local port=$2
+    local outside_interface=$(find_outside_interface)
 
-    if [ -z "$interface" ]; then
-        echo -e "${RED}Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
-        exit 1
-    fi
-
-    echo "$interface"
-}
-
-# Function to find the zone associated with the interface
-find_zone() {
-    local interface="$1"
-    # Get the active zones and find the one associated with the interface
-    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
-        {
-            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
-        }
-        /^  interfaces:/ {
-            if ($0 ~ iface) { print current_zone }
-        }
-    ')
-
-    if [ -z "$zone" ]; then
-        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
-        exit 1
-    fi
-
-    echo "$zone"
-}
-
-# Function to disable ICMP in the specified zone
-disable_icmp() {
-    local zone="$1"
-    echo -e "${YELLOW}Would you like to disable ICMP on the zone '$zone'? (yes/no)${TEXTRESET}"
-    read -r answer
-
-    if [[ "$answer" =~ ^[Yy][Ee][Ss]$ || "$answer" =~ ^[Yy]$ ]]; then
-        sudo firewall-cmd --zone="$zone" --add-icmp-block=echo-request --permanent
-        sudo firewall-cmd --reload
-        echo -e "${GREEN}ICMP has been disabled on the zone '$zone'.${TEXTRESET}"
+    if ! sudo nft list chain inet filter input | grep -q "iifname \"$outside_interface\" $protocol dport $port accept"; then
+        sudo nft add rule inet filter input iifname "$outside_interface" $protocol dport $port accept
+        echo -e "${GREEN}Rule added: Allow $protocol on port $port for interface $outside_interface${TEXTRESET}"
+        save_nftables_config
     else
-        echo -e "${GREEN}ICMP remains enabled on the zone '$zone'.${TEXTRESET}"
+        echo -e "${YELLOW}Rule already exists: Allow $protocol on port $port for interface $outside_interface${TEXTRESET}"
     fi
 }
 
-# Main execution block
-outside_interface=$(find_outside_interface)
-zone=$(find_zone "$outside_interface")
-disable_icmp "$zone"
+# Function to list all interfaces and open ports in a table format
+list_interfaces_and_ports() {
+    echo -e "${YELLOW}Listing all network interfaces and open ports:${TEXTRESET}"
+    echo "-------------------------------------------------------------"
+    echo "| Interface             | Connection Name       | Ports      |"
+    echo "-------------------------------------------------------------"
+
+    # Get all interfaces and associated connection names
+    nmcli device status | awk 'NR>1 {print $1}' | while read -r iface; do
+        # Get the connection name associated with the interface
+        connection_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$iface:" | cut -d':' -f2)
+        if [ -z "$connection_name" ]; then
+            connection_name="No active connection"
+        fi
+
+        # Extract open ports for the specified interface
+        ports=$(sudo nft list chain inet filter input | grep "iifname \"$iface\"" | awk '{print $3, $5}' | sort -u)
+
+        # Print the interface and connection name
+        printf "| %-22s | %-20s |\n" "$iface" "$connection_name"
+
+        if [ -z "$ports" ]; then
+            echo "|                        |                      | No open ports"
+        else
+            echo "$ports" | while read -r protocol port; do
+                printf "|                        |                      | %-10s |\n" "$protocol $port"
+            done
+         fi
+    done
+
+    # Close table
+    echo "-------------------------------------------------------------"
+}
+
+# Main script execution
+find_outside_interface
+setup_nftables
+add_additional_ports
+list_interfaces_and_ports
