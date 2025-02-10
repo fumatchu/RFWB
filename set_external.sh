@@ -321,8 +321,7 @@ handle_vlans() {
                 if [ "$vlan_state" == "connected" ]; then
                     echo -e "${GREEN}Internet access is already enabled for VLAN $vlan.${TEXTRESET}"
                 else
-                    nmcli connection up "$vlan" && echo -e "${GREEN}Enabled internet access for VLAN $vlan.${TEXTRESET}" || echo -e "${RED}Failed to enable intern
-et access for VLAN $vlan.${TEXTRESET}"
+                    nmcli connection up "$vlan" && echo -e "${GREEN}Enabled internet access for VLAN $vlan.${TEXTRESET}" || echo -e "${RED}Failed to enable internet access for VLAN $vlan.${TEXTRESET}"
                 fi
             fi
         done
