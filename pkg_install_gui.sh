@@ -998,12 +998,6 @@ main() {
     echo -e "${YELLOW}Locating the network interface...${TEXTRESET}"
     interface=$(find_interface)
 
-    echo -e "${YELLOW}Determining the zone for interface $interface...${TEXTRESET}"
-    zone=$(find_zone "$interface")
-
-    echo -e "${YELLOW}Starting firewall configuration...${TEXTRESET}"
-    configure_firewall "$interface" "$zone"
-
     echo -e "${GREEN}Firewall configuration complete.${TEXTRESET}"
 }
 
