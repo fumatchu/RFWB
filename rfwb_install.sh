@@ -419,18 +419,34 @@ else
   echo " "
 fi
 clear
-#Configure the ZONE for the inside interface
-# Ensure necessary commands are installed
-if ! command -v nmcli &> /dev/null; then
-  echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
-  exit 1
-fi
+# Function to check and disable firewalld
+disable_firewalld() {
+    if systemctl is-active --quiet firewalld; then
+        echo -e "${YELLOW}firewalld is running, disabling it...${TEXTRESET}"
+        sudo systemctl stop firewalld
+        sudo systemctl disable firewalld
+        echo -e "${GREEN}firewalld has been stopped and disabled.${TEXTRESET}"
+    else
+        echo -e "${GREEN}firewalld is not running.${TEXTRESET}"
+    fi
+}
 
-if ! systemctl is-active --quiet firewalld; then
-  echo -e "${RED}firewalld is not running. Please start it and try again.${TEXTRESET}"
-  exit 1
-fi
+# Function to check and enable nftables
+enable_nftables() {
+    if ! systemctl is-active --quiet nftables; then
+        echo -e "${YELLOW}nftables is not running, enabling it...${TEXTRESET}"
+        sudo systemctl start nftables
+        sudo systemctl enable nftables
+        echo -e "${GREEN}nftables has been started and enabled.${TEXTRESET}"
+    else
+        echo -e "${GREEN}nftables is already running.${TEXTRESET}"
+    fi
+}
 
+# Main script execution
+disable_firewalld
+enable_nftables
+#set the inside interface
 # Get all active connections managed by NetworkManager
 active_connection=$(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active | grep ":802-3-ethernet:" | grep ":activated")
 
@@ -454,104 +470,6 @@ else
     nmcli connection modify "$name" connection.id "$new_profile_name"
     nmcli connection reload
 fi
-
-# Display initial ASCII representation of the connection
-echo -e "${GREEN}Initial Connection Diagram:${TEXTRESET}"
-echo "  +-------------------+"
-echo "  |  Internal Network |"
-echo "  +-------------------+"
-echo "           |"
-echo "           |"
-echo "       +--------+"
-echo "       | $device |"
-echo "       +--------+"
-echo "           |"
-echo "           |"
-echo "       +---------+"
-echo "       | Firewall |"
-echo "       +---------+"
-echo
-
-
-
-# Ask user if they want to set this connection to the 'Internal' zone
-echo -e "It's HIGHLY suggested this interface be in the Firewall zone \"internal\""
-read -p "Do you want to set this connection to the 'Internal' zone in firewalld? (y/n): " user_confirm
-
-selected_zone=""
-
-if [[ "$user_confirm" == "y" ]]; then
-  selected_zone="internal"
-  echo -e "${GREEN}Setting $device to the 'internal' zone...${TEXTRESET}"
-  firewall-cmd --zone=internal --change-interface="$device" --permanent
-else
-  echo -e "${YELLOW}Available firewalld zones:${TEXTRESET}"
-  available_zones=$(firewall-cmd --get-zones)
-
-  # List available zones
-  for zone in $available_zones; do
-    echo -e "${YELLOW}- $zone${TEXTRESET}"
-  done
-
-  # Ask user to choose a different zone
-  read -p "Please enter the zone you would like to use for $device: " selected_zone
-
-  # Apply the chosen zone
-  if echo "$available_zones" | grep -qw "$selected_zone"; then
-    echo -e "${GREEN}Setting $device to the '$selected_zone' zone...${TEXTRESET}"
-    firewall-cmd --zone="$selected_zone" --change-interface="$device" --permanent
-  else
-    echo -e "${RED}Invalid zone selected. No changes were made.${TEXTRESET}"
-    exit 1
-  fi
-fi
-
-firewall-cmd --reload
-systemctl restart NetworkManager
-
-# Display current zone configuration for the interface
-echo -e "${YELLOW}Current firewalld zone configuration for $device:${TEXTRESET}"
-firewall-cmd --get-active-zones | grep -A1 "$device"
-
-echo -e "${GREEN}Completed configuration of network zones.${TEXTRESET}"
-
-# Display the updated ASCII representation of the connection with the zone applied
-echo -e "${GREEN}Updated Connection Diagram with Zone Applied:${TEXTRESET}"
-echo "  +-------------------+"
-echo "  |  Internal Network |"
-echo "  +-------------------+"
-echo "           |"
-echo "           |"
-echo "   +-----------------+"
-echo "   | $selected_zone Zone |"
-echo "   +-----------------+"
-echo "           |"
-echo "           |"
-echo "       +--------+"
-echo "       | $device |"
-echo "       +--------+"
-echo "           |"
-echo "           |"
-echo "       +---------+"
-echo "       | Firewall |"
-echo "       +---------+"
-echo
-echo -e "${GREEN}The Inside interface has been configured.${TEXTRESET}"
-read -p "Press Enter to proceed"
-clear
-cat <<EOF
-Your inside interface should now have a static IP address and appropriate inside zone set.
-We will remove the Default-Gateway later in the installer as for now, we need to install services via this interface.
-The system is not ready to endure an Internet based connection (it's not locked down- We will do that later).
-If you have multiple networks and want to use a router on a stick scenario, you will now be asked if you want VLANS. 
-The Installer will allow routing of all the INSIDE networks. No filtering will be put in place. Anything on the INSIDE interface is trusted.
-This is considered an advanced setup and you should have at least a basic understanding of how they work.
-Keep in mind that we are going to bind these VLANS (tags) to this interface. The IP address you provided will now be considered
-the "untagged" vlan. What you are going to create (if you are) with VLANS will all be tagged. Make sure the interface southbound
-of this device understands 802.1q. That all being said, if you only have one IP address "network" you can say no when asked.
-
-EOF
-
 #SET VLANS IF NEEDED
 # Function to validate IP address format and ensure it's not a network or broadcast address
 function validate_ip() {
@@ -579,19 +497,18 @@ function validate_ip() {
 
 # Function to display a graphical representation of mapped VLANs
 function display_vlan_map() {
-  echo -e "${GREEN}Existing VLAN Mappings:${TEXTRESET}"
-  nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | while IFS=: read -r con_name con_type con_iface; do
-    vlan_id=$(nmcli connection show "$con_name" | grep "802-1Q.id:" | awk '{print $2}')
-    ip_address=$(nmcli connection show "$con_name" | grep "ipv4.addresses:" | awk '{print $2}')
-    zone=$(firewall-cmd --get-zone-of-interface="$con_iface")
-    echo "  +-------------------+"
-    echo "  |  Interface: $con_iface  |"
-    echo "  |  VLAN ID: $vlan_id     |"
-    echo "  |  IP: $ip_address  |"
-    echo "  |  Zone: $zone  |"
-    echo "  +-------------------+"
-    echo
-  done
+    echo -e "${GREEN}Existing VLAN Mappings:${TEXTRESET}"
+    nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | sort | uniq | while IFS=: read -r con_name con_type con_iface; do
+        # Extract VLAN ID from the interface name
+        vlan_id="${con_iface##*.}"
+        ip_address=$(nmcli connection show "$con_name" | awk '/ipv4.addresses:/ {print $2}')
+        echo "  +-------------------+"
+        echo "  |  Interface: $con_iface  |"
+        echo "  |  VLAN ID: $vlan_id     |"
+        echo "  |  IP: $ip_address  |"
+        echo "  +-------------------+"
+        echo
+    done
 }
 
 # Start the VLAN configuration loop
@@ -661,44 +578,6 @@ while true; do
       nmcli connection add type vlan con-name "$vlan_connection" dev "$selected_interface" id "$vlan_id" ip4 "$ip_address"
       nmcli connection up "$vlan_connection"
       echo -e "${GREEN}VLAN $vlan_id configured on $selected_interface with IP $ip_address.${TEXTRESET}"
-
-      # Determine the current firewall zone of the selected interface
-      current_zone=$(firewall-cmd --get-zone-of-interface="$selected_interface")
-      echo -e "${YELLOW}Current firewall zone for $selected_interface is: $current_zone${TEXTRESET}"
-
-      # Ask if the user wants to modify the firewall zone
-      read -p "Do you want to modify the firewall zone for this VLAN? (y/n): " modify_zone
-
-      if [[ "$modify_zone" == "y" ]]; then
-        # List available zones
-        zones=($(firewall-cmd --get-zones))
-        echo -e "${YELLOW}Available firewall zones:${TEXTRESET}"
-        for i in "${!zones[@]}"; do
-          echo "$((i + 1))) ${zones[$i]}"
-        done
-
-        # Allow user to select a zone by number
-        while true; do
-          read -p "Select a firewall zone by number: " zone_number
-          if [[ "$zone_number" =~ ^[0-9]+$ && "$zone_number" -ge 1 && "$zone_number" -le "${#zones[@]}" ]]; then
-            selected_zone="${zones[$((zone_number - 1))]}"
-            break
-          else
-            echo -e "${RED}Invalid selection. Please enter a valid number corresponding to a zone.${TEXTRESET}"
-          fi
-        done
-      else
-        selected_zone="$current_zone"
-      fi
-
-      # Apply the selected zone to the VLAN interface
-      vlan_interface="${selected_interface}.${vlan_id}"
-      firewall-cmd --permanent --change-zone="$vlan_interface" --zone="$selected_zone"
-      firewall-cmd --reload
-      echo -e "${GREEN}Firewall zone $selected_zone applied to $vlan_interface.${TEXTRESET}"
-
-    else
-      echo -e "${YELLOW}Configuration cancelled by user.${TEXTRESET}"
     fi
 
     # Display updated VLAN mappings
@@ -715,11 +594,64 @@ while true; do
   fi
 done
 
+
+#ADD SSH TO THE INTERNAL INTERFACE(S)
+# Function to locate the server's private IP address using nmcli
+find_private_ip() {
+    # Find the interface ending with -inside
+    interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+    if [ -z "$interface" ]; then
+        echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Inside interface found: $interface${TEXTRESET}"
+}
+
+# Function to set up nftables rule for SSH on the inside interface and its sub-interfaces
+setup_nftables() {
+    # Ensure the nftables service is enabled and started
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    # Create a filter table if it doesn't exist
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
+    fi
+
+    # Create an input chain if it doesn't exist
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    # Add a rule to allow SSH on the inside interface and any sub-interfaces
+    # Find all interfaces related to the main inside interface
+    all_interfaces=$(nmcli device status | awk -v intf="$interface" '$1 ~ intf {print $1}')
+
+    for iface in $all_interfaces; do
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 22 accept
+            echo -e "${GREEN}Rule added: Allow SSH on interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface${TEXTRESET}"
+        fi
+    done
+
+    # Show the added rules in the input chain
+    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+    sudo nft list chain inet filter input
+}
+
+# Main script execution
+find_private_ip
+setup_nftables
+
 read -p "Press Enter to install applications and services"
-/root/RFWB/pkg_install_gui.sh
-/root/RFWB/config_services.sh
-/root/RFWB/enable_start_service_gui.sh
-/root/RFWB/set_external.sh
+#/root/RFWB/pkg_install_gui.sh
+#/root/RFWB/config_services.sh
+#/root/RFWB/enable_start_service_gui.sh
+#/root/RFWB/set_external.sh
 
 
 
