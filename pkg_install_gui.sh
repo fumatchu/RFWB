@@ -30,59 +30,62 @@ install_bind() {
     dnf -y install bind
     echo -e "${GREEN}BIND installation complete.${TEXTRESET}"
 
-    # Firewall configuration for BIND
-    # Get the network interface associated with a connection name ending in '-inside'
-    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+    # Function to locate the inside interface and its sub-interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    # Check if we found the inside interface
-    if [ -z "$inside_interface" ]; then
-      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
 
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
 
-    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-    inside_zone=""
-    while IFS= read -r line; do
-      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-        current_zone="${BASH_REMATCH[1]}"
-      fi
+    # Function to set up nftables rules for DNS on the inside interfaces
+    setup_nftables_for_dns() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-        inside_zone="$current_zone"
-        break
-      fi
-    done < <(firewall-cmd --list-all-zones)
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    # Check if we found the zone
-    if [ -z "$inside_zone" ]; then
-      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
 
-    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+        # Add rules to allow DNS on the inside interfaces
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
+                echo -e "${GREEN}Rule added: Allow DNS (UDP) on interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow DNS (UDP) on interface $iface${TEXTRESET}"
+            fi
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
+                echo -e "${GREEN}Rule added: Allow DNS (TCP) on interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow DNS (TCP) on interface $iface${TEXTRESET}"
+            fi
+        done
 
-    # Add the DNS service to this zone
-    echo -e "${YELLOW}Adding DNS service to zone $inside_zone...${TEXTRESET}"
-    if firewall-cmd --zone="$inside_zone" --add-service=dns --permanent; then
-      echo -e "${GREEN}DNS service added to zone $inside_zone.${TEXTRESET}"
-    else
-      echo -e "${RED}Failed to add DNS service to zone $inside_zone.${TEXTRESET}"
-      exit 1
-    fi
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
+    }
 
-    # Reload the firewall to apply changes
-    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-    firewall-cmd --reload
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_dns
 
-    # Display the services in the zone
-    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-    firewall-cmd --list-services --zone="$inside_zone"
-
-# Continue with the rest of the script
-echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-
+    # Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
 
 # Function to install ISC KEA
@@ -95,115 +98,127 @@ install_isc_kea() {
     dnf -y install isc-kea
     echo -e "${GREEN}ISC KEA installation complete.${TEXTRESET}"
 
-    # Firewall configuration for ISC KEA
-    # Get the network interface associated with a connection name ending in '-inside'
-    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+    # Function to locate the inside interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    # Check if we found the inside interface
-    if [ -z "$inside_interface" ]; then
-      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
 
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
 
-    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-    inside_zone=""
-    while IFS= read -r line; do
-      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-        current_zone="${BASH_REMATCH[1]}"
-      fi
+    # Function to set up nftables rules for DHCP on the inside interfaces
+    setup_nftables_for_dhcp() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-        inside_zone="$current_zone"
-        break
-      fi
-    done < <(firewall-cmd --list-all-zones)
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    # Check if we found the zone
-    if [ -z "$inside_zone" ]; then
-      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
 
-    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+        # Add rules to allow DHCP on the inside interfaces
+        for iface in $inside_interfaces; do
+            # Allow DHCP for IPv4 (UDP port 67)
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
+                echo -e "${GREEN}Rule added: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
+            fi
+            # Allow DHCP for IPv6 (UDP port 547)
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
+                echo -e "${GREEN}Rule added: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
+            fi
+        done
 
-    # Add the DHCP service to this zone
-    echo -e "${YELLOW}Adding DHCP service to zone $inside_zone...${TEXTRESET}"
-    if firewall-cmd --zone="$inside_zone" --add-service=dhcp --permanent; then
-      echo -e "${GREEN}DHCP service added to zone $inside_zone.${TEXTRESET}"
-    else
-      echo -e "${RED}Failed to add DHCP service to zone $inside_zone.${TEXTRESET}"
-      exit 1
-    fi
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
+    }
 
-    # Reload the firewall to apply changes
-    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-    firewall-cmd --reload
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_dhcp
 
-    # Display the services in the zone
-    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-    firewall-cmd --list-services --zone="$inside_zone"
+    # Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
-
-    # Function to install COCKPIT
+# Function to install COCKPIT
 install_cockpit() {
     echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
     sleep 2
     dnf -y install cockpit cockpit-storaged tuned
     echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
-    # Get the network interface associated with a connection name ending in '-inside'
-    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    # Check if we found the inside interface
-    if [ -z "$inside_interface" ]; then
-      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+    # Function to locate the inside interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
 
-    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-    inside_zone=""
-    while IFS= read -r line; do
-      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-        current_zone="${BASH_REMATCH[1]}"
-      fi
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
 
-      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-        inside_zone="$current_zone"
-        break
-      fi
-    done < <(firewall-cmd --list-all-zones)
+    # Function to set up nftables rules for Cockpit on the inside interfaces
+    setup_nftables_for_cockpit() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-    # Check if we found the zone
-    if [ -z "$inside_zone" ]; then
-      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
 
-    # Add the Cockpit service to this zone
-    echo -e "${YELLOW}Adding Cockpit service to zone $inside_zone...${TEXTRESET}"
-    if firewall-cmd --zone="$inside_zone" --add-service=cockpit --permanent; then
-      echo -e "${GREEN}Cockpit service added to zone $inside_zone.${TEXTRESET}"
-    else
-      echo -e "${RED}Failed to add Cockpit service to zone $inside_zone.${TEXTRESET}"
-      exit 1
-    fi
-    #Enable cockpit.socket
+        # Add rules to allow Cockpit on the inside interfaces using port 9090
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
+                echo -e "${GREEN}Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+            fi
+        done
+
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_cockpit
+
+    # Enable and start cockpit.socket
     systemctl enable --now cockpit.socket
     systemctl start cockpit.socket
-    # Reload the firewall to apply changes
-    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-    firewall-cmd --reload
 
-    # Display the services in the zone
-    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-    firewall-cmd --list-services --zone="$inside_zone"
+    # Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
-
 # Function to install WEBMIN
 install_webmin() {
     echo -e "${GREEN}Installing Webmin...${TEXTRESET}"
@@ -213,62 +228,57 @@ install_webmin() {
     dnf -y install webmin
     echo -e "${GREEN}Enabling Webmin at boot up${TEXTRESET}"
     systemctl enable webmin
-    echo -e "${GREEN}Adding port 10000 to firewalld services${TEXTRESET}"
-    firewall-cmd --permanent --new-service=webmin
-    firewall-cmd --permanent --service=webmin --set-description=webmin
-    firewall-cmd --permanent --service=webmin --add-port=10000/tcp
-    # Reload firewalld to recognize the new service
-    echo -e "${YELLOW}Reloading firewalld to recognize the new service...${TEXTRESET}"
-    sudo firewall-cmd --reload
 
-  # Get the network interface associated with a connection name ending in '-inside'
-    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+    # Function to locate the inside interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    # Check if we found the inside interface
-    if [ -z "$inside_interface" ]; then
-      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
 
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
 
-    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-    inside_zone=""
-    while IFS= read -r line; do
-      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-        current_zone="${BASH_REMATCH[1]}"
-      fi
+    # Function to set up nftables rules for Webmin on the inside interfaces
+    setup_nftables_for_webmin() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-        inside_zone="$current_zone"
-        break
-      fi
-    done < <(firewall-cmd --list-all-zones)
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    # Check if we found the zone
-    if [ -z "$inside_zone" ]; then
-      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
 
-    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+        # Add rules to allow Webmin on the inside interfaces using port 10000
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 10000 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 10000 accept
+                echo -e "${GREEN}Rule added: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
+            fi
+        done
 
-    # Add the Webmin service to this zone
-    echo -e "${YELLOW}Adding Webmin service to zone $inside_zone...${TEXTRESET}"
-    if firewall-cmd --zone="$inside_zone" --add-service=webmin --permanent; then
-      echo -e "${GREEN}Webmin service added to zone $inside_zone.${TEXTRESET}"
-    else
-      echo -e "${RED}Failed to add Webmin service to zone $inside_zone.${TEXTRESET}"
-      exit 1
-    fi
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
+    }
 
-    # Reload the firewall to apply changes
-    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-    firewall-cmd --reload
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_webmin
 
-    # Display the services in the zone
-    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-    firewall-cmd --list-services --zone="$inside_zone"
+    # Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
 # Function to install NTOPNG
 install_ntopng() {
@@ -320,65 +330,56 @@ install_ntopng() {
       exit 1
     fi
 
-    echo -e "${GREEN}Adding port 3000 to firewalld services${TEXTRESET}"
-    # Add to Firewalld
-    firewall-cmd --permanent --new-service=ntopng
-    firewall-cmd --permanent --service=ntopng --set-description=ntopng
-    firewall-cmd --permanent --service=ntopng --add-port=3000/tcp
-    # Reload firewalld to recognize the new service
-    echo -e "${YELLOW}Reloading firewalld to recognize the new service...${TEXTRESET}"
-    sudo firewall-cmd --reload
-# Get the network interface associated with a connection name ending in '-inside'
-    inside_interface=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+    # Function to locate the inside interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    # Check if we found the inside interface
-    if [ -z "$inside_interface" ]; then
-      echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
 
-    echo -e "${GREEN}Inside interface found: $inside_interface${TEXTRESET}"
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
 
-    # Determine the zone associated with this interface by parsing the output of `firewall-cmd --list-all-zones`
-    inside_zone=""
-    while IFS= read -r line; do
-      if [[ $line =~ ^([a-zA-Z0-9_-]+) ]]; then
-        current_zone="${BASH_REMATCH[1]}"
-      fi
+    # Function to set up nftables rules for ntopng on the inside interfaces
+    setup_nftables_for_ntopng() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-      if [[ $line == *"interfaces: "* && $line == *"$inside_interface"* ]]; then
-        inside_zone="$current_zone"
-        break
-      fi
-    done < <(firewall-cmd --list-all-zones)
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    # Check if we found the zone
-    if [ -z "$inside_zone" ]; then
-      echo -e "${RED}No zone associated with interface $inside_interface. Exiting...${TEXTRESET}"
-      exit 1
-    fi
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
 
-    echo -e "${GREEN}Zone associated with interface $inside_interface: $inside_zone${TEXTRESET}"
+        # Add rules to allow ntopng on the inside interfaces using port 3000
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 3000 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 3000 accept
+                echo -e "${GREEN}Rule added: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
+            else
+                echo -e "${YELLOW}Rule already exists: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
+            fi
+        done
 
-    # Add the ntopng service to this zone
-    echo -e "${YELLOW}Adding ntopng service to zone $inside_zone...${TEXTRESET}"
-    if firewall-cmd --zone="$inside_zone" --add-service=ntopng --permanent; then
-      echo -e "${GREEN}ntopng service added to zone $inside_zone.${TEXTRESET}"
-    else
-      echo -e "${RED}Failed to add ntopng service to zone $inside_zone.${TEXTRESET}"
-      exit 1
-    fi
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
+    }
 
-    # Reload the firewall to apply changes
-    echo -e "${YELLOW}Reloading firewall...${TEXTRESET}"
-    firewall-cmd --reload
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_ntopng
 
-    # Display the services in the zone
-    echo -e "${YELLOW}Services in zone $inside_zone:${TEXTRESET}"
-    firewall-cmd --list-services --zone="$inside_zone"
-
-# Continue with the rest of the script
-echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    # Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
 }
 # Function to install NTOPNG
 install_suricata() {
@@ -905,7 +906,6 @@ main() {
 
 # Run the main function
 main
-#Set FW Rules
 # Function to find the network interface
 find_interface() {
     # Find the interface with a connection ending in -inside
@@ -919,73 +919,44 @@ find_interface() {
     echo "$interface"
 }
 
-# Function to find the zone associated with the interface
-find_zone() {
+# Function to configure nftables rules
+configure_nftables() {
     local interface="$1"
-    # Get the active zones and find the one associated with the interface
-    zone=$(sudo firewall-cmd --get-active-zones | awk -v iface="$interface" '
-        {
-            if ($1 != "" && $1 !~ /interfaces:/) { current_zone = $1 }
-        }
-        /^  interfaces:/ {
-            if ($0 ~ iface) { print current_zone }
-        }
-    ')
 
-    if [ -z "$zone" ]; then
-        echo -e "${RED}Error: No zone associated with interface $interface.${TEXTRESET}"
-        exit 1
+    echo -e "${YELLOW}Configuring nftables for interface: $interface...${TEXTRESET}"
+
+    # Ensure the nftables service is enabled and started
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    # Create a filter table if it doesn't exist
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
     fi
 
-    echo "$zone"
+    # Create an input chain if it doesn't exist
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    # Add rules to allow traffic on port 5601 for Kibana
+    if ! sudo nft list chain inet filter input | grep -q "iifname \"$interface\" tcp dport 5601 accept"; then
+        sudo nft add rule inet filter input iifname "$interface" tcp dport 5601 accept
+        echo -e "${GREEN}Rule added: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
+    else
+        echo -e "${YELLOW}Rule already exists: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
+    fi
+
+    # Show the added rules in the input chain
+    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+    sudo nft list chain inet filter input
 }
 
-# Function to configure firewall rules
-configure_firewall() {
-    local interface="$1"
-    local zone="$2"
+# Main script execution
+interface=$(find_interface)
+configure_nftables "$interface"
 
-    echo -e "${YELLOW}Configuring firewall for interface: $interface in zone: $zone...${TEXTRESET}"
-
-    # Change the interface to the appropriate zone
-    if sudo firewall-cmd --permanent --zone="$zone" --change-interface="$interface"; then
-        echo -e "${GREEN}Interface $interface changed to the zone $zone.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to change interface $interface to the zone $zone.${TEXTRESET}"
-        exit 1
-    fi
-
-    # Add services to the zone
-    if sudo firewall-cmd --permanent --zone="$zone" --add-service=elasticsearch; then
-        echo -e "${GREEN}Elasticsearch service added to the zone $zone.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to add Elasticsearch service to the zone $zone.${TEXTRESET}"
-        exit 1
-    fi
-
-    if sudo firewall-cmd --permanent --zone="$zone" --add-service=kibana; then
-        echo -e "${GREEN}Kibana service added to the zone $zone.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to add Kibana service to the zone $zone.${TEXTRESET}"
-        exit 1
-    fi
-
-    # Open port 5601 for Kibana
-    if sudo firewall-cmd --permanent --zone="$zone" --add-port=5601/tcp; then
-        echo -e "${GREEN}Port 5601/tcp opened for Kibana.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to open port 5601/tcp for Kibana.${TEXTRESET}"
-        exit 1
-    fi
-
-    # Reload the firewall to apply changes
-    if sudo firewall-cmd --reload; then
-        echo -e "${GREEN}Firewall reloaded successfully.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to reload the firewall.${TEXTRESET}"
-        exit 1
-    fi
-}
+echo -e "${GREEN}Firewall configuration for port 5601 complete.${TEXTRESET}"
 
 # Main script execution
 main() {
