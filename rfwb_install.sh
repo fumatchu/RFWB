@@ -470,7 +470,10 @@ else
     nmcli connection modify "$name" connection.id "$new_profile_name"
     nmcli connection reload
 fi
-#SET VLANS IF NEEDED
+
+
+#SET VLANS
+
 # Function to validate IP address format and ensure it's not a network or broadcast address
 function validate_ip() {
   local ip="$1"
@@ -501,12 +504,18 @@ function display_vlan_map() {
     nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | sort | uniq | while IFS=: read -r con_name con_type con_iface; do
         # Extract VLAN ID from the interface name
         vlan_id="${con_iface##*.}"
+        # Get the IP address associated with the VLAN
         ip_address=$(nmcli connection show "$con_name" | awk '/ipv4.addresses:/ {print $2}')
-        echo "  +-------------------+"
-        echo "  |  Interface: $con_iface  |"
-        echo "  |  VLAN ID: $vlan_id     |"
-        echo "  |  IP: $ip_address  |"
-        echo "  +-------------------+"
+        # Get the friendly name (connection id)
+        friendly_name=$(nmcli -t -f connection.id connection show "$con_name")
+
+        # Display the VLAN information
+        echo "  +-----------------------------+"
+        echo "  |  Interface: $con_iface      |"
+        echo "  |  VLAN ID: $vlan_id          |"
+        echo "  |  IP: $ip_address            |"
+        echo "  |  Friendly Name: $friendly_name |"
+        echo "  +-----------------------------+"
         echo
     done
 }
@@ -520,12 +529,13 @@ while true; do
   read -p "Would you like to configure a VLAN? (y/n): " use_vlan
 
   if [[ "$use_vlan" == "y" ]]; then
-    # List network interfaces with connection profile names
-    echo -e "${YELLOW}Available network interfaces:${TEXTRESET}"
+    # List physical network interfaces with connection profile names
+    echo -e "${YELLOW}Available physical network interfaces:${TEXTRESET}"
     interfaces=()
     index=1
     while IFS=: read -r profile device; do
-      if [ -n "$device" ]; then
+      # Exclude interfaces that are VLANs (contain a dot)
+      if [[ -n "$device" && "$device" != *.* ]]; then
         interfaces+=("$device")
         echo "$index) $device ($profile)"
         ((index++))
@@ -539,7 +549,7 @@ while true; do
         selected_interface="${interfaces[$((selected_number - 1))]}"
         break
       else
-        echo -e "${RED}Invalid selection. Please enter a valid number corresponding to an interface.${TEXTRESET}"
+        echo -e "${RED}Invalid selection. Please enter a valid number corresponding to a physical interface.${TEXTRESET}"
       fi
     done
 
@@ -563,11 +573,15 @@ while true; do
       fi
     done
 
+    # Prompt for a friendly name for the VLAN interface
+    read -p "Enter a friendly name for the VLAN interface: " friendly_name
+
     # Review selections
     echo -e "${YELLOW}You have selected:${TEXTRESET}"
     echo -e "${GREEN}Interface: $selected_interface"
     echo "VLAN ID: $vlan_id"
-    echo "IP Address: $ip_address${TEXTRESET}"
+    echo "IP Address: $ip_address"
+    echo "Friendly Name: $friendly_name${TEXTRESET}"
 
     # Confirm changes
     read -p "Would you like to apply these changes? (y/n): " apply_changes
@@ -576,8 +590,11 @@ while true; do
       # Apply VLAN and IP configuration
       vlan_connection="${selected_interface}.${vlan_id}"
       nmcli connection add type vlan con-name "$vlan_connection" dev "$selected_interface" id "$vlan_id" ip4 "$ip_address"
-      nmcli connection up "$vlan_connection"
-      echo -e "${GREEN}VLAN $vlan_id configured on $selected_interface with IP $ip_address.${TEXTRESET}"
+      # Modify the connection to update the friendly name
+      nmcli connection modify "$vlan_connection" connection.id "$friendly_name"
+      # Use the updated connection name to bring it up
+      nmcli connection up "$friendly_name"
+      echo -e "${GREEN}VLAN $vlan_id configured on $selected_interface with IP $ip_address and friendly name '$friendly_name'.${TEXTRESET}"
     fi
 
     # Display updated VLAN mappings
@@ -595,6 +612,9 @@ while true; do
 done
 
 
+
+
+
 #ADD SSH TO THE INTERNAL INTERFACE(S)
 # Function to locate the server's private IP address using nmcli
 find_private_ip() {
@@ -606,7 +626,10 @@ find_private_ip() {
         exit 1
     fi
 
-    echo -e "${GREEN}Inside interface found: $interface${TEXTRESET}"
+    # Get the friendly name for the inside interface
+    friendly_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$interface:" | cut -d':' -f2)
+
+    echo -e "${GREEN}Inside interface found: $interface ($friendly_name)${TEXTRESET}"
 }
 
 # Function to set up nftables rule for SSH on the inside interface and its sub-interfaces
@@ -630,11 +653,14 @@ setup_nftables() {
     all_interfaces=$(nmcli device status | awk -v intf="$interface" '$1 ~ intf {print $1}')
 
     for iface in $all_interfaces; do
+        # Get the friendly name for each interface
+        friendly_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$iface:" | cut -d':' -f2)
+
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
             sudo nft add rule inet filter input iifname "$iface" tcp dport 22 accept
-            echo -e "${GREEN}Rule added: Allow SSH on interface $iface${TEXTRESET}"
+            echo -e "${GREEN}Rule added: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface${TEXTRESET}"
+            echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
         fi
     done
 
@@ -646,7 +672,6 @@ setup_nftables() {
 # Main script execution
 find_private_ip
 setup_nftables
-
 read -p "Press Enter to install applications and services"
 #/root/RFWB/pkg_install_gui.sh
 #/root/RFWB/config_services.sh
