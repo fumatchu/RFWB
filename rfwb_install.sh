@@ -668,7 +668,11 @@ setup_nftables() {
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
 }
+# Restart nftables to apply the changes
+    echo "Restarting nftables service..."
+    sudo systemctl restart nftables
 
+    echo "nftables configuration completed successfully."
 # Main script execution
 find_private_ip
 setup_nftables
