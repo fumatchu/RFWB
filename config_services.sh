@@ -626,12 +626,14 @@ else
         fi
     done
 fi
+#Start KEA Services
 start_and_enable_service() {
     local service_name="$1"
+    local conf_file="$2"
 
     # Check for the configuration file
-    if [ -f "/etc/kea/kea-dhcp4.conf" ]; then
-        echo -e "${YELLOW}Configuration file found. Enabling and starting the $service_name service...${TEXTRESET}"
+    if [ -f "$conf_file" ]; then
+        echo -e "${YELLOW}Configuration file $conf_file found. Enabling and starting the $service_name service...${TEXTRESET}"
 
         sudo systemctl enable "$service_name"
         sudo systemctl start "$service_name"
@@ -644,11 +646,16 @@ start_and_enable_service() {
             exit 1
         fi
     else
-        echo -e "${RED}Configuration file /etc/kea/kea-dhcp4.conf not found. Cannot enable and start $service_name service.${TEXTRESET}"
+        echo -e "${RED}Configuration file $conf_file not found. Cannot enable and start $service_name service.${TEXTRESET}"
         exit 1
     fi
 }
-start_and_enable_service "kea-dhcp4"
+
+# Start and enable the kea-dhcp4 service
+start_and_enable_service "kea-dhcp4" "/etc/kea/kea-dhcp4.conf"
+
+# Start and enable the kea-dhcp-ddns service
+start_and_enable_service "kea-dhcp-ddns" "/etc/kea/kea-dhcp-ddns.conf"
 # Add additional script logic here if needed
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
