@@ -130,6 +130,7 @@ EOF
     # Set file permissions
     sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
     sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    semanage boolean -m --on named_write_master_zones
     # Define the file path
 RNDC_KEY_FILE="/etc/rndc.key"
 
