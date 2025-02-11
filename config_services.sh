@@ -339,6 +339,10 @@ done
             "ncr-protocol": "UDP",
             "ncr-format": "JSON"
         },
+        "ddns-qualifying-suffix": "$domain",
+        "ddns-override-client-update": true,
+        "ddns-override-no-update": true,
+        "ddns-update-on-renew": true,
         "subnet4": [
             ##BEGINSUBNET-$description
             {
@@ -386,6 +390,10 @@ EOF
     "DhcpDdns": {
         "ip-address": "127.0.0.1",
         "port": 53001,
+        "control-socket": {
+        "socket-type": "unix",
+        "socket-name": "/tmp/kea-ddns-ctrl-socket"
+          },
         "dns-server-timeout": 500,
         "ncr-format": "JSON",
         "ncr-protocol": "UDP",
