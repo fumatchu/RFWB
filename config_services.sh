@@ -131,6 +131,8 @@ EOF
     sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
     sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
     semanage boolean -m --on named_write_master_zones
+    chown named:named $forward_zone_file $reverse_zone_file
+    chmod g+w /var/named
     # Define the file path
 RNDC_KEY_FILE="/etc/rndc.key"
 
