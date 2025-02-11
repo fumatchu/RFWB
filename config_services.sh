@@ -344,6 +344,9 @@ done
         "ddns-override-client-update": true,
         "ddns-override-no-update": true,
         "ddns-update-on-renew": true,
+        "ddns-generated-prefix": "dynamic",
+        "ddns-replace-client-name": "always",
+        "authoritative": true,
         "subnet4": [
             ##BEGINSUBNET-$description
             {
