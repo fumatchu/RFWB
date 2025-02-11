@@ -130,6 +130,31 @@ EOF
     # Set file permissions
     sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
     sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    # Define the file path
+RNDC_KEY_FILE="/etc/rndc.key"
+
+# Check if the file exists
+if [[ -f "$RNDC_KEY_FILE" ]]; then
+    # Change the ownership to 'named' user and group
+    chown named:named "$RNDC_KEY_FILE"
+    
+    # Set the permissions to 600
+    chmod 600 "$RNDC_KEY_FILE"
+    
+    echo "Permissions and ownership for $RNDC_KEY_FILE have been set."
+else
+    echo "Error: $RNDC_KEY_FILE does not exist."
+    exit 1
+fi
+
+# Check SELinux status and provide guidance
+SELINUX_STATUS=$(getenforce)
+if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
+    echo "SELinux is currently set to $SELINUX_STATUS. If you experience access issues, consider verifying SELinux policies."
+else
+    echo "SELinux is enforcing. If you experience access issues, consider temporarily setting SELinux to permissive mode for testing:"
+    echo "setenforce 0  # Temporarily set SELinux to permissive mode for troubleshooting"
+fi
 
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
 }
