@@ -394,10 +394,12 @@ EOF
                 {
                     "name": "$domain.",
                     "key-name": "Kea-DDNS",
-                    "dns-server": {
+                    "dns-servers": [ 
+                        {
                         "ip-address": "127.0.0.1",
                         "port": 53
-                    }
+                        }
+                    ]
                 }
             ]
         },
@@ -406,10 +408,12 @@ EOF
                 {
                     "name": "$reverse_zone.in-addr.arpa.",
                     "key-name": "Kea-DDNS",
-                    "dns-server": {
+                    "dns-servers": [ 
+                        {
                         "ip-address": "127.0.0.1",
                         "port": 53
-                    }
+                        }
+                    ]
                 }
             ]
         },
