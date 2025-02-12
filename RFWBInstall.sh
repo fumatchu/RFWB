@@ -72,7 +72,7 @@ cat <<EOF
 
  This script was created for ${GREEN}Rocky 9.x${TEXTRESET}
  This will install 
- 1. The Rocky Firewall Builder based on firewalld
+ 1. The Rocky Firewall Builder based on nftables
  
  What this script does:
  1. Validates and upgrades the system
