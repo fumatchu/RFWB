@@ -256,20 +256,12 @@ echo -e ${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${RES
 
 # Use echo to interpret colors correctly
 echo -e "
-This script can be used to create a SOHO firewall implementation on Rocky Linux with IPS/IDS and other network processes:
--BIND
--ISC-KEA (DHCP)
--Webmin
--Cockpit
--ntopng
--DDNS for DDNS registration
--Suricata (stand alone)
--Suricata with Elastic/Kibana/Filebeat for Dashboard analytics of Alerts and Events (2CPU 8GB of RAM)
+This script can be used to create a SOHO firewall implementation on Rocky Linux with IPS/IDS and other network applications
 
-The process of this program is the following:
 #1-Make sure you have ${YELLOW}two HARDWARE/VIRTUAL interfaces${RESET} on your system that are detected by nmcli
-#2-The ${YELLOW}FIRST, connected interface${RESET} will be designated as your inside interface (This interface you are probably SSH'd into)
-Your Internet facing interface ${YELLOW}SHOULD BE UNPLUGGED${RESET} right now"
+#2-The ${YELLOW}FIRST, connected interface${RESET} will be designated as your inside interface (This interface you are probably SSH'd into right now)
+It's imperative your Internet facing interface be ${YELLOW}UNPLUGGED${RESET} (We will configure it later)
+"
 
 
 read -p "Press Enter to start the installer"
@@ -446,6 +438,7 @@ enable_nftables() {
 # Main script execution
 disable_firewalld
 enable_nftables
+clear
 #set the inside interface
 # Get all active connections managed by NetworkManager
 active_connection=$(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active | grep ":802-3-ethernet:" | grep ":activated")
@@ -473,7 +466,23 @@ fi
 
 
 #SET VLANS
+echo -e "Considerations:
+If you create VLANS, your inside interface IP is untagged right now
+The Scripts will allow DNS and DHCP Services on all VLANS by default
+All management processes and applications stay on the native (untagged) ip address/interface
+For example, if cockpit is installed, you will not be able to access it from any vlan interface you create
+unless you manually specify this. 
+The goal is to have a Management VLAN. This VLAN is your untagged interface/IP scheme right now
 
+One other consideration.
+The device you are using to SSH into this system right now should be in the untagged VLAN network.
+If it is not (i.e. you are going over a router interface to SSH this box right now),
+If you create a VLAN and activate it in the subnet you will lose connectivity to the machine, and you 
+MUST SSH On the interface you created (This is just how arp works). If you do, the installer will restart and you may continue. 
+But, remember, you cannot access any of the applications from anything other than the "untagged" network.
+If you are setting up Kibana/Elastic for suricata, you will neeed direct access to this untagged network or your setup will fail.
+
+"
 # Function to validate IP address format and ensure it's not a network or broadcast address
 function validate_ip() {
   local ip="$1"
