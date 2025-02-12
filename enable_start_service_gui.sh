@@ -71,6 +71,13 @@ else
     show_infobox "cockpit is not installed. Skipping..."
 fi
 
+# Special handling for Kea DDNS
+if check_package_installed "isc-kea-dhcp-ddns"; then
+    enable_and_start_service "kea-dhcp-ddns"
+else
+    show_infobox "cockpit is not installed. Skipping..."
+fi
+
 if check_package_installed "ddclient"; then
     show_infobox "ddclient is installed. Please manually configure it for your DDNS requirements."
 fi
