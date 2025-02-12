@@ -1,14 +1,19 @@
 #!/bin/bash
 
+# Define colors for output
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+TEXTRESET="\033[0m"
+
 # Check if dialog is installed
 if ! command -v dialog &> /dev/null; then
     echo -e "${RED}Dialog is not installed. Please install it to use this script.${TEXTRESET}"
     exit 1
 fi
 
-# Function to show an infobox message
+# Function to show an infobox message with a title
 show_infobox() {
-    dialog --infobox "$1" 5 50
+    dialog --title "Checking activated services" --infobox "$1" 5 50
     sleep 3
 }
 
@@ -38,8 +43,8 @@ enable_and_start_service() {
     fi
 }
 
-# Display a starting banner
-dialog --infobox "Enabling and Starting services..." 5 50
+# Display a starting banner with a title
+dialog --title "Checking activated services" --infobox "Enabling and Starting services..." 5 50
 sleep 3
 
 # Main script execution
@@ -57,6 +62,7 @@ if check_package_installed "bind"; then
 else
     show_infobox "bind is not installed. Skipping..."
 fi
+
 # Special handling for Cockpit
 if check_package_installed "cockpit"; then
     enable_and_start_service "cockpit.socket"
@@ -68,18 +74,16 @@ fi
 if check_package_installed "isc-kea-dhcp4"; then
     enable_and_start_service "kea-dhcp4"
 else
-    show_infobox "cockpit is not installed. Skipping..."
+    show_infobox "isc-kea-dhcp4 is not installed. Skipping..."
 fi
 
 # Special handling for Kea DDNS
 if check_package_installed "isc-kea-dhcp-ddns"; then
     enable_and_start_service "kea-dhcp-ddns"
 else
-    show_infobox "cockpit is not installed. Skipping..."
+    show_infobox "isc-kea-dhcp-ddns is not installed. Skipping..."
 fi
 
 if check_package_installed "ddclient"; then
     show_infobox "ddclient is installed. Please manually configure it for your DDNS requirements."
 fi
-
-echo -e "${GREEN}Script execution completed.${TEXTRESET}"
