@@ -268,7 +268,7 @@ find_interface() {
 
     echo "$interface"
 }
-#Add MASQ and forwarding with connection, related
+
 # Find inside and outside interfaces
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
@@ -283,6 +283,8 @@ sudo sysctl -p
 
 # Apply nftables ruleset directly
 echo -e "${YELLOW}Applying nftables ruleset...${TEXTRESET}"
+
+# Create and configure the inet filter table
 sudo nft add table inet filter
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }
 sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; }
@@ -290,10 +292,16 @@ sudo nft add rule inet filter forward ct state established,related accept
 sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
 sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
 
+# Create and configure the ip nat table
 sudo nft add table ip nat
 sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; }
 sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
+# Log and block all incoming traffic on the outside interface
+echo -e "${YELLOW}Logging and blocking all incoming traffic on the outside interface...${TEXTRESET}"
+sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix "Dropped: " drop
+
+echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}"
 # Save the current ruleset
 echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
 sudo nft list ruleset > /etc/sysconfig/nftables.conf
