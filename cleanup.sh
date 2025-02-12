@@ -74,6 +74,67 @@ manage_inside_interfaces() {
 # Execute the function
 manage_inside_interfaces
 
+#Move the IP EKF Check for Startup
+# Define paths
+SRC_SCRIPT="/root/RFWB/check_ip_EKF.sh"
+DEST_SCRIPT="/opt/check_ip_EKF.sh"
+RC_LOCAL="/etc/rc.d/rc.local"
+
+# Check if the source script exists
+if [ ! -f "$SRC_SCRIPT" ]; then
+    echo "Source script $SRC_SCRIPT does not exist. Exiting."
+    exit 1
+fi
+
+# Copy the script to /opt/
+echo "Copying $SRC_SCRIPT to $DEST_SCRIPT..."
+sudo cp "$SRC_SCRIPT" "$DEST_SCRIPT"
+
+# Ensure the script is executable
+echo "Ensuring $DEST_SCRIPT is executable..."
+sudo chmod +x "$DEST_SCRIPT"
+
+# Check if rc.local exists
+if [ ! -f "$RC_LOCAL" ]; then
+    echo "Creating $RC_LOCAL..."
+    sudo touch "$RC_LOCAL"
+fi
+
+# Ensure rc.local is executable
+echo "Ensuring $RC_LOCAL is executable..."
+sudo chmod +x "$RC_LOCAL"
+
+# Add the script to rc.local if not already present
+if ! grep -q "$DEST_SCRIPT" "$RC_LOCAL"; then
+    echo "Adding $DEST_SCRIPT to $RC_LOCAL..."
+    echo "$DEST_SCRIPT" | sudo tee -a "$RC_LOCAL" > /dev/null
+fi
+
+# Check if rc-local service is enabled
+if ! systemctl is-enabled rc-local.service &>/dev/null; then
+    echo "Enabling rc-local service..."
+
+    # Create symbolic link if necessary (for compatibility)
+    if [ ! -L /etc/rc.local ]; then
+        sudo ln -s "$RC_LOCAL" /etc/rc.local
+    fi
+
+    # Enable the service
+    sudo systemctl enable rc-local
+fi
+
+# Start the rc-local service if not already running
+if ! systemctl is-active rc-local.service &>/dev/null; then
+    echo "Starting rc-local service..."
+    sudo systemctl start rc-local
+fi
+
+# Status of the rc-local service
+echo "Checking status of rc-local service..."
+systemctl status rc-local
+
+echo "Setup complete. The script $DEST_SCRIPT will run at startup."
+
 
 
 
