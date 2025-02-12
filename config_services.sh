@@ -6,6 +6,11 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 
+clear 
+echo -e "${GREEN}Configuring Services${TEXTRESET}"
+echo ""
+sleep 2
+
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
