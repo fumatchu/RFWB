@@ -180,7 +180,7 @@ install_isc_kea() {
 install_cockpit() {
     echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
     sleep 2
-    dnf -y install cockpit cockpit-storaged tuned
+    dnf -y install cockpit cockpit-storaged cockpit-files tuned
     echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
 
     # Function to locate the inside interfaces
