@@ -269,12 +269,35 @@ find_interface() {
     echo "$interface"
 }
 
+#!/bin/bash
+
+# Define color codes for pretty output
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+RED="\033[0;31m"
+TEXTRESET="\033[0m"
+
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Function to find sub-interfaces based on main interface
+find_sub_interfaces() {
+    local main_interface="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk -F: '{print $1}'
+}
+
 # Find inside and outside interfaces
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
 echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
 echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
+
+# Find sub-interfaces for the inside interface
+SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Enable IP forwarding
 echo -e "${YELLOW}Enabling IP forwarding...${TEXTRESET}"
@@ -289,7 +312,14 @@ sudo nft add table inet filter
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }
 sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; }
 sudo nft add rule inet filter forward ct state established,related accept
+
+# Add forwarding rules for the inside interface and its sub-interfaces
 sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    echo -e "${YELLOW}Adding forwarding rule for sub-interface: $sub_interface${TEXTRESET}"
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$OUTSIDE_INTERFACE" accept
+done
+
 sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
 
 # Create and configure the ip nat table
@@ -302,6 +332,7 @@ echo -e "${YELLOW}Logging and blocking all incoming traffic on the outside inter
 sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix "Dropped: " drop
 
 echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}"
+
 # Save the current ruleset
 echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
 sudo nft list ruleset > /etc/sysconfig/nftables.conf
