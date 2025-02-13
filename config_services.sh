@@ -645,6 +645,124 @@ else
         fi
     done
 fi
+# Function to find interfaces based on connection name suffix
+find_interfaces() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Find main and sub-interfaces
+INSIDE_INTERFACE=$(find_interfaces "-inside")
+SUB_INTERFACES=$(nmcli -t -f DEVICE device status | grep -E "${INSIDE_INTERFACE}\.[0-9]+")
+
+# Combine interfaces into an array
+INTERFACES=("$INSIDE_INTERFACE")
+INTERFACES+=($SUB_INTERFACES)
+
+# Check if kea-dhcp4.conf exists
+CONFIG_FILE="/etc/kea/kea-dhcp4.conf"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}Error: Configuration file $CONFIG_FILE not found.${TEXTRESET}"
+    exit 1
+fi
+
+# Count the number of subnets in the configuration file
+SUBNET_COUNT=$(grep -c '"subnet":' "$CONFIG_FILE")
+
+# Function to extract subnets
+extract_subnets() {
+    grep -A1 '"id":' "$CONFIG_FILE" | grep '"subnet":' | awk -F'"' '{print $4}'
+}
+
+# Function to update the configuration file
+update_config() {
+    if [ "$SUBNET_COUNT" -gt 1 ] && [ -z "$SUB_INTERFACES" ]; then
+        echo -e "${YELLOW}Warning: More subnets than interfaces. Confirm if this setup is correct.${TEXTRESET}"
+        read -p "Do you want to proceed? (yes/no): " confirm
+        if [ "$confirm" != "yes" ]; then
+            echo "Aborting changes."
+            echo -e "${TEXTRESET}"
+            exit 0
+        fi
+    fi
+
+    if [ "$SUBNET_COUNT" -gt 1 ] && [ -n "$SUB_INTERFACES" ]; then
+        echo -e "${YELLOW}Multiple subnets and interfaces detected. Please select bindings:${TEXTRESET}"
+
+        echo "Available interfaces:"
+        for i in "${!INTERFACES[@]}"; do
+            echo "$i) ${INTERFACES[$i]}"
+        done
+
+        echo "Subnets in configuration:"
+        subnets=($(extract_subnets))
+        for j in "${!subnets[@]}"; do
+            echo "${subnets[$j]}"
+        done
+
+        # Prompt for user input to map interfaces to subnets
+        read -p "Enter interface number for subnet ${subnets[0]}: " index1
+        read -p "Enter interface number for subnet ${subnets[1]}: " index2
+
+        iface1="${INTERFACES[$index1]}"
+        iface2="${INTERFACES[$index2]}"
+
+        # Use awk to update the configuration file
+        awk -v iface1="$iface1" -v iface2="$iface2" -v sub0="${subnets[0]}" -v sub1="${subnets[1]}" '
+        BEGIN { interface_inserted1 = 0; interface_inserted2 = 0 }
+        /"subnet":/ {
+            print
+            if ($0 ~ sub0 && !interface_inserted1) {
+                print "        \"interface\": \"" iface1 "\","
+                interface_inserted1 = 1
+            } else if ($0 ~ sub1 && !interface_inserted2) {
+                print "        \"interface\": \"" iface2 "\","
+                interface_inserted2 = 1
+            }
+            next
+        }
+        { print }
+        ' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+        # Update the interfaces list in the configuration
+        current_interfaces=$(grep -oP '(?<=\[)[^]]*' "$CONFIG_FILE" | tr -d '"')
+        IFS=',' read -ra interface_array <<< "$current_interfaces"
+
+        if [[ ! " ${interface_array[@]} " =~ " $iface1 " ]]; then
+            interface_array+=("$iface1")
+        fi
+        if [[ ! " ${interface_array[@]} " =~ " $iface2 " ]]; then
+            interface_array+=("$iface2")
+        fi
+
+        new_interfaces=$(printf '"%s",' "${interface_array[@]}")
+        new_interfaces="[${new_interfaces%,}]"
+
+        sed -i "s/\"interfaces\": \[.*\]/\"interfaces\": $new_interfaces/" "$CONFIG_FILE"
+    fi
+
+    if [ "$SUBNET_COUNT" -eq 1 ] && [ -n "$INSIDE_INTERFACE" ]; then
+        echo -e "${GREEN}Updating configuration for single subnet and interface.${TEXTRESET}"
+        sed -i "s/\"interfaces\": \[\".*\"\]/\"interfaces\": [\"$INSIDE_INTERFACE\"]/" "$CONFIG_FILE"
+        awk -v iface="$INSIDE_INTERFACE" -v subnet="$(extract_subnets)" '
+        BEGIN { interface_inserted = 0 }
+        /"subnet":/ {
+            print
+            if ($0 ~ subnet && !interface_inserted) {
+                print "        \"interface\": \"" iface "\","
+                interface_inserted = 1
+            }
+            next
+        }
+        { print }
+        ' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+    fi
+}
+
+# Execute the update
+update_config
+echo -e "${GREEN}Configuration update completed.${TEXTRESET}"
+
 #Start KEA Services
 start_and_enable_service() {
     local service_name="$1"
