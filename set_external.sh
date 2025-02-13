@@ -313,6 +313,9 @@ sudo nft add chain inet filter input { type filter hook input priority 0 \; poli
 sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; }
 sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
 
+# Allow all traffic on the loopback interface
+sudo nft add rule inet filter input iif lo accept
+
 # Allow established and related connections on the input chain
 sudo nft add rule inet filter input ct state established,related accept
 
