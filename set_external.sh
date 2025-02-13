@@ -309,27 +309,42 @@ echo -e "${YELLOW}Applying nftables ruleset...${TEXTRESET}"
 
 # Create and configure the inet filter table
 sudo nft add table inet filter
-sudo nft add chain inet filter input { type filter hook input priority 0 \; policy accept \; }
+sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; }
 sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; }
-sudo nft add rule inet filter forward ct state established,related accept
+sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
 
-# Add forwarding rules for the inside interface and its sub-interfaces
-sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+# Allow established and related connections on the input chain
+sudo nft add rule inet filter input ct state established,related accept
+
+# Allow inbound traffic on the inside interface(s)
+sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    echo -e "${YELLOW}Adding forwarding rule for sub-interface: $sub_interface${TEXTRESET}"
-    sudo nft add rule inet filter forward iif "$sub_interface" oif "$OUTSIDE_INTERFACE" accept
+    echo -e "${YELLOW}Allowing inbound traffic for sub-interface: $sub_interface${TEXTRESET}"
+    sudo nft add rule inet filter input iif "$sub_interface" accept
 done
 
-sudo nft add chain inet filter output { type filter hook output priority 0 \; policy accept \; }
+# Allow forwarding between inside interface and its sub-interfaces
+sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$INSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$sub_interface" accept
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$INSIDE_INTERFACE" accept
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$sub_interface" accept
+done
+
+# Allow forwarding from inside to outside
+sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$OUTSIDE_INTERFACE" accept
+done
 
 # Create and configure the ip nat table
 sudo nft add table ip nat
 sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; }
 sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
-# Log and block all incoming traffic on the outside interface
-echo -e "${YELLOW}Logging and blocking all incoming traffic on the outside interface...${TEXTRESET}"
-sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix "Dropped: " drop
+# Log and drop unsolicited incoming traffic on the outside interface
+echo -e "${YELLOW}Logging and blocking unsolicited incoming traffic on the outside interface...${TEXTRESET}"
+sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
 
 echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}"
 
