@@ -7,6 +7,7 @@ TEXTRESET="\033[0m"
 RESET='\033[0m'
 # Function to install REQUIRED
 install_required() {
+    clear
     echo -e "${GREEN}Installing Required OS packages...${TEXTRESET}"
     sleep 2
     dnf -y config-manager --set-enabled crb
