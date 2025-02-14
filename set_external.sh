@@ -5,7 +5,7 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
-
+clear
 # Ensure nmcli is installed
 if ! command -v nmcli &> /dev/null; then
     echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
