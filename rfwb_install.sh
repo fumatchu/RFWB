@@ -266,7 +266,44 @@ It's imperative your Internet facing interface be ${YELLOW}UNPLUGGED${RESET} (We
 
 read -p "Press Enter to start the installer"
 clear
+
+##Detect interfaces
+# Function to print a separator line
+print_separator() {
+    echo -e "${YELLOW}----------------------------------------${RESET}"
+}
+
+# Function to display the result with styling and color
+display_result() {
+    local message="$1"
+    local color="$2"
+    echo
+    print_separator
+    echo -e "${color}${message}${RESET}"
+    print_separator
+    echo
+}
+
+# Get the list of network interfaces excluding the loopback interface (lo)
+interfaces=$(ip link show | awk -F: '$0 !~ "lo|vir|br|^[^0-9]"{print $2;getline}')
+
+# Count the number of interfaces
+interface_count=$(echo "$interfaces" | wc -l)
+
+# Check if there are at least two interfaces
+if [ "$interface_count" -ge 2 ]; then
+    display_result "The device has at least two network interfaces:" "$GREEN"
+    sleep 2
+    echo "$interfaces" | sed 's/^/  - /'  # Indent each interface for better readability
+else
+    display_result "The server has less than two active network interfaces." "$RED"
+    echo -e "${RED}Please make sure we can see at least two interfaces on this system.${RESET}"
+    exit 1
+fi
+sleep 2
+
 #Check for Network Connectivity
+clear
 echo "Checking for Internet Connectivity"
 echo " "
 sleep 3
