@@ -232,7 +232,7 @@ manage_inside_interfaces() {
 # Execute the function
 manage_inside_interfaces
 
-#Set Avahi on the insdie interfaces 
+#Set Avahi on the inside interfaces 
 # Function to find the network interface based on connection name ending
 find_interface() {
     local suffix="$1"
