@@ -793,7 +793,124 @@ start_and_enable_service "kea-dhcp4" "/etc/kea/kea-dhcp4.conf"
 
 # Start and enable the kea-dhcp-ddns service
 start_and_enable_service "kea-dhcp-ddns" "/etc/kea/kea-dhcp-ddns.conf"
-# Add additional script logic here if needed
+
+#Cleanup-If using VLANS we need to make sure mulitple subents are accounted for in the named configuration
+# Define file paths and directories
+KEA_CONF="/etc/kea/kea-dhcp4.conf"
+NAMED_CONF="/etc/named.conf"
+ZONE_DIR="/var/named/"
+KEYS_FILE="/etc/named/keys.conf"
+
+# Extract domain and hostname
+full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
+
+if [[ ! "$full_hostname" == *.* ]]; then
+    echo -e "${RED}Error: Hostname does not contain a domain part.${TEXTRESET}"
+    exit 1
+fi
+
+hostname="${full_hostname%%.*}"
+domain="${full_hostname#*.}"
+
+# Function to reverse the IP portion of the subnet
+reverse_ip() {
+    local ip="$1"
+    echo "$ip" | awk -F '.' '{print $3"."$2"."$1}'
+}
+
+# Get the server's IP addresses (IPv4)
+ip_addresses=($(hostname -I))
+
+# Extract subnets from the Kea configuration file
+subnets=$(grep '"subnet":' "$KEA_CONF" | awk -F '"' '{print $4}')
+
+# Stop the named service
+echo -e "${YELLOW}Stopping named service...${TEXTRESET}"
+sudo systemctl stop named
+
+# Ensure KEA-DDNS key is included once
+if ! grep -q "include \"$KEYS_FILE\";" "$NAMED_CONF"; then
+    echo "include \"$KEYS_FILE\";" | sudo tee -a "$NAMED_CONF"
+fi
+
+# Check each subnet for a corresponding reverse DNS zone and create if missing
+for subnet in $subnets; do
+    # Extract the IP portion and reverse it
+    ip_portion=$(echo "$subnet" | cut -d'/' -f1)
+    reversed_ip=$(reverse_ip "$ip_portion")
+    reverse_zone="${reversed_ip}.in-addr.arpa"
+    reverse_zone_file="${ZONE_DIR}db.${reversed_ip}"
+
+    # Attempt to find a matching IP address for the subnet
+    closest_ip=""
+    for ip in "${ip_addresses[@]}"; do
+        # Check for match on third octet
+        if [[ "$ip" == "${ip_portion%.*}."* ]]; then
+            closest_ip="$ip"
+            break
+        # Check for match on second octet
+        elif [[ "$ip" == "${ip_portion%%.*}."* ]]; then
+            closest_ip="$ip"
+        fi
+    done
+
+    if [ -z "$closest_ip" ]; then
+        echo -e "${RED}Error: No close IP address match found for subnet $subnet${TEXTRESET}"
+        continue
+    fi
+
+    # Use the closest matching IP address for the reverse zone
+    echo -e "${GREEN}Using IP address $closest_ip for subnet $subnet${TEXTRESET}"
+
+    # Check if the reverse zone exists in the named configuration
+    if ! grep -q "zone \"$reverse_zone\"" "$NAMED_CONF"; then
+        echo -e "${YELLOW}No matching reverse zone for subnet $subnet: creating $reverse_zone${TEXTRESET}"
+
+        # Add reverse zone to named.conf
+        sudo bash -c "cat >> $NAMED_CONF" <<EOF
+
+zone "${reverse_zone}" {
+    type master;
+    file "$reverse_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+EOF
+
+        # Create reverse zone file
+        sudo bash -c "cat > $reverse_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+${closest_ip##*.}  IN  PTR   $full_hostname.
+EOF
+
+        # Set file permissions
+        sudo chmod 640 $reverse_zone_file
+        sudo chown named:named $reverse_zone_file
+    else
+        echo -e "${GREEN}Match found for subnet $subnet: $reverse_zone${TEXTRESET}"
+    fi
+done
+
+# Start the named service
+echo -e "${YELLOW}Starting named service...${TEXTRESET}"
+sudo systemctl start named
+
+# Validate that the named service is running
+if systemctl is-active --quiet named; then
+    echo -e "${GREEN}Named service is running successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Error: Named service failed to start after KEA subnet Cleanup.${TEXTRESET}"
+    exit 1
+fi
+
+
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
 # Define the original and new file paths
