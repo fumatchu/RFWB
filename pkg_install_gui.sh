@@ -855,7 +855,7 @@ fi
 
 # Step 3: Install Elasticsearch and Kibana
 clear
-echo -e "${YELLOW}Installing Elasticsearch and Kibana...${TEXTRESET}"
+echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
 sleep 2
 if sudo dnf install --enablerepo=elasticsearch elasticsearch kibana -y; then
     echo -e "${GREEN}Elasticsearch and Kibana installed successfully.${TEXTRESET}"
