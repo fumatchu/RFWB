@@ -86,4 +86,5 @@ fi
 
 if check_package_installed "ddclient"; then
     show_infobox "ddclient is installed. Please manually configure it for your DDNS requirements."
+    sleep 2
 fi
