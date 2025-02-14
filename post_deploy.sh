@@ -43,6 +43,102 @@ manage_inside_interfaces() {
 # Execute the function
 manage_inside_interfaces
 
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Function to find sub-interfaces based on main interface
+find_sub_interfaces() {
+    local main_interface="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
+}
+
+#SETUP the FW ALLOW all inside interfaces and subinterfaces to talk and allow all of them Internet access
+# Find inside and outside interfaces
+INSIDE_INTERFACE=$(find_interface "-inside")
+OUTSIDE_INTERFACE=$(find_interface "-outside")
+
+echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
+echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
+
+# Find sub-interfaces for the inside interface
+SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+
+# Enable IP forwarding
+echo -e "${YELLOW}Enabling IP forwarding...${TEXTRESET}"
+echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+# Apply nftables ruleset
+echo -e "${YELLOW}Applying nftables ruleset...${TEXTRESET}"
+
+# Create and configure the inet filter table if not exists
+sudo nft add table inet filter 2>/dev/null
+
+# Ensure the input chain policy is set to drop
+sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
+
+# Allow all traffic on the loopback interface
+sudo nft add rule inet filter input iif lo accept
+
+# Allow established and related connections on the input chain
+sudo nft add rule inet filter input ct state established,related accept
+
+# Allow inbound traffic on the inside interface(s)
+sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    echo -e "${YELLOW}Allowing inbound traffic for sub-interface: $sub_interface${TEXTRESET}"
+    sudo nft add rule inet filter input iif "$sub_interface" accept
+done
+
+# Allow SSH on the outside interface
+sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" tcp dport 22 accept
+
+# Create and configure the forward chain with drop policy
+sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; } 2>/dev/null
+
+# Allow established and related connections on the forward chain
+sudo nft add rule inet filter forward ct state established,related accept
+
+# Allow forwarding between inside interface and its sub-interfaces
+sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$INSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$sub_interface" accept
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$INSIDE_INTERFACE" accept
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$sub_interface" accept
+done
+
+# Allow forwarding from inside to outside
+sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+for sub_interface in $SUB_INTERFACES; do
+    sudo nft add rule inet filter forward iif "$sub_interface" oif "$OUTSIDE_INTERFACE" accept
+done
+
+# Create and configure the inet nat table
+sudo nft add table ip nat 2>/dev/null
+sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null
+sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
+
+# Log and drop unsolicited incoming traffic on the outside interface
+echo -e "${YELLOW}Logging and blocking unsolicited incoming traffic on the outside interface...${TEXTRESET}"
+sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
+
+echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}"
+
+# Save the current ruleset
+echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+sudo nft list ruleset > /etc/sysconfig/nftables.conf
+
+# Enable and start nftables service to ensure configuration is loaded on boot
+echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"
+sudo systemctl enable nftables
+sudo systemctl start nftables
+
+echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}"
+
+
 #Move the IP EKF Check for Startup
 # Define paths
 SRC_SCRIPT="/root/RFWB/check_ip_EKF.sh"
