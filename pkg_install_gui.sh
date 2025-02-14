@@ -1506,7 +1506,7 @@ find_private_ip() {
 # Install Filebeat
 install_filebeat() {
     clear
-    echo -e "${YELLOW}Installing Filebeat...${TEXTRESET}"
+    echo -e "${GREEN}Installing Filebeat...${TEXTRESET}"
     sleep 2
     sudo dnf install --enablerepo=elasticsearch filebeat -y
 
