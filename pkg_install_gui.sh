@@ -7,7 +7,7 @@ TEXTRESET="\033[0m"
 RESET='\033[0m'
 # Function to install REQUIRED
 install_required() {
-    echo -e "${GREEN}Installing Required packages...${TEXTRESET}"
+    echo -e "${GREEN}Installing Required OS packages...${TEXTRESET}"
     sleep 2
     dnf -y config-manager --set-enabled crb
     dnf -y install epel-release
@@ -15,16 +15,20 @@ install_required() {
     dnf -y update
     dnf -y install ntsysv iptraf fail2ban tuned
     echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
+    sleep 2
 }
 # Function to install ddns
 install_ddclient() {
+    clear
     echo -e "${GREEN}Installing ddns client (ddclient)...${TEXTRESET}"
     sleep 2
     dnf -y install ddclient
     echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
+    sleep 2
 }
 # Function to install BIND
 install_bind() {
+    clear
     echo -e "${GREEN}Installing BIND...${TEXTRESET}"
     sleep 2
     dnf -y install bind
@@ -96,9 +100,11 @@ install_bind() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep2
 }
 # Function to install ISC KEA
 install_isc_kea() {
+    clear
     echo -e "${GREEN}Installing ISC KEA...${TEXTRESET}"
     sleep 2
     dnf -y install epel-release
@@ -175,9 +181,11 @@ install_isc_kea() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep 2
 }
 # Function to install COCKPIT
 install_cockpit() {
+    clear
     echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
     sleep 2
     dnf -y install cockpit cockpit-storaged cockpit-files tuned
@@ -241,9 +249,11 @@ install_cockpit() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep 2
 }
 # Function to install WEBMIN
 install_webmin() {
+    clear
     echo -e "${GREEN}Installing Webmin...${TEXTRESET}"
     sleep 2
     curl -o webmin-setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repos.sh
@@ -306,9 +316,11 @@ install_webmin() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep 2
 }
 # Function to install NTOPNG
 install_ntopng() {
+    clear
     echo -e "${GREEN}Installing ntopng...${TEXTRESET}"
     sleep 2
     curl https://packages.ntop.org/centos-stable/ntop.repo > /etc/yum.repos.d/ntop.repo
@@ -411,10 +423,12 @@ install_ntopng() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep 2
 }
 # Function to install NTOPNG
 install_suricata() {
-echo -e "${YELLOW}Checking Hardware Requirements...${RESET}"
+clear
+echo -e "${YELLOW}Installing Suricata Engine${RESET}"
 sleep 2
 dnf -y install bc
 # Function to check if the system has at least 8 GB of RAM
@@ -483,7 +497,8 @@ else
 fi
 
 # Install essential packages
-echo -e "${YELLOW}Installing essential packages...${TEXTRESET}"
+clear
+echo -e "${YELLOW}Installing essential suricata packages...${TEXTRESET}"
 sleep 2
 if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
     echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
@@ -493,6 +508,7 @@ else
 fi
 
 # Install Suricata
+clear
 echo -e "${YELLOW}Installing Suricata...${TEXTRESET}"
 sleep 2
 # Enable copr command for dnf
@@ -795,12 +811,15 @@ else
     exit 1
 fi
 
-echo -e "${GREEN}Script completed successfully.${TEXTRESET}"
+echo -e "${GREEN}suricata completed successfully.${TEXTRESET}"
+echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+sleep2
 }
 
 # Function to install REQUIRED
 install_elastic() {
 # Inform the user that the process is starting
+clear
 echo -e "${YELLOW}Starting the installation of Elasticsearch and Kibana...${TEXTRESET}"
 sleep 2
 # Step 1: Import the Elastic GPG key
@@ -834,7 +853,9 @@ else
 fi
 
 # Step 3: Install Elasticsearch and Kibana
+clear
 echo -e "${YELLOW}Installing Elasticsearch and Kibana...${TEXTRESET}"
+sleep 2
 if sudo dnf install --enablerepo=elasticsearch elasticsearch kibana -y; then
     echo -e "${GREEN}Elasticsearch and Kibana installed successfully.${TEXTRESET}"
 else
@@ -842,8 +863,9 @@ else
     exit 1
 fi
 
-echo -e "${GREEN}Installation process completed successfully.${TEXTRESET}"
-
+echo -e "${GREEN}Installation download completed successfully.${TEXTRESET}"
+sleep 2
+clear
 # Define the Elasticsearch configuration paths
 ELASTIC_YML="/etc/elasticsearch/elasticsearch.yml"
 JVM_OPTIONS_DIR="/etc/elasticsearch/jvm.options.d"
@@ -1054,7 +1076,7 @@ main() {
 
 # Run the main function
 main
-
+clear
 echo -e "${GREEN}Generating Password for the elastic account.${TEXTRESET}"
 echo -e "${Yellow}This will be forced to reset when first logging in.${TEXTRESET}"
 # Function to generate a random password
@@ -1391,7 +1413,7 @@ check_kibana_status() {
 generate_enrollment_token
 start_kibana_service
 check_kibana_status
-
+clear
 echo -e "${GREEN}Kibana setup and startup process completed successfully.${TEXTRESET}"
 
 # Function to display initial instructions
@@ -1482,7 +1504,9 @@ find_private_ip() {
 
 # Install Filebeat
 install_filebeat() {
+    clear
     echo -e "${YELLOW}Installing Filebeat...${TEXTRESET}"
+    sleep 2
     sudo dnf install --enablerepo=elasticsearch filebeat -y
 
     if [ $? -eq 0 ]; then
@@ -1738,7 +1762,7 @@ edit_suricata_config
 setup_filebeat
 start_filebeat_service
 check_filebeat_status
-
+clear
 echo -e "${GREEN}Filebeat Suricata module setup and configuration completed successfully.${TEXTRESET}"
 echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
 echo -e
