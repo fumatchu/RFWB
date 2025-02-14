@@ -326,3 +326,21 @@ sudo systemctl enable nftables
 sudo systemctl start nftables
 
 echo -e "${GREEN}Setup complete. Avahi is configured for mDNS reflection on internal interfaces, and nftables are configured to allow mDNS traffic only on those interfaces.${TEXTRESET}"
+
+clear
+# Notify the user that the firewall setup is complete
+echo "Firewall setup complete."
+
+# Prompt the user to choose whether to restart the firewall
+read -p "Do you want to restart the firewall now? (yes/no): " user_choice
+
+# Check the user's input
+if [[ "$user_choice" == "yes" ]]; then
+    echo "Restarting the firewall..."
+    # Issue the reboot command
+    sudo reboot
+elif [[ "$user_choice" == "no" ]]; then
+    echo "The firewall will not be restarted now."
+else
+    echo "Invalid choice. Please run the script again and select either 'yes' or 'no'."
+fi
