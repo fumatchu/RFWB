@@ -1714,11 +1714,13 @@ edit_suricata_config() {
         echo -e "${RED}Error: Failed to update Suricata module configuration.${TEXTRESET}"
         exit 1
     fi
+    sleep 2
 }
 
 # Setup Filebeat (load dashboards and pipelines)
 setup_filebeat() {
-    echo -e "${YELLOW}Setting up Filebeat...${TEXTRESET}"
+    clear 
+    echo -e "${GREEN}Setting up Filebeat...${TEXTRESET}"
 
     # Start the spinner in the background
     sudo filebeat setup & spinner $!
