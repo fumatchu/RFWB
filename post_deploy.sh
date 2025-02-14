@@ -140,24 +140,38 @@ echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}"
 
 
 #Move the IP EKF Check for Startup
+# Move the IP EKF Check for Startup
 # Define paths
-SRC_SCRIPT="/root/RFWB/check_ip_EKF.sh"
-DEST_SCRIPT="/opt/check_ip_EKF.sh"
+SRC_SCRIPT1="/root/RFWB/check_ip_EKF.sh"
+DEST_SCRIPT1="/opt/check_ip_EKF.sh"
+SRC_SCRIPT2="/root/RFWB/fw_delay_start.sh"
+DEST_SCRIPT2="/opt/fw_delay_start.sh"
 RC_LOCAL="/etc/rc.d/rc.local"
 
-# Check if the source script exists
-if [ ! -f "$SRC_SCRIPT" ]; then
-    echo "Source script $SRC_SCRIPT does not exist. Exiting."
+# Check if the source scripts exist
+if [ ! -f "$SRC_SCRIPT1" ]; then
+    echo "Source script $SRC_SCRIPT1 does not exist. Exiting."
     exit 1
 fi
 
-# Copy the script to /opt/
-echo "Copying $SRC_SCRIPT to $DEST_SCRIPT..."
-sudo cp "$SRC_SCRIPT" "$DEST_SCRIPT"
+if [ ! -f "$SRC_SCRIPT2" ]; then
+    echo "Source script $SRC_SCRIPT2 does not exist. Exiting."
+    exit 1
+fi
 
-# Ensure the script is executable
-echo "Ensuring $DEST_SCRIPT is executable..."
-sudo chmod +x "$DEST_SCRIPT"
+# Copy the scripts to /opt/
+echo "Copying $SRC_SCRIPT1 to $DEST_SCRIPT1..."
+sudo cp "$SRC_SCRIPT1" "$DEST_SCRIPT1"
+
+echo "Copying $SRC_SCRIPT2 to $DEST_SCRIPT2..."
+sudo cp "$SRC_SCRIPT2" "$DEST_SCRIPT2"
+
+# Ensure the scripts are executable
+echo "Ensuring $DEST_SCRIPT1 is executable..."
+sudo chmod +x "$DEST_SCRIPT1"
+
+echo "Ensuring $DEST_SCRIPT2 is executable..."
+sudo chmod +x "$DEST_SCRIPT2"
 
 # Check if rc.local exists
 if [ ! -f "$RC_LOCAL" ]; then
@@ -169,10 +183,15 @@ fi
 echo "Ensuring $RC_LOCAL is executable..."
 sudo chmod +x "$RC_LOCAL"
 
-# Add the script to rc.local if not already present
-if ! grep -q "$DEST_SCRIPT" "$RC_LOCAL"; then
-    echo "Adding $DEST_SCRIPT to $RC_LOCAL..."
-    echo "$DEST_SCRIPT" | sudo tee -a "$RC_LOCAL" > /dev/null
+# Add the scripts to rc.local if not already present
+if ! grep -q "$DEST_SCRIPT1" "$RC_LOCAL"; then
+    echo "Adding $DEST_SCRIPT1 to $RC_LOCAL..."
+    echo "$DEST_SCRIPT1" | sudo tee -a "$RC_LOCAL" > /dev/null
+fi
+
+if ! grep -q "$DEST_SCRIPT2" "$RC_LOCAL"; then
+    echo "Adding $DEST_SCRIPT2 to $RC_LOCAL..."
+    echo "$DEST_SCRIPT2" | sudo tee -a "$RC_LOCAL" > /dev/null
 fi
 
 # Check if rc-local service is enabled
@@ -198,8 +217,7 @@ fi
 echo "Checking status of rc-local service..."
 systemctl status rc-local
 
-echo "Setup complete. The script $DEST_SCRIPT will run at startup."
-
+echo "Setup complete. The scripts $DEST_SCRIPT1 and $DEST_SCRIPT2 will run at startup."
 # Function to manage inside interfaces and remove gateway entries
 manage_inside_gw() {
     # Find the main interface with a connection name ending in '-inside'
