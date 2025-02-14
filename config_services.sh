@@ -1028,6 +1028,7 @@ else
     echo -e "${RED}SSHD jail is not functional or has current failures. Please check Fail2Ban configuration.${TEXTRESET}"
 fi
 echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
+sleep 2
 }
 # Call the configure_fail2ban function
 configure_fail2ban
