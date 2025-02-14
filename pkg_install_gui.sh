@@ -101,7 +101,7 @@ install_bind() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep2
+    sleep 2
 }
 # Function to install ISC KEA
 install_isc_kea() {
