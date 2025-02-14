@@ -363,6 +363,7 @@ echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 dnf -y update
 dnf -y install net-tools dmidecode ipcalc bind-utils
+clear
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
 sleep 4
 #!/usr/bin/env bash
@@ -376,6 +377,7 @@ fi
 # Run the package installation script and install speedtest
 curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash
 dnf -y install speedtest
+clear
 echo -e ${YELLOW}"The Installer will answer all questions for you ${RED}DO NOT type YES${TEXTRESET}"
 sleep 4
 # Create an expect script to automate the interaction with speedtest
@@ -390,7 +392,7 @@ HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cu
 HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
 
 echo -e ${GREEN}"Checking for Virtualtization Platform${TEXTRESET}"
-#Checking for VM platform-Install client
+sleep 2 #Checking for VM platform-Install client
 echo ${GREEN}"Installing VMGuest${TEXTRESET}"
 if [ "$HWKVM" = "KVM" ]; then
   echo -e ${GREEN}"KVM Platform detected ${TEXTRESET}"
