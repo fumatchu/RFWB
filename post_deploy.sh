@@ -5,9 +5,9 @@ RED="\033[0;31m"
 GREEN="\033[0;32m"
 TEXTRESET="\033[0m"
 
-
+#SETUP DNS
 # Function to manage inside interfaces and update DNS settings
-manage_inside_interfaces() {
+manage_inside_dns() {
     # Find the main interface with a connection name ending in '-inside'
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
@@ -41,7 +41,7 @@ manage_inside_interfaces() {
 }
 
 # Execute the function
-manage_inside_interfaces
+manage_inside_dns
 
 # Function to find the network interface based on connection name ending
 find_interface() {
@@ -201,7 +201,7 @@ systemctl status rc-local
 echo "Setup complete. The script $DEST_SCRIPT will run at startup."
 
 # Function to manage inside interfaces and remove gateway entries
-manage_inside_interfaces() {
+manage_inside_gw() {
     # Find the main interface with a connection name ending in '-inside'
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
@@ -230,7 +230,7 @@ manage_inside_interfaces() {
 }
 
 # Execute the function
-manage_inside_interfaces
+manage_inside_gw
 
 #Set Avahi on the inside interfaces 
 # Function to find the network interface based on connection name ending
