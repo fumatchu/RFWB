@@ -182,6 +182,7 @@ start_and_enable_service() {
         echo -e "${RED}Failed to start $service_name service.${TEXTRESET}"
         exit 1
     fi
+    sleep 2
 }
 
 # Main execution block
@@ -225,7 +226,8 @@ find_private_ip() {
 }
 
 configure_kea() {
-    echo -e "${YELLOW}Configuring Kea DHCP server...${TEXTRESET}"
+    clear 
+    echo -e "${GREEN}Configuring Kea DHCP server...${TEXTRESET}"
 
     # Get the network interface and its private IP
     interface=$(find_interface)
