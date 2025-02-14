@@ -5,6 +5,16 @@ RED="\033[0;31m"
 GREEN="\033[0;32m"
 TEXTRESET="\033[0m"
 
+#Update /etc/issue so we can see the hostname and IP address Before logging in
+rm -r -f /etc/issue
+touch /etc/issue
+cat <<EOF >/etc/issue
+\S
+Kernel \r on an \m
+Hostname: \n
+IP Address: \4
+EOF
+
 #SETUP DNS
 # Function to manage inside interfaces and update DNS settings
 manage_inside_dns() {
