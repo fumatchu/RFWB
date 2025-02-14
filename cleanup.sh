@@ -136,6 +136,83 @@ manage_inside_interfaces() {
 # Execute the function
 manage_inside_interfaces
 
+#Set Avahi on the insdie interfaces 
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Function to find sub-interfaces based on main interface
+find_sub_interfaces() {
+    local main_interface="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
+}
+
+# Find inside and outside interfaces
+INSIDE_INTERFACE=$(find_interface "-inside")
+OUTSIDE_INTERFACE=$(find_interface "-outside")
+
+echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
+echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
+
+# Find sub-interfaces for the inside interface
+SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+
+# Install Avahi and Avahi Tools
+echo -e "${YELLOW}Installing Avahi and Avahi Tools...${TEXTRESET}"
+sudo yum install -y avahi avahi-tools
+
+# Configure Avahi to enable mDNS reflection on internal interfaces
+echo -e "${YELLOW}Configuring Avahi to enable mDNS reflection...${TEXTRESET}"
+# Backup existing configuration
+sudo cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.bak
+
+# Create a list of interfaces for Avahi to listen on
+INTERFACES="$INSIDE_INTERFACE"
+for sub_interface in $SUB_INTERFACES; do
+    INTERFACES+=",${sub_interface}"
+done
+
+# Modify Avahi configuration
+sudo bash -c "cat > /etc/avahi/avahi-daemon.conf <<EOL
+[server]
+use-ipv4=yes
+use-ipv6=yes
+allow-interfaces=$INTERFACES
+
+[reflector]
+enable-reflector=yes
+EOL"
+
+# Start and enable Avahi service
+echo -e "${YELLOW}Starting and enabling Avahi service...${TEXTRESET}"
+sudo systemctl start avahi-daemon
+sudo systemctl enable avahi-daemon
+
+# Configure nftables to allow mDNS traffic on internal interfaces only
+echo -e "${YELLOW}Configuring nftables to allow mDNS traffic...${TEXTRESET}"
+# Ensure nftables table and chain exist
+sudo nft add table inet filter 2>/dev/null
+sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
+
+# Allow mDNS traffic on internal interfaces
+sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" udp dport 5353 accept
+for sub_interface in $SUB_INTERFACES; do
+    sudo nft add rule inet filter input iif "$sub_interface" udp dport 5353 accept
+done
+
+# Save the current ruleset
+echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+sudo nft list ruleset > /etc/sysconfig/nftables.conf
+
+# Enable and start nftables service to ensure configuration is loaded on boot
+echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"
+sudo systemctl enable nftables
+sudo systemctl start nftables
+
+echo -e "${GREEN}Setup complete. Avahi is configured for mDNS reflection on internal interfaces, and nftables are configured to allow mDNS traffic only on those interfaces.${TEXTRESET}"
+
 
 
 
