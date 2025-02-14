@@ -378,7 +378,7 @@ fi
 curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash
 dnf -y install speedtest
 clear
-echo -e ${YELLOW}"The Installer will answer all questions for you ${RED}DO NOT type YES${TEXTRESET}"
+echo -e ${YELLOW}"The script will answer the following question for you ${RED}DO NOT type YES${TEXTRESET}"
 sleep 4
 # Create an expect script to automate the interaction with speedtest
 /usr/bin/expect <<EOF
