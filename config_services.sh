@@ -795,6 +795,7 @@ start_and_enable_service "kea-dhcp4" "/etc/kea/kea-dhcp4.conf"
 start_and_enable_service "kea-dhcp-ddns" "/etc/kea/kea-dhcp-ddns.conf"
 
 #Cleanup-If using VLANS we need to make sure mulitple subents are accounted for in the named configuration
+echo -e "${GREEN}Double Checking Subnet Mapping for named${TEXTRESET}"
 # Define file paths and directories
 KEA_CONF="/etc/kea/kea-dhcp4.conf"
 NAMED_CONF="/etc/named.conf"
