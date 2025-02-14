@@ -699,7 +699,7 @@ read -p "Press Enter to install applications and services"
 /root/RFWB/config_services.sh
 /root/RFWB/enable_start_service_gui.sh
 /root/RFWB/set_external.sh
-/root/RFWB.post_deploy.sh
+/root/RFWB/post_deploy.sh
 
 
 echo -e "Continue script"
