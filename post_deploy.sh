@@ -245,6 +245,8 @@ EOF
 
 # Reload systemd, enable and start the timer
 sudo systemctl daemon-reload
+sudo systemctl enable rfwb-nft-threatlist.service
+sudo systemctl start rfwb-nft-threatlist.service
 sudo systemctl enable rfwb-nft-threatlist.timer
 sudo systemctl start rfwb-nft-threatlist.timer
 
