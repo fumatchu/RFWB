@@ -251,7 +251,7 @@ sudo systemctl start rfwb-nft-threatlist.timer
 echo -e "${GREEN}Threat list update service and timer configured successfully.${RESET}" | tee >(logger)
 
 # Run the threat list update script immediately
-echo -e "${YELLOW}Running the threat list update script...${RESET}" | tee >(logger)
+echo -e "${YELLOW}Running the threat list update script this may take a minute and the screen may look frozen...${RESET}" | tee >(logger)
 /usr/local/bin/update_nft_threatlist.sh
 
 # Validate the update
