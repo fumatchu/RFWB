@@ -52,6 +52,16 @@ manage_inside_dns() {
 
 # Execute the function
 manage_inside_dns
+##Load nftables with confguration and install threat lists 
+# Define variables for threat list management
+THREAT_LISTS=(
+    "https://iplists.firehol.org/files/firehol_level1.netset"
+    "https://www.abuseipdb.com/blacklist.csv"
+    "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+)
+BLOCK_SET="threat_block"
+TMP_DIR="/etc/nftables"
+TMP_FILE="$TMP_DIR/threat_list.txt"
 
 # Function to find the network interface based on connection name ending
 find_interface() {
@@ -65,24 +75,29 @@ find_sub_interfaces() {
     nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
 }
 
-#SETUP the FW ALLOW all inside interfaces and subinterfaces to talk and allow all of them Internet access
-# Find inside and outside interfaces
+# Setup the FW: Determine inside and outside interfaces
+echo -e "${YELLOW}Determining network interfaces...${RESET}" | tee >(logger)
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
-echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
+echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${RESET}" | tee >(logger)
+echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${RESET}" | tee >(logger)
+
+if [[ -z "$INSIDE_INTERFACE" || -z "$OUTSIDE_INTERFACE" ]]; then
+    echo -e "${RED}Error: Could not determine one or both interfaces. Please check your connection names.${RESET}" | tee >(logger)
+    exit 1
+fi
 
 # Find sub-interfaces for the inside interface
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Enable IP forwarding
-echo -e "${YELLOW}Enabling IP forwarding...${TEXTRESET}"
+echo -e "${YELLOW}Enabling IP forwarding...${RESET}" | tee >(logger)
 echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
 # Apply nftables ruleset
-echo -e "${YELLOW}Applying nftables ruleset...${TEXTRESET}"
+echo -e "${YELLOW}Applying nftables ruleset...${RESET}" | tee >(logger)
 
 # Create and configure the inet filter table if not exists
 sudo nft add table inet filter 2>/dev/null
@@ -99,7 +114,7 @@ sudo nft add rule inet filter input ct state established,related accept
 # Allow inbound traffic on the inside interface(s)
 sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    echo -e "${YELLOW}Allowing inbound traffic for sub-interface: $sub_interface${TEXTRESET}"
+    echo -e "${YELLOW}Allowing inbound traffic for sub-interface: $sub_interface${RESET}" | tee >(logger)
     sudo nft add rule inet filter input iif "$sub_interface" accept
 done
 
@@ -132,21 +147,120 @@ sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \
 sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
 # Log and drop unsolicited incoming traffic on the outside interface
-echo -e "${YELLOW}Logging and blocking unsolicited incoming traffic on the outside interface...${TEXTRESET}"
+echo -e "${YELLOW}Logging and blocking unsolicited incoming traffic on the outside interface...${RESET}" | tee >(logger)
 sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
 
-echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}"
+# Create a named set for threat blocking
+sudo nft add set inet filter $BLOCK_SET { type ipv4_addr\; flags timeout\; } 2>/dev/null
+
+# Add a rule to drop traffic from IPs in the threat list
+sudo nft add rule inet filter input ip saddr @$BLOCK_SET drop
+
+echo -e "${GREEN}nftables ruleset applied successfully.${RESET}" | tee >(logger)
 
 # Save the current ruleset
-echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+echo -e "${YELLOW}Saving the current nftables ruleset...${RESET}" | tee >(logger)
 sudo nft list ruleset > /etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
-echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"
+echo -e "${YELLOW}Enabling nftables service...${RESET}" | tee >(logger)
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}"
+echo -e "${GREEN}nftables ruleset applied and saved successfully.${RESET}" | tee >(logger)
+
+# Create the threat list update script
+cat << 'EOF' > /usr/local/bin/update_nft_threatlist.sh
+#!/bin/bash
+
+# Define variables
+THREAT_LISTS=(
+    "https://iplists.firehol.org/files/firehol_level1.netset"
+    "https://www.abuseipdb.com/blacklist.csv"
+    "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+)
+BLOCK_SET="threat_block"
+TMP_DIR="/etc/nftables"
+TMP_FILE="$TMP_DIR/threat_list.txt"
+
+# Ensure the directory exists
+mkdir -p $TMP_DIR
+
+# Clear the temporary file
+> $TMP_FILE
+
+# Download and combine threat lists
+for LIST_URL in "${THREAT_LISTS[@]}"; do
+    echo "Downloading $LIST_URL..." | tee >(logger)
+    curl -s $LIST_URL >> $TMP_FILE
+done
+
+# Extract only valid IP addresses
+grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' $TMP_FILE | sort -u > $TMP_FILE.cleaned
+
+# Create or update the named set in nftables
+sudo nft add table inet filter 2>/dev/null
+sudo nft add set inet filter $BLOCK_SET { type ipv4_addr\; flags timeout\; } 2>/dev/null
+
+# Clear the existing set elements
+sudo nft flush set inet filter $BLOCK_SET
+
+# Populate the set with IPs from the cleaned threat list
+while IFS= read -r ip; do
+    sudo nft add element inet filter $BLOCK_SET { $ip }
+done < $TMP_FILE.cleaned
+
+echo "Threat list updated successfully." | tee >(logger)
+EOF
+
+# Make the script executable
+chmod +x /usr/local/bin/update_nft_threatlist.sh
+
+# Create a systemd service file for the threat list update
+cat << EOF > /etc/systemd/system/rfwb-nft-threatlist.service
+[Unit]
+Description=RFWB NFTables Threat List Updater
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/update_nft_threatlist.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create a systemd timer to run the service daily at 4 AM
+cat << EOF > /etc/systemd/system/rfwb-nft-threatlist.timer
+[Unit]
+Description=Run RFWB NFTables Threat List Updater Daily
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Reload systemd, enable and start the timer
+sudo systemctl daemon-reload
+sudo systemctl enable rfwb-nft-threatlist.timer
+sudo systemctl start rfwb-nft-threatlist.timer
+
+echo -e "${GREEN}Threat list update service and timer configured successfully.${RESET}" | tee >(logger)
+
+# Run the threat list update script immediately
+echo -e "${YELLOW}Running the threat list update script...${RESET}" | tee >(logger)
+/usr/local/bin/update_nft_threatlist.sh
+
+# Validate the update
+if [[ $? -eq 0 ]]; then
+    echo -e "${GREEN}Threat list updated and loaded into nftables successfully.${RESET}" | tee >(logger)
+    echo -e "${GREEN}Threat list updates will run everyday at 4:00 (A.M.)"
+else
+    echo -e "${RED}Failed to update the threat list.${RESET}" | tee >(logger)
+fi
 
 
 #Move the IP EKF Check for Startup
