@@ -5,6 +5,15 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 RESET='\033[0m'
+#Function to install rfwb-portscan detection
+install_portscan() {
+
+
+
+
+
+sleep 2
+}
 # Function to install REQUIRED
 install_required() {
     clear
