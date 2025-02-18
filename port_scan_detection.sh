@@ -20,30 +20,36 @@ if [ ! -f "$BLOCKED_FILE" ]; then
     touch "$BLOCKED_FILE"
 fi
 
-# Ensure the internal networks configuration file exists and populate with RFC 1918 networks
-INTERNAL_NETWORKS_FILE="/etc/nftables/internal_networks.conf"
-if [ ! -f "$INTERNAL_NETWORKS_FILE" ]; then
-    echo "Creating internal networks configuration file with RFC 1918 networks."
-    cat <<EOF > "$INTERNAL_NETWORKS_FILE"
+# Ensure the ignore networks configuration file exists and populate with RFC 1918 networks
+IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
+if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
+    echo "Creating ignore networks configuration file with RFC 1918 networks."
+    cat <<EOF > "$IGNORE_NETWORKS_FILE"
+# Ignore file for rfwb-nft-portscan
+# The port scan detection will ignore any ip addresses or networks placed into this file
+# Network example
+# 192.168.210.0/24
+# Host example 192.168.210.10/32
+# Entries must be one per line
 192.168.0.0/16
 10.0.0.0/8
 172.16.0.0/12
 EOF
 
     # Verify if the file was created and populated correctly
-    if [ -f "$INTERNAL_NETWORKS_FILE" ]; then
-        echo "Internal networks configuration file created successfully."
+    if [ -f "$IGNORE_NETWORKS_FILE" ]; then
+        echo "Ignore networks configuration file created successfully."
     else
-        echo "Failed to create internal networks configuration file."
+        echo "Failed to create ignore networks configuration file."
         exit 1
     fi
 else
-    echo "Internal networks configuration file already exists."
+    echo "Ignore networks configuration file already exists."
 fi
 
 # Verify file content
-echo "Current contents of $INTERNAL_NETWORKS_FILE:"
-cat "$INTERNAL_NETWORKS_FILE"
+echo "Current contents of $IGNORE_NETWORKS_FILE:"
+cat "$IGNORE_NETWORKS_FILE"
 
 # Function to find the network interface based on connection name ending
 find_interface() {
@@ -68,9 +74,9 @@ fi
 
 echo "Protecting outside interface: $OUTSIDE_INTERFACE with IP: $EXTERNAL_IP"
 
-# Load internal networks from the configuration file
-INTERNAL_NETWORKS=$(cat "$INTERNAL_NETWORKS_FILE")
-echo "Using internal networks: $INTERNAL_NETWORKS"
+# Load ignore networks from the configuration file
+IGNORE_NETWORKS=$(cat "$IGNORE_NETWORKS_FILE")
+echo "Using ignore networks: $IGNORE_NETWORKS"
 
 # Prepare elements string for blocked IPs set if not empty
 ELEMENTS=""
@@ -172,12 +178,12 @@ systemctl daemon-reload
 systemctl enable nft-portscan.service
 systemctl start nft-portscan.service
 
-# Function to append unique IPs to the blocked file, ignoring internal networks
+# Function to append unique IPs to the blocked file, ignoring networks from ignore_networks.conf
 append_blocked_ip() {
     local ip="$1"
-    for internal_network in $INTERNAL_NETWORKS; do
-        if ipcalc -c "$ip" "$internal_network" >/dev/null 2>&1; then
-            echo "Ignoring internal IP $ip"
+    for ignore_network in $IGNORE_NETWORKS; do
+        if ipcalc -c "$ip" "$ignore_network" >/dev/null 2>&1; then
+            echo "Ignoring IP $ip from scanning"
             return
         fi
     done
