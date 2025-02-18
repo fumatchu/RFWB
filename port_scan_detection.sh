@@ -135,16 +135,18 @@ cat <<EOL >> "$NFT_CONF_FILE"
 EOL
 
 # Create a stop script to clean up nftables configuration
-STOP_SCRIPT="/usr/local/bin/nft-portscan-stop.sh"
+STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
 cat <<'EOF' > "$STOP_SCRIPT"
 #!/bin/bash
 echo "Flushing and removing dynamic block set, and resetting hosts.blocked file."
 
-# Flush and delete the dynamic block set
-nft flush set inet portscan dynamic_block
+# Flush all rules in the input chain to remove references to the set
+nft flush chain inet portscan input
+
+# Delete the dynamic block set
 nft delete set inet portscan dynamic_block
 
-# Optionally, delete the entire table if you want to remove all configurations
+# Delete the table to remove all configurations
 nft delete table inet portscan
 
 # Reset the hosts.blocked file
@@ -157,7 +159,7 @@ EOF
 chmod +x "$STOP_SCRIPT"
 
 # Create systemd service file
-SYSTEMD_SERVICE_FILE="/etc/systemd/system/nft-portscan.service"
+SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
 cat <<EOL > "$SYSTEMD_SERVICE_FILE"
 [Unit]
 Description=Port Scan Detection Service
@@ -175,8 +177,8 @@ EOL
 
 # Reload systemd and enable service
 systemctl daemon-reload
-systemctl enable nft-portscan.service
-systemctl start nft-portscan.service
+systemctl enable rfwb-portscan.service
+systemctl start rfwb-portscan.service
 
 # Function to append unique IPs to the blocked file, ignoring networks from ignore_networks.conf
 append_blocked_ip() {
