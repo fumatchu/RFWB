@@ -134,8 +134,7 @@ EOL
 
 # Add rules for the external IP, including common service ports 1-1000
 cat <<EOL >> "$NFT_CONF_FILE"
-    ip daddr $EXTERNAL_IP tcp dport { 20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995 } ct
-state new limit rate 3/minute log prefix "Port Scan Detected: " counter
+    ip daddr $EXTERNAL_IP tcp dport { 20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995 } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
 EOL
 
 cat <<EOL >> "$NFT_CONF_FILE"
