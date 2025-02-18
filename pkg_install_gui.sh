@@ -8,6 +8,9 @@ RESET='\033[0m'
 #Function to install rfwb-portscan detection
 install_portscan() {
 # Script to set up nftables for detecting and blocking port scans on Red Hat systems
+ clear
+ echo -e "${GREEN}Installing RFWB-Portscan Detection engine...${TEXTRESET}"
+ sleep 2
 # Ensure the script is run as root
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root"
