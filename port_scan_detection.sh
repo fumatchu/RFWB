@@ -123,16 +123,30 @@ cat <<EOL >> "$NFT_CONF_FILE"
     iifname $OUTSIDE_INTERFACE tcp flags syn limit rate 10/minute log prefix "Port Scan Detected: " counter
 EOL
 
-# Add rules for the external IP
+# Add rules for the external IP, including common service ports 1-1000
 cat <<EOL >> "$NFT_CONF_FILE"
-    ip daddr $EXTERNAL_IP tcp dport { 21, 23, 25, 53, 80, 110, 111, 135, 139, 143, 161, 443, 445, 993, 995, 1723, 3306, 3389, 5900, 8080 } ct state
- new limit rate 3/minute log prefix "Port Scan Detected: " counter
+    ip daddr $EXTERNAL_IP tcp dport { 20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995 } ct
+state new limit rate 3/minute log prefix "Port Scan Detected: " counter
 EOL
 
 cat <<EOL >> "$NFT_CONF_FILE"
   }
 }
 EOL
+
+# Create a pre-start script to log the outside interface and IP
+PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
+cat <<'EOF' > "$PRE_START_SCRIPT"
+#!/bin/bash
+
+OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '$2 ~ suffix {print $1}')
+EXTERNAL_IP=$(ip -4 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+
+echo "Starting service: Protecting outside interface: $OUTSIDE_INTERFACE with IP: $EXTERNAL_IP"
+EOF
+
+# Make the pre-start script executable
+chmod +x "$PRE_START_SCRIPT"
 
 # Create a stop script to clean up nftables configuration
 STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
@@ -166,6 +180,7 @@ Description=Port Scan Detection Service
 After=network.target
 
 [Service]
+ExecStartPre=$PRE_START_SCRIPT
 ExecStart=/usr/sbin/nft -f /etc/nftables/portscan.conf
 ExecStop=$STOP_SCRIPT
 Type=oneshot
@@ -205,7 +220,8 @@ journalctl -kf | while read -r line; do
         fi
     fi
 done &
-
+systemctl stop rfwb-portscan
+systemctl start rfwb-portscan
 echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
 echo "Blocked IPs are logged to $BLOCKED_FILE."
 
