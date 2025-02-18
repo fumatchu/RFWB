@@ -2028,6 +2028,7 @@ options=(
     7 "Install required Packages" on
     8 "Install Suricata (Only Suricata Engine)" off
     9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    10 "Install RFWB Portscan detection"
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2061,6 +2062,9 @@ for choice in $choices; do
         ;;
     9)
         install_elastic
+        ;;
+   10)
+        install_portscan
         ;;
 
     esac
