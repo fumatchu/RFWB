@@ -2028,7 +2028,7 @@ options=(
     7 "Install required Packages" on
     8 "Install Suricata (Only Suricata Engine)" off
     9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    10 "Install RFWB Portscan detection"
+    10 "Install RFWB Portscan detection" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
