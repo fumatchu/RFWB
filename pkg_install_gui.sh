@@ -2248,6 +2248,7 @@ options=(
     8 "Install Suricata (Only Suricata Engine)" off
     9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
     10 "Install RFWB Portscan detection" off
+    11 "Install SNMP Daemon" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2285,7 +2286,9 @@ for choice in $choices; do
    10)
         install_portscan
         ;;
-
+   11)
+        install_snmpd
+        ;;
     esac
 done
 
