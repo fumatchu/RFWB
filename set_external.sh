@@ -320,7 +320,7 @@ echo -e "${YELLOW}Running the threat list update script this may take a minute a
 # Validate the update
 if [[ $? -eq 0 ]]; then
     echo -e "${GREEN}Threat list updated and loaded into nftables successfully.${RESET}" | tee >(logger)
-    echo -e "${GREEN}Threat list updates will run everyday at 4:00 (A.M.)"
+    echo -e "${GREEN}Threat list updates will run everyday at 4:00 (A.M.)${RESET}"
 else
     echo -e "${RED}Failed to update the threat list.${RESET}" | tee >(logger)
 fi
