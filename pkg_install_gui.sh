@@ -209,8 +209,12 @@ if systemctl status snmpd | grep "active (running)" > /dev/null; then
 else
     echo -e "${RED}Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
 fi
-sleep 2
+# Continue with the rest of the script
+    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
+    sleep 2
 }
+
+
 #Function to install rfwb-portscan detection
 install_portscan() {
 # Script to set up nftables for detecting and blocking port scans on Red Hat systems
