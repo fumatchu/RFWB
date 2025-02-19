@@ -48,10 +48,10 @@ list_active_zones_and_policies() {
         else
             # Extract interfaces
             iface_line=${line#"  interfaces: "}
-            IFS=' ' read -r -a ifaces <<< "$iface_line"
+            IFS=' ' read -r -a ifaces <<<"$iface_line"
             interfaces=("${ifaces[@]}")
         fi
-    done <<< "$active_zones_info"
+    done <<<"$active_zones_info"
 
     # Print last zone and details
     if [[ -n $current_zone ]]; then

@@ -7,13 +7,13 @@ YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 clear
 # Ensure nmcli is installed
-if ! command -v nmcli &> /dev/null; then
+if ! command -v nmcli &>/dev/null; then
     echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
     exit 1
 fi
 
 # Ensure nftables is installed and running
-if ! command -v nft &> /dev/null; then
+if ! command -v nft &>/dev/null; then
     echo -e "${RED}nftables is not installed. Please install it and try again.${TEXTRESET}"
     exit 1
 fi
@@ -34,7 +34,7 @@ while IFS=: read -r name device type; do
     if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
         echo -e "${YELLOW}- $device ($name): Type $type${TEXTRESET}"
     fi
-done <<< "$connections"
+done <<<"$connections"
 
 # Check and modify autoconnect settings
 echo -e "\n${YELLOW}Modifying interfaces that are not set to autoconnect...${TEXTRESET}"
@@ -58,7 +58,7 @@ while IFS=: read -r name device type; do
             echo -e "${GREEN}Connection $name (Device: $device) is already set to autoconnect.${TEXTRESET}"
         fi
     fi
-done <<< "$connections"
+done <<<"$connections"
 
 echo -e "${GREEN}Completed checking and updating autoconnect settings.${TEXTRESET}"
 
@@ -96,7 +96,7 @@ while true; do
         break
     fi
 
-    sleep 0.5  # Check every 0.5 seconds
+    sleep 0.5 # Check every 0.5 seconds
 done
 
 # Function to find the outside interface
@@ -112,7 +112,7 @@ find_outside_interface() {
     echo "$outside_interface"
 }
 
-##Load nftables with confguration and install threat lists 
+##Load nftables with confguration and install threat lists
 # Define variables for threat list management
 THREAT_LISTS=(
     "https://iplists.firehol.org/files/firehol_level1.netset"
@@ -220,7 +220,7 @@ echo -e "${GREEN}nftables ruleset applied successfully.${RESET}" | tee >(logger)
 
 # Save the current ruleset
 echo -e "${YELLOW}Saving the current nftables ruleset...${RESET}" | tee >(logger)
-sudo nft list ruleset > /etc/sysconfig/nftables.conf
+sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
 echo -e "${YELLOW}Enabling nftables service...${RESET}" | tee >(logger)
@@ -231,7 +231,7 @@ echo -e "${GREEN}nftables ruleset applied and saved successfully.${RESET}" | tee
 echo -e "${YELLOW}The Next step may take a minute we are downloading updates, be pateient.${RESET}"
 echo -e "Creating and downloading threat lists for nftables"
 # Create the threat list update script
-cat << 'EOF' > /usr/local/bin/update_nft_threatlist.sh
+cat <<'EOF' >/usr/local/bin/update_nft_threatlist.sh
 #!/bin/bash
 
 # Define variables
@@ -278,7 +278,7 @@ EOF
 chmod +x /usr/local/bin/update_nft_threatlist.sh
 
 # Create a systemd service file for the threat list update
-cat << EOF > /etc/systemd/system/rfwb-nft-threatlist.service
+cat <<EOF >/etc/systemd/system/rfwb-nft-threatlist.service
 [Unit]
 Description=RFWB NFTables Threat List Updater
 After=network.target
@@ -292,7 +292,7 @@ WantedBy=multi-user.target
 EOF
 
 # Create a systemd timer to run the service daily at 4 AM
-cat << EOF > /etc/systemd/system/rfwb-nft-threatlist.timer
+cat <<EOF >/etc/systemd/system/rfwb-nft-threatlist.timer
 [Unit]
 Description=Run RFWB NFTables Threat List Updater Daily
 
@@ -324,4 +324,3 @@ if [[ $? -eq 0 ]]; then
 else
     echo -e "${RED}Failed to update the threat list.${RESET}" | tee >(logger)
 fi
-

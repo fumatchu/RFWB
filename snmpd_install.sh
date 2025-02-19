@@ -16,7 +16,7 @@ fi
 function validate_ip_or_network() {
     local ip_network=$1
     if [[ $ip_network =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$ ]]; then
-        IFS='/' read -r ip prefix <<< "$ip_network"
+        IFS='/' read -r ip prefix <<<"$ip_network"
         for octet in $(echo $ip | tr '.' ' '); do
             if ((octet < 0 || octet > 255)); then
                 echo -e "${RED}Invalid IP address or network: $ip_network${TEXTRESET}"
@@ -111,7 +111,7 @@ fi
 
 # Save nftables configuration
 echo -e "${YELLOW}Saving nftables configuration...${TEXTRESET}"
-nft list ruleset > /etc/sysconfig/nftables.conf
+nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Restart rfwb-portscan service if it was active
 if [ "$rfwb_status" == "active" ]; then
@@ -126,7 +126,7 @@ cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup
 # Create a new configuration file based on user input and the provided template
 echo -e "${YELLOW}Configuring SNMP...${TEXTRESET}"
 
-cat <<EOF > /etc/snmp/snmpd.conf
+cat <<EOF >/etc/snmp/snmpd.conf
 ###############################################################################
 # System contact information
 syslocation $syslocation
@@ -190,7 +190,7 @@ systemctl start snmpd
 systemctl enable snmpd
 
 # Validate that the service is running
-if systemctl status snmpd | grep "active (running)" > /dev/null; then
+if systemctl status snmpd | grep "active (running)" >/dev/null; then
     echo -e "${GREEN}SNMP service is running successfully.${TEXTRESET}"
 else
     echo -e "${RED}Failed to start SNMP service. Please check the configuration.${TEXTRESET}"

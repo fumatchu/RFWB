@@ -53,8 +53,6 @@ manage_inside_dns() {
 # Execute the function
 manage_inside_dns
 
-
-
 #Move the IP EKF Check for Startup
 # Move the IP EKF Check for Startup
 # Define paths
@@ -102,12 +100,12 @@ sudo chmod +x "$RC_LOCAL"
 # Add the scripts to rc.local if not already present
 if ! grep -q "$DEST_SCRIPT1" "$RC_LOCAL"; then
     echo "Adding $DEST_SCRIPT1 to $RC_LOCAL..."
-    echo "$DEST_SCRIPT1" | sudo tee -a "$RC_LOCAL" > /dev/null
+    echo "$DEST_SCRIPT1" | sudo tee -a "$RC_LOCAL" >/dev/null
 fi
 
 if ! grep -q "$DEST_SCRIPT2" "$RC_LOCAL"; then
     echo "Adding $DEST_SCRIPT2 to $RC_LOCAL..."
-    echo "$DEST_SCRIPT2" | sudo tee -a "$RC_LOCAL" > /dev/null
+    echo "$DEST_SCRIPT2" | sudo tee -a "$RC_LOCAL" >/dev/null
 fi
 
 # Check if rc-local service is enabled
@@ -166,7 +164,7 @@ manage_inside_gw() {
 # Execute the function
 manage_inside_gw
 
-#Set Avahi on the inside interfaces 
+#Set Avahi on the inside interfaces
 # Function to find the network interface based on connection name ending
 find_interface() {
     local suffix="$1"
@@ -234,7 +232,7 @@ done
 
 # Save the current ruleset
 echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
-sudo nft list ruleset > /etc/sysconfig/nftables.conf
+sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
 echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"

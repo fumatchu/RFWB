@@ -127,7 +127,7 @@ check_and_update_filebeat_ip() {
     changed=0
 
     echo -e "${YELLOW}Validating IP addresses in $config_file...${TEXTRESET}"
-    filebeat_host_ip=$(grep 'host:' "$config_file" | sed -n  's/.*"\([0-9.]*\):5601".*/\1/p')
+    filebeat_host_ip=$(grep 'host:' "$config_file" | sed -n 's/.*"\([0-9.]*\):5601".*/\1/p')
     filebeat_hosts_ip=$(grep 'hosts:' "$config_file" | sed -n 's/.*\["\([0-9.]*\):9200"\].*/\1/p')
 
     if [ -n "$filebeat_host_ip" ] && [ "$interface_ip" != "$filebeat_host_ip" ]; then

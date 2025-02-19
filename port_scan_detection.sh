@@ -9,7 +9,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Install nftables if not already installed
-if ! command -v nft &> /dev/null; then
+if ! command -v nft &>/dev/null; then
     echo "Installing nftables..."
     yum install -y nftables
 fi
@@ -24,7 +24,7 @@ fi
 IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
 if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
     echo "Creating ignore networks configuration file with RFC 1918 networks."
-    cat <<EOF > "$IGNORE_NETWORKS_FILE"
+    cat <<EOF >"$IGNORE_NETWORKS_FILE"
 # Ignore file for rfwb-nft-portscan
 # The port scan detection will ignore any ip addresses or networks placed into this file
 # Network example
@@ -92,7 +92,7 @@ mkdir -p "$NFT_CONF_DIR"
 NFT_CONF_FILE="$NFT_CONF_DIR/portscan.conf"
 
 # Clear the configuration file before writing new rules
-cat <<EOL > "$NFT_CONF_FILE"
+cat <<EOL >"$NFT_CONF_FILE"
 table inet portscan {
   set dynamic_block {
     type ipv4_addr
@@ -102,12 +102,12 @@ EOL
 
 # Only add elements if there are IPs
 if [ -n "$ELEMENTS" ]; then
-cat <<EOL >> "$NFT_CONF_FILE"
+    cat <<EOL >>"$NFT_CONF_FILE"
     elements = { $ELEMENTS }
 EOL
 fi
 
-cat <<EOL >> "$NFT_CONF_FILE"
+cat <<EOL >>"$NFT_CONF_FILE"
   }
 
   chain input {
@@ -124,18 +124,18 @@ cat <<EOL >> "$NFT_CONF_FILE"
 EOL
 
 # Add rules for the external IP, including common service ports 1-1000
-cat <<EOL >> "$NFT_CONF_FILE"
+cat <<EOL >>"$NFT_CONF_FILE"
     ip daddr $EXTERNAL_IP tcp dport { 20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995 } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
 EOL
 
-cat <<EOL >> "$NFT_CONF_FILE"
+cat <<EOL >>"$NFT_CONF_FILE"
   }
 }
 EOL
 
 # Create a pre-start script to log the outside interface and IP
 PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
-cat <<'EOF' > "$PRE_START_SCRIPT"
+cat <<'EOF' >"$PRE_START_SCRIPT"
 #!/bin/bash
 
 OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '$2 ~ suffix {print $1}')
@@ -149,7 +149,7 @@ chmod +x "$PRE_START_SCRIPT"
 
 # Create a stop script to clean up nftables configuration
 STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
-cat <<'EOF' > "$STOP_SCRIPT"
+cat <<'EOF' >"$STOP_SCRIPT"
 #!/bin/bash
 echo "Flushing and removing dynamic block set, and resetting hosts.blocked file."
 
@@ -173,7 +173,7 @@ chmod +x "$STOP_SCRIPT"
 
 # Create systemd service file
 SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
-cat <<EOL > "$SYSTEMD_SERVICE_FILE"
+cat <<EOL >"$SYSTEMD_SERVICE_FILE"
 [Unit]
 Description=Port Scan Detection Service
 After=network.target
@@ -204,7 +204,7 @@ append_blocked_ip() {
         fi
     done
     if ! grep -q "^$ip$" "$BLOCKED_FILE"; then
-        echo "$ip" >> "$BLOCKED_FILE"
+        echo "$ip" >>"$BLOCKED_FILE"
         echo "Blocked IP $ip added to $BLOCKED_FILE"
         nft add element inet portscan dynamic_block { $ip }
     fi

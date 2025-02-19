@@ -6,7 +6,7 @@ RED="\033[0;31m"
 TEXTRESET="\033[0m"
 
 # Check if dialog is installed
-if ! command -v dialog &> /dev/null; then
+if ! command -v dialog &>/dev/null; then
     echo -e "${RED}Dialog is not installed. Please install it to use this script.${TEXTRESET}"
     exit 1
 fi
@@ -20,7 +20,7 @@ show_infobox() {
 # Function to check if a package is installed
 check_package_installed() {
     local package_name="$1"
-    if dnf list installed "$package_name" &> /dev/null; then
+    if dnf list installed "$package_name" &>/dev/null; then
         return 0
     else
         return 1

@@ -35,7 +35,6 @@ else
   exit 1
 fi
 
-
 cat <<EOF
 ${GREEN}**************************
 Please wait while we gather some files
@@ -61,7 +60,6 @@ mkdir /root/RFWB
 git clone https://github.com/fumatchu/RFWB.git /root/RFWB
 
 chmod 700 /root/RFWB/*
-
 
 clear
 echo ${RED}"Removing Git${TEXTRESET}"

@@ -6,7 +6,7 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 
-clear 
+clear
 echo -e "${GREEN}Configuring Services${TEXTRESET}"
 echo ""
 sleep 2
@@ -139,30 +139,30 @@ EOF
     chown named:named $forward_zone_file $reverse_zone_file
     chmod g+w /var/named
     # Define the file path
-RNDC_KEY_FILE="/etc/rndc.key"
+    RNDC_KEY_FILE="/etc/rndc.key"
 
-# Check if the file exists
-if [[ -f "$RNDC_KEY_FILE" ]]; then
-    # Change the ownership to 'named' user and group
-    chown named:named "$RNDC_KEY_FILE"
-    
-    # Set the permissions to 600
-    chmod 600 "$RNDC_KEY_FILE"
-    
-    echo "Permissions and ownership for $RNDC_KEY_FILE have been set."
-else
-    echo "Error: $RNDC_KEY_FILE does not exist."
-    exit 1
-fi
+    # Check if the file exists
+    if [[ -f "$RNDC_KEY_FILE" ]]; then
+        # Change the ownership to 'named' user and group
+        chown named:named "$RNDC_KEY_FILE"
 
-# Check SELinux status and provide guidance
-SELINUX_STATUS=$(getenforce)
-if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
-    echo "SELinux is currently set to $SELINUX_STATUS. If you experience access issues, consider verifying SELinux policies."
-else
-    echo "SELinux is enforcing. If you experience access issues, consider temporarily setting SELinux to permissive mode for testing:"
-    echo "setenforce 0  # Temporarily set SELinux to permissive mode for troubleshooting"
-fi
+        # Set the permissions to 600
+        chmod 600 "$RNDC_KEY_FILE"
+
+        echo "Permissions and ownership for $RNDC_KEY_FILE have been set."
+    else
+        echo "Error: $RNDC_KEY_FILE does not exist."
+        exit 1
+    fi
+
+    # Check SELinux status and provide guidance
+    SELINUX_STATUS=$(getenforce)
+    if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
+        echo "SELinux is currently set to $SELINUX_STATUS. If you experience access issues, consider verifying SELinux policies."
+    else
+        echo "SELinux is enforcing. If you experience access issues, consider temporarily setting SELinux to permissive mode for testing:"
+        echo "setenforce 0  # Temporarily set SELinux to permissive mode for troubleshooting"
+    fi
 
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
 }
@@ -226,7 +226,7 @@ find_private_ip() {
 }
 
 configure_kea() {
-    clear 
+    clear
     echo -e "${GREEN}Configuring Kea DHCP server...${TEXTRESET}"
 
     # Get the network interface and its private IP
@@ -243,72 +243,72 @@ configure_kea() {
         # Check if IP and prefix are valid
         [[ $ip =~ ^$n(\.$n){3}$ ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]
     }
-# Extract domain name from hostnamectl
+    # Extract domain name from hostnamectl
     domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
-while true; do
-    # Prompt user for network scheme until valid input is provided
     while true; do
-        read -p "Enter the network scheme (e.g., 192.168.1.0/24): " network_scheme
-        if validate_cidr "$network_scheme"; then
+        # Prompt user for network scheme until valid input is provided
+        while true; do
+            read -p "Enter the network scheme (e.g., 192.168.1.0/24): " network_scheme
+            if validate_cidr "$network_scheme"; then
+                break
+            else
+                echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
+            fi
+        done
+
+        # Extract network address and prefix length
+        IFS='/' read -r network_address prefix_length <<<"$network_scheme"
+
+        # Calculate default pool range and router address based on the network scheme
+        IFS='.' read -r net1 net2 net3 net4 <<<"$network_address"
+        default_pool_start="${net1}.${net2}.${net3}.10"
+        default_pool_end="${net1}.${net2}.${net3}.100"
+        default_router_address="${net1}.${net2}.${net3}.1"
+
+        # Prompt user for a friendly name for the subnet
+        read -p "Please provide a friendly name for this subnet: " description
+
+        # Prompt user to confirm or change the pool address range
+        echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
+        read -p "Is this range OK? (y/n): " confirm_pool
+        if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
+            read -p "Enter the desired pool start address: " pool_start
+            read -p "Enter the desired pool end address: " pool_end
+        else
+            pool_start="$default_pool_start"
+            pool_end="$default_pool_end"
+        fi
+
+        # Prompt user to confirm or change the router address
+        echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
+        read -p "Is this address OK? (y/n): " confirm_router
+        if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
+            read -p "Enter the desired router address: " router_address
+        else
+            router_address="$default_router_address"
+        fi
+
+        # Display the information for review
+        echo -e "\nReview the settings:"
+        echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
+        echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
+        echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
+        echo -e "Router Address: ${GREEN}$router_address${TEXTRESET}"
+        echo -e "NTP Server: ${GREEN}$dns_server_ip${TEXTRESET}"
+        echo -e "DNS Server: ${GREEN}$dns_server_ip${TEXTRESET}"
+        echo -e "Client suffix: ${GREEN}$domain${TEXTRESET}"
+        echo -e "Client Search Domain: ${GREEN}$domain${TEXTRESET}"
+
+        # Ask if the settings are correct
+        read -p "Are these settings correct? (y/n): " confirm_settings
+        if [[ "$confirm_settings" =~ ^[Yy]$ ]]; then
+            # If settings are correct, proceed with the script
             break
         else
-            echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
+            # If settings are not correct, loop and ask again
+            echo -e "\nLet's try again.\n"
         fi
     done
-
-    # Extract network address and prefix length
-    IFS='/' read -r network_address prefix_length <<< "$network_scheme"
-
-    # Calculate default pool range and router address based on the network scheme
-    IFS='.' read -r net1 net2 net3 net4 <<< "$network_address"
-    default_pool_start="${net1}.${net2}.${net3}.10"
-    default_pool_end="${net1}.${net2}.${net3}.100"
-    default_router_address="${net1}.${net2}.${net3}.1"
-
-    # Prompt user for a friendly name for the subnet
-    read -p "Please provide a friendly name for this subnet: " description
-
-    # Prompt user to confirm or change the pool address range
-    echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
-    read -p "Is this range OK? (y/n): " confirm_pool
-    if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
-        read -p "Enter the desired pool start address: " pool_start
-        read -p "Enter the desired pool end address: " pool_end
-    else
-        pool_start="$default_pool_start"
-        pool_end="$default_pool_end"
-    fi
-
-    # Prompt user to confirm or change the router address
-    echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
-    read -p "Is this address OK? (y/n): " confirm_router
-    if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
-        read -p "Enter the desired router address: " router_address
-    else
-        router_address="$default_router_address"
-    fi
-
-    # Display the information for review
-    echo -e "\nReview the settings:"
-    echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
-    echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
-    echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
-    echo -e "Router Address: ${GREEN}$router_address${TEXTRESET}"
-    echo -e "NTP Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-    echo -e "DNS Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-    echo -e "Client suffix: ${GREEN}$domain${TEXTRESET}"
-    echo -e "Client Search Domain: ${GREEN}$domain${TEXTRESET}"
-
-    # Ask if the settings are correct
-    read -p "Are these settings correct? (y/n): " confirm_settings
-    if [[ "$confirm_settings" =~ ^[Yy]$ ]]; then
-        # If settings are correct, proceed with the script
-        break
-    else
-        # If settings are not correct, loop and ask again
-        echo -e "\nLet's try again.\n"
-    fi
-done
 
     # Extract domain name from hostnamectl
     domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
@@ -459,10 +459,10 @@ EOF
 if [ -f "$KEA_CONF" ]; then
     echo -e "${GREEN}$KEA_CONF found. Proceeding with configuration...${TEXTRESET}"
     configure_kea
-    else
+else
     echo -e "${RED}$KEA_CONF not found. Skipping KEA-DHCP configuration.${TEXTRESET}"
 fi
-#Add additional Scopes if needed 
+#Add additional Scopes if needed
 # Path to the KEA DHCP4 configuration file
 KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
 
@@ -500,10 +500,10 @@ add_subnet() {
         done
 
         # Extract network address and prefix length
-        IFS='/' read -r network_address prefix_length <<< "$network_scheme"
+        IFS='/' read -r network_address prefix_length <<<"$network_scheme"
 
         # Calculate default pool range and router address based on the network scheme
-        IFS='.' read -r net1 net2 net3 net4 <<< "$network_address"
+        IFS='.' read -r net1 net2 net3 net4 <<<"$network_address"
         default_pool_start="${net1}.${net2}.${net3}.10"
         default_pool_end="${net1}.${net2}.${net3}.100"
         default_router_address="${net1}.${net2}.${net3}.1"
@@ -561,7 +561,8 @@ add_subnet() {
     new_id=$((last_id + 1))
 
     # Format the new subnet entry
-    new_subnet_entry=$(cat <<EOF
+    new_subnet_entry=$(
+        cat <<EOF
         ]
     },
     {
@@ -601,7 +602,7 @@ add_subnet() {
     }
 }
 EOF
-)
+    )
 
     # Create a temporary file to store the updated configuration
     tmpfile=$(mktemp)
@@ -617,7 +618,7 @@ EOF
             print lines[i]
         }
         print new_subnet
-    }' /etc/kea/kea-dhcp4.conf > "$tmpfile"
+    }' /etc/kea/kea-dhcp4.conf >"$tmpfile"
 
     # Replace the original configuration file with the updated one
     sudo mv "$tmpfile" /etc/kea/kea-dhcp4.conf
@@ -724,11 +725,11 @@ update_config() {
             next
         }
         { print }
-        ' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+        ' "$CONFIG_FILE" >"${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
 
         # Update the interfaces list in the configuration
         current_interfaces=$(grep -oP '(?<=\[)[^]]*' "$CONFIG_FILE" | tr -d '"')
-        IFS=',' read -ra interface_array <<< "$current_interfaces"
+        IFS=',' read -ra interface_array <<<"$current_interfaces"
 
         if [[ ! " ${interface_array[@]} " =~ " $iface1 " ]]; then
             interface_array+=("$iface1")
@@ -757,7 +758,7 @@ update_config() {
             next
         }
         { print }
-        ' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+        ' "$CONFIG_FILE" >"${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
     fi
 }
 
@@ -913,37 +914,36 @@ else
     exit 1
 fi
 
-
 configure_fail2ban() {
     echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
-# Define the original and new file paths
-ORIGINAL_FILE="/etc/fail2ban/jail.conf"
-JAIL_LOCAL_FILE="/etc/fail2ban/jail.local"
-SSHD_LOCAL_FILE="/etc/fail2ban/jail.d/sshd.local"
+    # Define the original and new file paths
+    ORIGINAL_FILE="/etc/fail2ban/jail.conf"
+    JAIL_LOCAL_FILE="/etc/fail2ban/jail.local"
+    SSHD_LOCAL_FILE="/etc/fail2ban/jail.d/sshd.local"
 
-# Copy the original jail.conf to jail.local
-echo -e "${YELLOW}Copying $ORIGINAL_FILE to $JAIL_LOCAL_FILE...${TEXTRESET}"
-cp -v "$ORIGINAL_FILE" "$JAIL_LOCAL_FILE"
+    # Copy the original jail.conf to jail.local
+    echo -e "${YELLOW}Copying $ORIGINAL_FILE to $JAIL_LOCAL_FILE...${TEXTRESET}"
+    cp -v "$ORIGINAL_FILE" "$JAIL_LOCAL_FILE"
 
-# Check if the copy was successful
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}Failed to copy file. Exiting.${TEXTRESET}"
-    exit 1
-fi
+    # Check if the copy was successful
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to copy file. Exiting.${TEXTRESET}"
+        exit 1
+    fi
 
-# Use sed to modify the jail.local file
-echo -e "${YELLOW}Modifying $JAIL_LOCAL_FILE to enable SSH jail...${TEXTRESET}"
-sed -i '/^\[sshd\]/,/^$/ s/#mode.*normal/&\nenabled = true/' "$JAIL_LOCAL_FILE"
+    # Use sed to modify the jail.local file
+    echo -e "${YELLOW}Modifying $JAIL_LOCAL_FILE to enable SSH jail...${TEXTRESET}"
+    sed -i '/^\[sshd\]/,/^$/ s/#mode.*normal/&\nenabled = true/' "$JAIL_LOCAL_FILE"
 
-# Check if the modification was successful
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}Failed to modify $JAIL_LOCAL_FILE. Exiting.${TEXTRESET}"
-    exit 1
-fi
+    # Check if the modification was successful
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to modify $JAIL_LOCAL_FILE. Exiting.${TEXTRESET}"
+        exit 1
+    fi
 
-# Create or overwrite the sshd.local file with the desired content
-echo -e "${YELLOW}Creating or modifying $SSHD_LOCAL_FILE...${TEXTRESET}"
-cat <<EOL > "$SSHD_LOCAL_FILE"
+    # Create or overwrite the sshd.local file with the desired content
+    echo -e "${YELLOW}Creating or modifying $SSHD_LOCAL_FILE...${TEXTRESET}"
+    cat <<EOL >"$SSHD_LOCAL_FILE"
 [sshd]
 enabled = true
 maxretry = 5
@@ -953,84 +953,82 @@ bantime.increment = true
 bantime.factor = 2
 EOL
 
-# Check if the file creation was successful
-if [[ $? -ne 0 ]]; then
-    echo -e "${RED}Failed to create or modify $SSHD_LOCAL_FILE. Exiting.${TEXTRESET}"
-    exit 1
-fi
-
-# Enable and start the Fail2Ban service
-echo -e "${YELLOW}Enabling Fail2Ban service...${TEXTRESET}"
-systemctl enable fail2ban
-
-echo -e "${YELLOW}Starting Fail2Ban service...${TEXTRESET}"
-systemctl start fail2ban
-sleep 5
-
-# Check the status of the Fail2Ban service
-echo -e "${YELLOW}Checking Fail2Ban service status...${TEXTRESET}"
-if systemctl status fail2ban | grep -q "active (running)"; then
-    echo -e "${GREEN}Fail2Ban is running.${TEXTRESET}"
-else
-    echo -e "${RED}Fail2Ban is not running. Checking SELinux configuration...${TEXTRESET}"
-
-    # Check SELinux status
-    selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
-
-    if [ "$selinux_status" == "enabled" ]; then
-        echo -e "${YELLOW}SELinux is enabled.${TEXTRESET}"
-
-        # Restore SELinux context for /etc/fail2ban/jail.local
-        echo -e "${YELLOW}Restoring SELinux context for /etc/fail2ban/jail.local...${TEXTRESET}"
-        restorecon -v /etc/fail2ban/jail.local
-
-        # Check SELinux denials for fail2ban-server
-        echo -e "${YELLOW}Checking SELinux denials for fail2ban-server...${TEXTRESET}"
-        denials=$(ausearch -m avc -ts recent | grep "fail2ban-server" | wc -l)
-
-        if [ "$denials" -gt 0 ]; then
-            echo -e "${RED}SELinux denials found for fail2ban-server. Creating a local policy module...${TEXTRESET}"
-
-            # Generate and install a local policy module to allow fail2ban access
-            ausearch -c 'fail2ban-server' --raw | audit2allow -M my-fail2banserver
-            semodule -X 300 -i my-fail2banserver.pp
-
-            echo -e "${GREEN}Custom SELinux policy module installed.${TEXTRESET}"
-        else
-            echo -e "${GREEN}No SELinux denials found for fail2ban-server.${TEXTRESET}"
-        fi
-    else
-        echo -e "${YELLOW}SELinux is not enabled.${TEXTRESET}"
+    # Check if the file creation was successful
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to create or modify $SSHD_LOCAL_FILE. Exiting.${TEXTRESET}"
+        exit 1
     fi
 
-    # Restart the Fail2Ban service after SELinux adjustments
-    echo -e "${YELLOW}Restarting Fail2Ban service...${TEXTRESET}"
-    systemctl restart fail2ban
+    # Enable and start the Fail2Ban service
+    echo -e "${YELLOW}Enabling Fail2Ban service...${TEXTRESET}"
+    systemctl enable fail2ban
 
-    # Check the Fail2Ban service status again
-    echo -e "${YELLOW}Re-checking Fail2Ban service status...${TEXTRESET}"
+    echo -e "${YELLOW}Starting Fail2Ban service...${TEXTRESET}"
+    systemctl start fail2ban
+    sleep 5
+
+    # Check the status of the Fail2Ban service
+    echo -e "${YELLOW}Checking Fail2Ban service status...${TEXTRESET}"
     if systemctl status fail2ban | grep -q "active (running)"; then
-        echo -e "${GREEN}Fail2Ban is now running after SELinux adjustments.${TEXTRESET}"
+        echo -e "${GREEN}Fail2Ban is running.${TEXTRESET}"
     else
-        echo -e "${RED}Fail2Ban is still not running. Further investigation may be required.${TEXTRESET}"
+        echo -e "${RED}Fail2Ban is not running. Checking SELinux configuration...${TEXTRESET}"
+
+        # Check SELinux status
+        selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
+
+        if [ "$selinux_status" == "enabled" ]; then
+            echo -e "${YELLOW}SELinux is enabled.${TEXTRESET}"
+
+            # Restore SELinux context for /etc/fail2ban/jail.local
+            echo -e "${YELLOW}Restoring SELinux context for /etc/fail2ban/jail.local...${TEXTRESET}"
+            restorecon -v /etc/fail2ban/jail.local
+
+            # Check SELinux denials for fail2ban-server
+            echo -e "${YELLOW}Checking SELinux denials for fail2ban-server...${TEXTRESET}"
+            denials=$(ausearch -m avc -ts recent | grep "fail2ban-server" | wc -l)
+
+            if [ "$denials" -gt 0 ]; then
+                echo -e "${RED}SELinux denials found for fail2ban-server. Creating a local policy module...${TEXTRESET}"
+
+                # Generate and install a local policy module to allow fail2ban access
+                ausearch -c 'fail2ban-server' --raw | audit2allow -M my-fail2banserver
+                semodule -X 300 -i my-fail2banserver.pp
+
+                echo -e "${GREEN}Custom SELinux policy module installed.${TEXTRESET}"
+            else
+                echo -e "${GREEN}No SELinux denials found for fail2ban-server.${TEXTRESET}"
+            fi
+        else
+            echo -e "${YELLOW}SELinux is not enabled.${TEXTRESET}"
+        fi
+
+        # Restart the Fail2Ban service after SELinux adjustments
+        echo -e "${YELLOW}Restarting Fail2Ban service...${TEXTRESET}"
+        systemctl restart fail2ban
+
+        # Check the Fail2Ban service status again
+        echo -e "${YELLOW}Re-checking Fail2Ban service status...${TEXTRESET}"
+        if systemctl status fail2ban | grep -q "active (running)"; then
+            echo -e "${GREEN}Fail2Ban is now running after SELinux adjustments.${TEXTRESET}"
+        else
+            echo -e "${RED}Fail2Ban is still not running. Further investigation may be required.${TEXTRESET}"
+        fi
     fi
-fi
 
-# Verify that the SSHD jail is running and functional
-echo -e "${YELLOW}Verifying SSHD jail status...${TEXTRESET}"
-sshd_status=$(fail2ban-client status sshd 2>&1)
+    # Verify that the SSHD jail is running and functional
+    echo -e "${YELLOW}Verifying SSHD jail status...${TEXTRESET}"
+    sshd_status=$(fail2ban-client status sshd 2>&1)
 
-if echo "$sshd_status" | grep -q "ERROR   NOK: ('sshd',)"; then
-    echo -e "${RED}SSHD jail failed to start. Please check Fail2Ban configuration.${TEXTRESET}"
-elif echo "$sshd_status" | grep -E "Banned IP list:" | sed 's/^[[:space:]]*`- //'; then
-    echo -e "${GREEN}SSHD jail is active and functional.${TEXTRESET}"
-else
-    echo -e "${RED}SSHD jail is not functional or has current failures. Please check Fail2Ban configuration.${TEXTRESET}"
-fi
-echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
-sleep 2
+    if echo "$sshd_status" | grep -q "ERROR   NOK: ('sshd',)"; then
+        echo -e "${RED}SSHD jail failed to start. Please check Fail2Ban configuration.${TEXTRESET}"
+    elif echo "$sshd_status" | grep -E "Banned IP list:" | sed 's/^[[:space:]]*`- //'; then
+        echo -e "${GREEN}SSHD jail is active and functional.${TEXTRESET}"
+    else
+        echo -e "${RED}SSHD jail is not functional or has current failures. Please check Fail2Ban configuration.${TEXTRESET}"
+    fi
+    echo -e "${GREEN}Fail2ban configuration complete.${TEXTRESET}"
+    sleep 2
 }
 # Call the configure_fail2ban function
 configure_fail2ban
-
-
