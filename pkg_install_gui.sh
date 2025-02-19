@@ -624,11 +624,22 @@ install_isc_kea() {
                 echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
             fi
         done
+         # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+  if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+  fi
         # Save the current nftables configuration
         sudo nft list ruleset > /etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
         echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+if [ "$rfwb_status" == "active" ]; then
+    echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+    systemctl start rfwb-portscan
+fi
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -688,11 +699,22 @@ install_cockpit() {
                 echo -e "${YELLOW}Rule already exists: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
             fi
         done
+       # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+  if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+  fi
         # Save the current nftables configuration
         sudo nft list ruleset > /etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
         echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+if [ "$rfwb_status" == "active" ]; then
+    echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+    systemctl start rfwb-portscan
+fi
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -759,11 +781,22 @@ install_webmin() {
                 echo -e "${YELLOW}Rule already exists: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
             fi
         done
+         # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+  if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+  fi
         # Save the current nftables configuration
         sudo nft list ruleset > /etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
         echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+if [ "$rfwb_status" == "active" ]; then
+    echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+    systemctl start rfwb-portscan
+fi
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -866,11 +899,22 @@ install_ntopng() {
                 echo -e "${YELLOW}Rule already exists: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
             fi
         done
+         # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+  if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+  fi
         # Save the current nftables configuration
         sudo nft list ruleset > /etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
         echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+if [ "$rfwb_status" == "active" ]; then
+    echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+    systemctl start rfwb-portscan
+fi
         # Show the added rules in the input chain
         echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
@@ -884,7 +928,7 @@ install_ntopng() {
     echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
     sleep 2
 }
-# Function to install NTOPNG
+# Function to install Suricata
 install_suricata() {
 clear
 echo -e "${YELLOW}Installing Suricata Engine${RESET}"
@@ -1458,14 +1502,25 @@ configure_nftables() {
     else
         echo -e "${YELLOW}Rule already exists: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
     fi
-    # Save the current nftables configuration
-    sudo nft list ruleset > /etc/sysconfig/nftables.conf
-    # Restart the nftables service to apply changes
-    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
-    sudo systemctl restart nftables
-    # Show the added rules in the input chain
-    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
-    sudo nft list chain inet filter input
+     # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+  if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+  fi
+        # Save the current nftables configuration
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+        sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+if [ "$rfwb_status" == "active" ]; then
+    echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+    systemctl start rfwb-portscan
+fi
+        # Show the added rules in the input chain
+        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+        sudo nft list chain inet filter input
 }
 
 # Main script execution
