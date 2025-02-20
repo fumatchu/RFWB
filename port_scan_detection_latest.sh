@@ -171,7 +171,16 @@ EOL
 }
 EOL
 
-    # Pre-start script to log the outside interface and IP
+    # Apply the new nftables configuration
+    /usr/sbin/nft -f "$NFT_CONF_FILE"
+
+    # Verify that the nftables configuration is applied
+    if ! nft list tables | grep -q "inet portscan"; then
+        echo "Error: The portscan table is not initialized. Exiting."
+        exit 1
+    fi
+
+    # Create a pre-start script to log the outside interface and IP
     PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
     cat <<EOF >"$PRE_START_SCRIPT"
 #!/bin/bash
@@ -200,6 +209,7 @@ while :; do
     # Check if nftables service is active
     if ! systemctl is-active --quiet nftables; then
         echo "\$(date): nftables service is not active. Waiting for nftables service..." >> "\$LOG_FILE"
+        systemctl start nftables
         sleep "\$delay"
         ((attempt++))
         delay=\$((delay * RETRY_MULTIPLIER))
@@ -315,6 +325,12 @@ EOL
 
 # Apply the new nftables configuration
 /usr/sbin/nft -f "\$NFT_CONF_FILE"
+
+# Verify that the nftables configuration is applied
+if ! nft list tables | grep -q "inet portscan"; then
+    echo "Error: The portscan table is not initialized. Exiting."
+    exit 1
+fi
 EOF
 
     # Make the handler script executable
@@ -326,6 +342,7 @@ EOF
 [Unit]
 Description=Port Scan Detection Service
 After=network-online.target
+Wants=network-online.target
 
 [Service]
 ExecStartPre=$PRE_START_SCRIPT
@@ -375,8 +392,7 @@ EOL
             fi
         fi
     done &
-    systemctl stop rfwb-portscan
-    systemctl start rfwb-portscan
+
     echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
     echo "Blocked IPs are logged to $BLOCKED_FILE."
 
