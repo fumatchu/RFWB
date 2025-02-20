@@ -250,7 +250,7 @@ INITIAL_DELAY=10
 RETRY_MULTIPLIER=2
 
 # Ports to monitor for port scan detection. Separate ports with commas.
-MONITORED_PORTS="20, 21, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995"
+MONITORED_PORTS="20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995"
 
 # Timeout for dynamically blocked IPs. Use 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days.
 # Set to '0' for no timeout (indefinitely).
