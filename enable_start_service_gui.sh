@@ -13,7 +13,7 @@ fi
 
 # Function to show an infobox message with a title
 show_infobox() {
-    dialog --title "Checking activated services" --infobox "$1" 5 50
+    dialog --title "Checking installed services" --infobox "$1" 5 70
     sleep 2
 }
 
@@ -44,11 +44,11 @@ enable_and_start_service() {
 }
 
 # Display a starting banner with a title
-dialog --title "Checking activated services" --infobox "Enabling and Starting services..." 5 50
+dialog --title "Checking activated services" --infobox "Enabling and Starting services..." 5 70
 sleep 3
 
 # Main script execution
-for service in webmin ntopng suricata filebeat kibana elasticsearch; do
+for service in netdata webmin ntopng suricata filebeat kibana elasticsearch; do
     if check_package_installed "$service"; then
         enable_and_start_service "$service"
     else
