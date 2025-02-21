@@ -434,11 +434,11 @@ configure_kea() {
     while true; do
         # Prompt user for network scheme until valid input is provided
         while true; do
-            read -p "Enter the network scheme (e.g., 192.168.1.0/24): " network_scheme
+            read -p "Enter the Network Scope (e.g., 192.168.1.0/24): " network_scheme
             if validate_cidr "$network_scheme"; then
                 break
             else
-                echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
+                echo -e "${RED}Invalid Network Scope. Please enter a valid CIDR notation.${TEXTRESET}"
             fi
         done
 
@@ -492,7 +492,7 @@ configure_kea() {
             break
         else
             # If settings are not correct, loop and ask again
-            echo -e "\nLet's try again.\n"
+            echo -e "\nConfigure Scope.\n"
         fi
     done
 
@@ -677,7 +677,7 @@ add_subnet() {
     while true; do
         # Prompt user for network scheme until valid input is provided
         while true; do
-            read -p "Enter the network scheme for the new subnet (e.g., 192.168.2.0/24): " network_scheme
+            read -p "Enter the DHCP Scope you would like to create (e.g., 192.168.2.0/24): " network_scheme
             if validate_cidr "$network_scheme"; then
                 break
             else
@@ -735,7 +735,7 @@ add_subnet() {
             break
         else
             # If settings are not correct, loop and ask again
-            echo -e "\n${RED}Let's try again.${TEXTRESET}\n"
+            echo -e "\n${RED}Configure Scope${TEXTRESET}\n"
         fi
     done
 
