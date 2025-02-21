@@ -14,7 +14,7 @@ fi
 # Function to show an infobox message with a title
 show_infobox() {
     dialog --title "Checking activated services" --infobox "$1" 5 50
-    sleep 3
+    sleep 2
 }
 
 # Function to check if a package is installed
@@ -86,5 +86,5 @@ fi
 
 if check_package_installed "ddclient"; then
     show_infobox "ddclient is installed. Please manually configure it for your DDNS requirements."
-    sleep 2
+    sleep 3
 fi
