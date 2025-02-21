@@ -227,7 +227,7 @@ echo -e "${YELLOW}Enabling nftables service...${RESET}" | tee >(logger)
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "${GREEN}nftables ruleset applied and saved successfully.${RESET}" | tee >(logger)
+echo -e "nftables ruleset applied and saved successfully." | tee >(logger)
 echo -e "The Next step may take a minute we are downloading updates, be patient."
 echo -e "Creating and downloading threat lists for nftables"
 # Create the threat list update script
@@ -313,9 +313,6 @@ sudo systemctl start rfwb-nft-threatlist.timer
 
 echo -e "${GREEN}Threat list update service and timer configured successfully.${RESET}" | tee >(logger)
 
-# Run the threat list update script immediately
-echo -e "Running the threat list update script this may take a minute and the screen may look frozen..." | tee >(logger)
-/usr/local/bin/update_nft_threatlist.sh
 
 # Validate the update
 if [[ $? -eq 0 ]]; then
