@@ -127,7 +127,6 @@ while true; do
 done
 
 # Function to set up nftables rules for NTP and Chrony on the inside interfaces
-setup_nftables_for_ntp_and_chrony() {
     # Ensure the nftables service is enabled and started
     sudo systemctl enable nftables
     sudo systemctl start nftables
@@ -190,7 +189,7 @@ setup_nftables_for_ntp_and_chrony() {
 }
 
 # Call the nftables setup function
-setup_nftables_for_ntp_and_chrony
+configure_time
 
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
