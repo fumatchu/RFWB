@@ -221,9 +221,7 @@ EOF
 }
 
 configure_bind() {
-     clear 
-     echo -e "${GREEN}Configuring BIND${TEXTRESET}"
-     sleep 2
+    
     # Extract domain and hostname
     full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
 
@@ -349,6 +347,7 @@ EOF
     fi
 
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
+    sleep 3
 }
 
 start_and_enable_service() {
@@ -370,6 +369,9 @@ start_and_enable_service() {
 }
 
 # Main execution block
+     clear 
+     echo -e "${GREEN}Configuring BIND${TEXTRESET}"
+     sleep 2
 if [ -f "$NAMED_CONF" ]; then
     echo -e "${GREEN}$NAMED_CONF found. Proceeding with configuration...${TEXTRESET}"
     generate_tsig_key
