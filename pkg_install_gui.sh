@@ -2568,6 +2568,7 @@ options=(
     9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
     10 "Install RFWB Portscan detection" off
     11 "Install SNMP Daemon" off
+    12 "Install Netdata" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
