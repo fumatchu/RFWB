@@ -10,7 +10,117 @@ clear
 echo -e "${GREEN}Configuring Services${TEXTRESET}"
 echo ""
 sleep 2
+configure_time () {
 
+clear
+echo -e "${GREEN}Configuring Time Service${TEXTRESET}"
+
+# Define the path to the chrony configuration file
+CHRONY_CONF="/etc/chrony.conf"
+TEMP_CONF="/tmp/chrony_temp.conf"
+
+# Backup the original configuration file
+cp $CHRONY_CONF ${CHRONY_CONF}.bak
+echo -e "${YELLOW}Backup of the original configuration file created.${TEXTRESET}"
+
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Function to find sub-interfaces based on main interface
+find_sub_interfaces() {
+    local main_interface="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
+}
+
+# Function to determine the IP addressing scheme for an interface
+find_ip_scheme() {
+    local interface="$1"
+    nmcli -t -f IP4.ADDRESS dev show $interface | grep -oP '\d+\.\d+\.\d+\.\d+/\d+'
+}
+
+# Determine inside interfaces
+INSIDE_INTERFACES=()
+INSIDE_INTERFACES+=($(find_interface "-inside"))
+
+# Determine sub-interfaces for each inside interface
+for iface in "${INSIDE_INTERFACES[@]}"; do
+    SUB_INTERFACES=($(find_sub_interfaces "$iface"))
+    INSIDE_INTERFACES+=("${SUB_INTERFACES[@]}")
+done
+
+# Collect all IP schemes for inside interfaces
+declare -A NETWORK_PREFIXES
+for iface in "${INSIDE_INTERFACES[@]}"; do
+    IP_SCHEME=$(find_ip_scheme "$iface")
+    if [[ $IP_SCHEME =~ ([0-9]+\.[0-9]+)\.[0-9]+\.[0-9]+/[0-9]+ ]]; then
+        NETWORK_PREFIXES["${BASH_REMATCH[1]}"]=1
+    fi
+done
+
+# Determine the appropriate allow statement
+ALLOW_STATEMENT=""
+if [[ ${#NETWORK_PREFIXES[@]} -eq 1 ]]; then
+    for prefix in "${!NETWORK_PREFIXES[@]}"; do
+        ALLOW_STATEMENT="${prefix}.0.0/16"
+    done
+else
+    ALLOW_STATEMENT="0.0.0.0/0"
+fi
+
+# Process the configuration file
+awk -v allow_statement="$ALLOW_STATEMENT" '
+    BEGIN { pool_added = 0 }
+    /^#allow .*$/ {
+        print "allow " allow_statement
+        next
+    }
+    /^server[[:space:]]+([0-9]{1,3}\.){3}[0-9]{1,3}.*$/ {
+        if (!pool_added) {
+            print "pool 2.rocky.pool.ntp.org iburst"
+            pool_added = 1
+        }
+        next
+    }
+    { print }
+' $CHRONY_CONF > $TEMP_CONF
+
+# Replace the original configuration with the modified one
+mv $TEMP_CONF $CHRONY_CONF
+echo -e "${YELLOW}Configuration file updated.${TEXTRESET}"
+
+# Set ownership and permissions
+chown root:root $CHRONY_CONF
+chmod 644 $CHRONY_CONF
+restorecon -v $CHRONY_CONF
+echo -e "${YELLOW}Permissions and SELinux context set.${TEXTRESET}"
+
+# Check if chronyd service is running
+if systemctl is-active --quiet chronyd; then
+    echo -e "${YELLOW}chronyd is running, restarting service...${TEXTRESET}"
+    systemctl restart chronyd
+else
+    echo -e "${YELLOW}chronyd is not running, starting service...${TEXTRESET}"
+    systemctl start chronyd
+fi
+
+# Check synchronization status
+while true; do
+    CHRONYC_OUTPUT=$(chronyc tracking)
+
+    if echo "$CHRONYC_OUTPUT" | grep -q "Leap status.*Not synchronised"; then
+        echo -e "${RED}System time is not synchronized. Retrying in 10 seconds...${TEXTRESET}"
+        sleep 10
+    else
+        echo -e "${GREEN}System time is synchronized.${TEXTRESET}"
+        break
+    fi
+done
+sleep 2
+}
+configure_time
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
