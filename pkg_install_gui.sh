@@ -1247,19 +1247,21 @@ install_suricata() {
     cpu_status=$?
 
     # Evaluate results
+    clear
     echo -e "${CYAN}\nSummary:${RESET}"
     if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
         echo -e "${GREEN}System meets the minimum requirements.${RESET}"
-        sleep 2
+        sleep 4
     else
         echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
         [ "$ram_status" -ne 0 ] && echo -e "${YELLOW}Please add more RAM.${RESET}"
         [ "$cpu_status" -ne 0 ] && echo -e "${YELLOW}Please add more CPUs.${RESET}"
-        sleep 2
+        sleep 3
         exit 1
     fi
 
     # Update the server
+    clear
     echo -e "${YELLOW}Updating the server...${TEXTRESET}"
     if sudo dnf update -y; then
         echo -e "${GREEN}Server updated successfully.${TEXTRESET}"
@@ -1274,6 +1276,7 @@ install_suricata() {
     sleep 2
     if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
         echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
+        sleep 2
     else
         echo -e "${RED}Failed to install essential packages.${TEXTRESET}"
         exit 1
