@@ -104,8 +104,6 @@ install_netdata() {
     sudo nft list chain inet filter input
 }
 
-# Main script execution
-install_netdata
 #Function to install snmpd
 install_snmpd() {
     clear
