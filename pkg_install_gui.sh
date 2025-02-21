@@ -458,7 +458,7 @@ table inet portscan {
 EOL
 
      # Only add elements if there are IPs
-    if [ -n "$ELEMENTS" ]; then
+     if [ -n "$ELEMENTS" ]; then
         cat <<EOL >>"$NFT_CONF_FILE"
     elements = { $ELEMENTS }
 EOL
@@ -609,7 +609,7 @@ if nft list tables | grep -q "inet portscan"; then
     nft delete table inet portscan
 fi
 
-# Regenerate nftables configuration file
+# Regenerate nftables configuration  file
 NFT_CONF_FILE="/etc/nftables/portscan.conf"
 cat <<EOL >"\$NFT_CONF_FILE"
 table inet portscan {
@@ -717,7 +717,6 @@ EOL
     echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
     sleep 4
 }
-
 
 # Function to install REQUIRED
 install_required() {
