@@ -12,6 +12,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 #Function to install Netdata
 install_netdata() {
+    clear
     echo -e "${YELLOW}Installing Netdata...${TEXTRESET}"
     sleep 2
     if ! sudo dnf -y update; then
