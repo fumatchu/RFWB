@@ -13,7 +13,7 @@ fi
 #Function to install Netdata
 install_netdata() {
     clear
-    echo -e "${YELLOW}Installing Netdata...${TEXTRESET}"
+    echo -e "${GREEN}Installing Netdata...${TEXTRESET}"
     sleep 2
     if ! sudo dnf -y update; then
         echo -e "${RED}System update failed. Exiting.${TEXTRESET}"
