@@ -15,7 +15,7 @@ configure_time () {
 
 clear
 echo -e "${GREEN}Configuring Time Service${TEXTRESET}"
-
+sleep 2
 # Define the path to the chrony configuration file
 CHRONY_CONF="/etc/chrony.conf"
 TEMP_CONF="/tmp/chrony_temp.conf"
@@ -188,9 +188,10 @@ done
     sudo nft list chain inet filter input
 }
 
-# Call the nftables setup function
+#Call Time Function
 configure_time
 
+#Configure BIND
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
@@ -220,6 +221,9 @@ EOF
 }
 
 configure_bind() {
+     clear 
+     echo -e "${GREEN}Configuring BIND${TEXTRESET}"
+     sleep 2
     # Extract domain and hostname
     full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
 
