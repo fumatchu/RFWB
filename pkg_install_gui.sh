@@ -10,7 +10,102 @@ if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root"
     exit 1
 fi
+#Function to install Netdata
+install_netdata() {
+    echo -e "${YELLOW}Updating the system...${TEXTRESET}"
+    if ! sudo dnf -y update; then
+        echo -e "${RED}System update failed. Exiting.${TEXTRESET}"
+        exit 1
+    fi
 
+    echo -e "${YELLOW}Installing EPEL repository...${TEXTRESET}"
+    if ! sudo dnf -y install epel-release; then
+        echo -e "${RED}EPEL repository installation failed. Exiting.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Enabling CodeReady Builder repository...${TEXTRESET}"
+    if ! sudo dnf config-manager --set-enabled crb; then
+        echo -e "${RED}Failed to enable CodeReady Builder repository. Exiting.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Installing required packages...${TEXTRESET}"
+    if ! sudo dnf -y install wget; then
+        echo -e "${RED}Required packages installation failed. Exiting.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}Downloading and executing Netdata installation script...${TEXTRESET}"
+    if wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; then
+        if ! sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive; then
+            echo -e "${RED}Netdata installation failed. Exiting.${TEXTRESET}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}Failed to download Netdata installation script. Exiting.${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Cleaning up temporary files...${TEXTRESET}"
+    rm -f /tmp/netdata-kickstart.sh
+
+    echo -e "${GREEN}Netdata installation completed successfully.${TEXTRESET}"
+
+    echo -e "${YELLOW}Locating inside interfaces...${TEXTRESET}"
+    inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    if [ -z "$inside_interfaces" ]; then
+        echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+
+    echo -e "${YELLOW}Configuring nftables rules for Netdata...${TEXTRESET}"
+
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
+    fi
+
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    for iface in $inside_interfaces; do
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 19999 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 19999 accept
+            echo -e "${GREEN}Rule added: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
+        fi
+    done
+
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+    fi
+
+    sudo nft list ruleset >/etc/sysconfig/nftables.conf
+
+    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+    sudo systemctl restart nftables
+
+    if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+        systemctl start rfwb-portscan
+    fi
+
+    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+    sudo nft list chain inet filter input
+}
+
+# Main script execution
+install_netdata
 #Function to install snmpd
 install_snmpd() {
     clear
@@ -2514,6 +2609,9 @@ for choice in $choices; do
         ;;
     11)
         install_snmpd
+        ;;
+    12)
+        install_netdata
         ;;
     esac
 done
