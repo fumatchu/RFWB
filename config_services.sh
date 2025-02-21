@@ -10,6 +10,7 @@ clear
 echo -e "${GREEN}Configuring Services${TEXTRESET}"
 echo ""
 sleep 2
+
 configure_time () {
 
 clear
@@ -18,6 +19,12 @@ echo -e "${GREEN}Configuring Time Service${TEXTRESET}"
 # Define the path to the chrony configuration file
 CHRONY_CONF="/etc/chrony.conf"
 TEMP_CONF="/tmp/chrony_temp.conf"
+
+# Check if /etc/chrony.conf exists
+if [ ! -f "$CHRONY_CONF" ]; then
+    echo -e "${YELLOW}/etc/chrony.conf not found. Exiting...${TEXTRESET}"
+    exit 0
+fi
 
 # Backup the original configuration file
 cp $CHRONY_CONF ${CHRONY_CONF}.bak
@@ -118,9 +125,73 @@ while true; do
         break
     fi
 done
-sleep 2
+
+# Function to set up nftables rules for NTP and Chrony on the inside interfaces
+setup_nftables_for_ntp_and_chrony() {
+    # Ensure the nftables service is enabled and started
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    # Create a filter table if it doesn't exist
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
+    fi
+
+    # Create an input chain if it doesn't exist
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    # Add rules to allow NTP and Chrony on the inside interfaces
+    for iface in "${INSIDE_INTERFACES[@]}"; do
+        # NTP rules
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 123 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" udp dport 123 accept
+            echo -e "${GREEN}Rule added: Allow NTP (UDP) on interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow NTP (UDP) on interface $iface${TEXTRESET}"
+        fi
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 123 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 123 accept
+            echo -e "${GREEN}Rule added: Allow NTP (TCP) on interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow NTP (TCP) on interface $iface${TEXTRESET}"
+        fi
+
+        # Chrony rules
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 323 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" udp dport 323 accept
+            echo -e "${GREEN}Rule added: Allow Chrony (UDP) on interface $iface${TEXTRESET}"
+        else
+            echo -e "${YELLOW}Rule already exists: Allow Chrony (UDP) on interface $iface${TEXTRESET}"
+        fi
+    done
+
+    # Check and handle rfwb-portscan service
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        systemctl stop rfwb-portscan
+    fi
+
+    # Save the current nftables configuration
+    sudo nft list ruleset >/etc/sysconfig/nftables.conf
+    # Restart the nftables service to apply changes
+    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+    sudo systemctl restart nftables
+    # Restart rfwb-portscan service if it was active
+    if [ "$rfwb_status" == "active" ]; then
+        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+        systemctl start rfwb-portscan
+    fi
+    # Show the added rules in the input chain
+    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+    sudo nft list chain inet filter input
 }
-configure_time
+
+# Call the nftables setup function
+setup_nftables_for_ntp_and_chrony
+
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
