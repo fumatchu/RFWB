@@ -12,7 +12,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 #Function to install Netdata
 install_netdata() {
-    echo -e "${YELLOW}Updating the system...${TEXTRESET}"
+    echo -e "${YELLOW}Installing Netdata...${TEXTRESET}"
+    sleep 2
     if ! sudo dnf -y update; then
         echo -e "${RED}System update failed. Exiting.${TEXTRESET}"
         exit 1
@@ -102,6 +103,8 @@ install_netdata() {
 
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
+    echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}"
+    sleep 4
 }
 
 #Function to install snmpd
@@ -303,8 +306,8 @@ EOF
         echo -e "${RED}Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
     fi
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+    echo -e "${GREEN}SNMP Daemon Install Complete...${TEXTRESET}"
+    sleep 4
 }
 
 #Function to install rfwb-portscan detection
@@ -710,7 +713,8 @@ EOL
     echo "Port scan events will be logged with the prefix 'Port Scan Detected:' in the system logs."
     echo "To view these logs, you can use a command such as: journalctl -xe | grep 'Port Scan Detected'"
 
-    sleep 2
+    echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
+    sleep 4
 }
 
 
@@ -725,7 +729,7 @@ install_required() {
     dnf -y update
     dnf -y install ntsysv iptraf fail2ban tuned
     echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
-    sleep 2
+    sleep 4
 }
 # Function to install ddns
 install_ddclient() {
@@ -734,7 +738,7 @@ install_ddclient() {
     sleep 2
     dnf -y install ddclient
     echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
-    sleep 2
+    sleep 4
 }
 # Function to install BIND
 install_bind() {
@@ -822,8 +826,9 @@ install_bind() {
     setup_nftables_for_dns
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+    echo -e "${GREEN}BIND Install Complete...${TEXTRESET}"
+    sleep 4
+    
 }
 # Function to install ISC KEA
 install_isc_kea() {
@@ -914,8 +919,8 @@ install_isc_kea() {
     setup_nftables_for_dhcp
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+    echo -e "${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
+    sleep 4
 }
 # Function to install COCKPIT
 install_cockpit() {
@@ -993,8 +998,8 @@ install_cockpit() {
     systemctl start cockpit.socket
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+     echo -e "${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    sleep 4
 }
 # Function to install WEBMIN
 install_webmin() {
@@ -1071,8 +1076,8 @@ install_webmin() {
     setup_nftables_for_webmin
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+     echo -e "${GREEN}Webmin Install Complete...${TEXTRESET}"
+    sleep 4
 }
 # Function to install NTOPNG
 install_ntopng() {
@@ -1189,8 +1194,8 @@ install_ntopng() {
     setup_nftables_for_ntopng
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+     echo -e "${GREEN}ntopng Install Complete...${TEXTRESET}"
+    sleep 4
 }
 # Function to install Suricata
 install_suricata() {
@@ -1576,12 +1581,11 @@ iled|E: logopenfile
         exit 1
     fi
 
-    echo -e "${GREEN}suricata completed successfully.${TEXTRESET}"
-    echo -e "${GREEN}Continuing with the rest of the script...${TEXTRESET}"
-    sleep 2
+    echo -e "${GREEN}Suricata Install Complete...${TEXTRESET}"
+    sleep 4
 }
 
-# Function to install REQUIRED
+# Function to install ElasticSearch
 install_elastic() {
     # Inform the user that the process is starting
     clear
@@ -1718,8 +1722,6 @@ EOF
 
         echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
         configure_jvm_heap
-
-        echo -e "${GREEN}Configuration complete. Please restart the Elasticsearch service to apply changes.${TEXTRESET}"
     }
 
     # Run the main function
@@ -1846,8 +1848,8 @@ EOF
         check_status
 
         # Continue with further steps if needed
-        echo -e "${GREEN}Elasticsearch is running. Proceeding...${TEXTRESET}"
-        # Add additional script actions here
+        echo -e "${GREEN}Elasticsearch Install Complete...${TEXTRESET}"
+        sleep 4
     }
 
     # Run the main function
@@ -2541,13 +2543,13 @@ EOF
     start_filebeat_service
     check_filebeat_status
     clear
-    echo -e "${GREEN}Filebeat Suricata module setup and configuration completed successfully.${TEXTRESET}"
+    echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
     echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
     echo -e
     echo -e "Your generated password for this installation is located in the file /root/elastic_password"
     echo -e "The password is:"
     cat /root/elastic_password
-    echo -e "If you wish to change this password you can do so using FW-Manager after the system is fully operational"
+    echo " "
     echo -e "One last step to get your dashboards are to login to Kibana http://localhost:5601 (the dashboard you logged into earlier),"
     echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
     echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
