@@ -586,11 +586,12 @@ table inet portscan {
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
 
+    # Accept packets to ignored ports
+    ip daddr $EXTERNAL_IP tcp dport != { \$IGNORED_PORTS } accept
+    
     # Use configured ports for detection
     ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute burst 5 packets log prefix "Port Scan Detected: " counter
 
-    # Accept packets to ignored ports
-    ip daddr $EXTERNAL_IP tcp dport != { \$IGNORED_PORTS } accept
 
     # Detect SYN packets from untrusted sources on the outside interface
     iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute burst 5 packets log prefix "Port Scan Detected: " counter
