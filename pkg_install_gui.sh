@@ -583,12 +583,12 @@ table inet portscan {
     # Allow established and related connections
     ct state established,related accept
 
+    # Accept packets to ignored ports
+    ip daddr $EXTERNAL_IP tcp dport != { \$IGNORED_PORTS } accept
+
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
 
-    # Accept packets to ignored ports
-    ip daddr $EXTERNAL_IP tcp dport != { \$IGNORED_PORTS } accept
-    
     # Use configured ports for detection
     ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute burst 5 packets log prefix "Port Scan Detected: " counter
 
