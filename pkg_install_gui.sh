@@ -475,11 +475,13 @@ EOL
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
 
+    # Use configured ports for detection
+    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
+
     # Detect SYN packets from untrusted sources on the outside interface
     iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute log prefix "Port Scan Detected: " counter
 
-    # Use configured ports for detection
-    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
+    
   }
 }
 EOL
