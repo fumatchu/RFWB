@@ -594,7 +594,7 @@ table inet portscan {
 
 
     # Detect SYN packets from untrusted sources on the outside interface
-    iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute burst 5 packets log prefix "Port Scan Detected: " counter
+    iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute burst 20 packets log prefix "Port Scan Detected: " counter
   }
 }
 EOL
