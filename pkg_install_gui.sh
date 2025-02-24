@@ -584,7 +584,7 @@ table inet portscan {
     ct state established,related accept
 
     # Accept packets to ignored ports
-    ip daddr $EXTERNAL_IP tcp dport = { \$IGNORED_PORTS } accept
+    ip daddr $EXTERNAL_IP tcp dport == { \$IGNORED_PORTS } accept
 
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
