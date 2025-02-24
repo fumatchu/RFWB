@@ -583,11 +583,11 @@ table inet portscan {
     # Allow established and related connections
     ct state established,related accept
 
-    # Accept packets to ignored ports
-    ip daddr $EXTERNAL_IP tcp dport == { \$IGNORED_PORTS } accept
-
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
+
+     # Accept packets to ignored ports
+    ip daddr $EXTERNAL_IP tcp dport == { \$IGNORED_PORTS } accept
 
     # Use configured ports for detection
     ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 10/minute burst 20 packets log prefix "Port Scan Detected: " counter
@@ -667,7 +667,7 @@ echo "To view these logs, you can use a command such as: journalctl -xe | grep '
 
 echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
 sleep 4
-    
+
  #Install the monitoring service for RFWB
  #!/bin/bash
 
@@ -763,6 +763,7 @@ systemctl start rfwb-ps-mon.service
 # Confirm the service status
 echo "Verifying the service status..."
 systemctl status rfwb-ps-mon.service
+
 }
 
 
