@@ -357,14 +357,23 @@ EOF
     # Create or update the port ignore configuration file
     PORT_IGNORE_FILE="/etc/nftables/port_ignore.conf"
     if [ ! -f "$PORT_IGNORE_FILE" ]; then
-        echo "22" > "$PORT_IGNORE_FILE"  # Example: Ignore port 22 by default
+        cat <<EOF >"$PORT_IGNORE_FILE"
+# Port Ignore Configuration
+# List each port to be ignored on a separate line.
+# These ports will be excluded from SYN rate limiting.
+
+# Example:
+22
+80
+443
+EOF
     fi
 
     # Load configuration settings
     source "$CONFIG_FILE"
 
-    # Read ignored ports into a variable
-    IGNORED_PORTS=$(cat "$PORT_IGNORE_FILE" | tr '\n' ',' | sed 's/,$//')
+    # Read ignored ports into a variable, converting them into a comma-separated list
+    IGNORED_PORTS=$(awk 'NF {print $1}' "$PORT_IGNORE_FILE" | tr '\n' ',' | sed 's/,$//')
 
     # Ensure the hosts.blocked file exists
     BLOCKED_FILE="/etc/nftables/hosts.blocked"
@@ -693,6 +702,7 @@ EOL
 
     echo -e "Rocky Firewall Builder Port Scan Detection Complete..."
     sleep 4
+    
  #Install the monitoring service for RFWB
  #!/bin/bash
 
