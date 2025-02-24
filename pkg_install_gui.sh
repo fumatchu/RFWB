@@ -346,7 +346,7 @@ INITIAL_DELAY=10
 RETRY_MULTIPLIER=2
 
 # Ports to monitor for port scan detection. Separate ports with commas.
-MONITORED_PORTS="20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995"
+MONITORED_PORTS="20, 21, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995"
 
 # Timeout for dynamically blocked IPs. Use 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days.
 # Set to '0' for no timeout (indefinitely).
@@ -354,8 +354,17 @@ BLOCK_TIMEOUT="30m"
 EOF
     fi
 
+    # Create or update the port ignore configuration file
+    PORT_IGNORE_FILE="/etc/nftables/port_ignore.conf"
+    if [ ! -f "$PORT_IGNORE_FILE" ]; then
+        echo "22" > "$PORT_IGNORE_FILE"  # Example: Ignore port 22 by default
+    fi
+
     # Load configuration settings
     source "$CONFIG_FILE"
+
+    # Read ignored ports into a variable
+    IGNORED_PORTS=$(cat "$PORT_IGNORE_FILE" | tr '\n' ',' | sed 's/,$//')
 
     # Ensure the hosts.blocked file exists
     BLOCKED_FILE="/etc/nftables/hosts.blocked"
@@ -478,10 +487,8 @@ EOL
     # Use configured ports for detection
     ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
 
-    # Detect SYN packets from untrusted sources on the outside interface
-    iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute log prefix "Port Scan Detected: " counter
-
-    
+    # Detect SYN packets from untrusted sources on the outside interface, excluding ignored ports
+    iifname "$OUTSIDE_INTERFACE" tcp dport != { $IGNORED_PORTS } tcp flags syn limit rate 10/minute log prefix "SYN Flood Detected: " counter
   }
 }
 EOL
@@ -610,7 +617,7 @@ if nft list tables | grep -q "inet portscan"; then
     nft delete table inet portscan
 fi
 
-# Regenerate nftables configuration  file
+# Regenerate nftables configuration file
 NFT_CONF_FILE="/etc/nftables/portscan.conf"
 cat <<EOL >"\$NFT_CONF_FILE"
 table inet portscan {
@@ -629,8 +636,8 @@ table inet portscan {
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
 
-    # Detect SYN packets from untrusted sources on the outside interface
-    iifname "\$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute log prefix "Port Scan Detected: " counter
+    # Detect SYN packets from untrusted sources on the outside interface, excluding ignored ports
+    iifname "\$OUTSIDE_INTERFACE" tcp dport != { $IGNORED_PORTS } tcp flags syn limit rate 10/minute log prefix "SYN Flood Detected: " counter
 
     # Use configured ports for detection
     ip daddr \$EXTERNAL_IP tcp dport { \$MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
@@ -653,7 +660,7 @@ EOF
 
     # Create systemd service file
     SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
-    cat <<EOL  >"$SYSTEMD_SERVICE_FILE"
+    cat <<EOL >"$SYSTEMD_SERVICE_FILE"
 [Unit]
 Description=Port Scan Detection Service
 After=network-online.target
@@ -677,7 +684,6 @@ EOL
     systemctl enable rfwb-portscan.service
     systemctl start rfwb-portscan.service
 
-
     echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
     echo "Blocked IPs are logged to $BLOCKED_FILE."
 
@@ -685,10 +691,9 @@ EOL
     echo "Port scan events will be logged with the prefix 'Port Scan Detected:' in the system logs."
     echo "To view these logs, you can use a command such as: journalctl -xe | grep 'Port Scan Detected'"
 
-    echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
+    echo -e "Rocky Firewall Builder Port Scan Detection Complete..."
     sleep 4
-    
-    #Install the monitoring service for RFWB
+ #Install the monitoring service for RFWB
  #!/bin/bash
 
 # Define variables
@@ -784,6 +789,7 @@ systemctl start rfwb-ps-mon.service
 echo "Verifying the service status..."
 systemctl status rfwb-ps-mon.service
 }
+install_portscan
 
 # Function to install REQUIRED
 install_required() {
