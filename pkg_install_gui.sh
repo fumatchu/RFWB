@@ -590,7 +590,7 @@ table inet portscan {
     ip saddr @dynamic_block drop
 
     # Use configured ports for detection
-    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute burst 5 packets log prefix "Port Scan Detected: " counter
+    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 10/minute burst 20 packets log prefix "Port Scan Detected: " counter
 
 
     # Detect SYN packets from untrusted sources on the outside interface
