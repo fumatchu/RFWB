@@ -799,7 +799,7 @@ systemctl start rfwb-ps-mon.service
 echo "Verifying the service status..."
 systemctl status rfwb-ps-mon.service
 }
-install_portscan
+
 
 # Function to install REQUIRED
 install_required() {
