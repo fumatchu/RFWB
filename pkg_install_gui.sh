@@ -313,27 +313,28 @@ EOF
 
 #Function to install rfwb-portscan detection
 install_portscan() {
-    # Script to set up nftables for detecting and blocking port scans on Red Hat systems
-    clear
-    echo -e "Installing RFWB-Portscan Detection engine..."
-    sleep 2
+#!/bin/bash
+# Script to set up nftables for detecting and blocking port scans on Red Hat systems
+clear
+echo -e "Installing RFWB-Portscan Detection engine..."
+sleep 2
 
-    # Ensure the script is run as root
-    if [[ $EUID -ne 0 ]]; then
-        echo "This script must be run as root"
-        exit 1
-    fi
+# Ensure the script is run as root
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root"
+    exit 1
+fi
 
-    # Install nftables if not already installed
-    if ! command -v nft &>/dev/null; then
-        echo "Installing nftables..."
-        yum install -y nftables
-    fi
+# Install nftables if not already installed
+if ! command -v nft &>/dev/null; then
+    echo "Installing nftables..."
+    yum install -y nftables
+fi
 
-    # Create or update the configuration file for user settings
-    CONFIG_FILE="/etc/rfwb-portscan.conf"
-    if [ ! -f "$CONFIG_FILE" ]; then
-        cat <<EOF >"$CONFIG_FILE"
+# Create or update the configuration file for user settings
+CONFIG_FILE="/etc/rfwb-portscan.conf"
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat <<EOF >"$CONFIG_FILE"
 # Configuration file for RFWB-Portscan service
 
 # Maximum number of retries to obtain an external IP address. Set to 0 for infinite retries.
@@ -346,46 +347,28 @@ INITIAL_DELAY=10
 RETRY_MULTIPLIER=2
 
 # Ports to monitor for port scan detection. Separate ports with commas.
-MONITORED_PORTS="20, 21, 23, 25, 53, 67, 68, 69, 80, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 443, 445, 465, 514, 515, 587, 631, 636, 993, 995"
+MONITORED_PORTS="20, 21, 23, 25, 53, 67, 68, 69, 110, 111, 119, 135, 137, 138, 139, 143, 161, 162, 179, 389, 445, 465, 514, 515, 587, 631, 636, 993, 995"
 
 # Timeout for dynamically blocked IPs. Use 's' for seconds, 'm' for minutes, 'h' for hours, 'd' for days.
 # Set to '0' for no timeout (indefinitely).
 BLOCK_TIMEOUT="30m"
 EOF
-    fi
+fi
 
-    # Create or update the port ignore configuration file
-    PORT_IGNORE_FILE="/etc/nftables/port_ignore.conf"
-    if [ ! -f "$PORT_IGNORE_FILE" ]; then
-        cat <<EOF >"$PORT_IGNORE_FILE"
-# Port Ignore Configuration
-# List each port to be ignored on a separate line.
-# These ports will be excluded from SYN rate limiting.
+# Load configuration settings
+source "$CONFIG_FILE"
 
-# Example:
-22
-80
-443
-EOF
-    fi
+# Ensure the hosts.blocked file exists
+BLOCKED_FILE="/etc/nftables/hosts.blocked"
+if [ ! -f "$BLOCKED_FILE" ]; then
+    touch "$BLOCKED_FILE"
+fi
 
-    # Load configuration settings
-    source "$CONFIG_FILE"
-
-    # Read ignored ports into a variable, converting them into a comma-separated list
-    IGNORED_PORTS=$(awk 'NF {print $1}' "$PORT_IGNORE_FILE" | tr '\n' ',' | sed 's/,$//')
-
-    # Ensure the hosts.blocked file exists
-    BLOCKED_FILE="/etc/nftables/hosts.blocked"
-    if [ ! -f "$BLOCKED_FILE" ]; then
-        touch "$BLOCKED_FILE"
-    fi
-
-    # Ensure the ignore networks configuration file exists and populate with RFC 1918 networks
-    IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
-    if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
-        echo "Creating ignore networks configuration file with RFC 1918 networks."
-        cat <<EOF >"$IGNORE_NETWORKS_FILE"
+# Ensure the ignore networks configuration file exists and populate with RFC 1918 networks
+IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
+if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
+    echo "Creating ignore networks configuration file with RFC 1918 networks."
+    cat <<EOF >"$IGNORE_NETWORKS_FILE"
 # Ignore file for rfwb-nft-portscan
 # The port scan detection will ignore any IP addresses or networks placed into this file
 # Network example
@@ -397,123 +380,85 @@ EOF
 172.16.0.0/12
 EOF
 
-        # Verify if the file was created and populated correctly
-        if [ -f "$IGNORE_NETWORKS_FILE" ]; then
-            echo "Ignore networks configuration file created successfully."
-        else
-            echo "Failed to create ignore networks configuration file."
-            exit 1
-        fi
+    # Verify if the file was created and populated correctly
+    if [ -f "$IGNORE_NETWORKS_FILE" ]; then
+        echo "Ignore networks configuration file created successfully."
     else
-        echo "Ignore networks configuration file already exists."
-    fi
-
-    # Verify file content
-    echo "Current contents of $IGNORE_NETWORKS_FILE:"
-    cat "$IGNORE_NETWORKS_FILE"
-
-    # Function to find the network interface based on connection name ending
-    find_interface() {
-        local suffix="$1"
-        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-    }
-
-    # Determine the outside interface
-    OUTSIDE_INTERFACE=$(find_interface "-outside")
-
-    if [[ -z "$OUTSIDE_INTERFACE" ]]; then
-        echo "Error: Could not determine the outside interface. Please check your connection names."
+        echo "Failed to create ignore networks configuration file."
         exit 1
     fi
+else
+    echo "Ignore networks configuration file already exists."
+fi
 
-    # Retry mechanism to get the external IP address with exponential backoff
-    EXTERNAL_IP=""
-    attempt=1
-    delay=$INITIAL_DELAY
+# Verify file content
+echo "Current contents of $IGNORE_NETWORKS_FILE:"
+cat "$IGNORE_NETWORKS_FILE"
 
-    while :; do
-        EXTERNAL_IP=$(ip -4 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
-        if [[ -n "$EXTERNAL_IP" ]]; then
-            break
-        fi
-        if [[ $MAX_RETRIES -ne 0 && $attempt -gt $MAX_RETRIES ]]; then
-            echo "Error: Failed to determine the external IP address after $MAX_RETRIES attempts. Exiting."
-            exit 1
-        fi
-        echo "Attempt $attempt: Could not determine the external IP address for interface $OUTSIDE_INTERFACE. Retrying in $delay seconds..."
-        sleep "$delay"
-        ((attempt++))
-        delay=$((delay * RETRY_MULTIPLIER))
-    done
+# Ensure the ignore ports configuration file exists
+IGNORE_PORTS_FILE="/etc/nftables/ignore_ports.conf"
+if [ ! -f "$IGNORE_PORTS_FILE" ]; then
+    echo "Creating ignore ports configuration file."
+    echo "# Ports to ignore for port scan detection. Separate ports with commas." > "$IGNORE_PORTS_FILE"
+    echo "22, 80, 443" >> "$IGNORE_PORTS_FILE"  # Example default ports to ignore
+fi
 
-    echo "Protecting outside interface: $OUTSIDE_INTERFACE with IP: $EXTERNAL_IP"
-
-    # Load ignore networks from the configuration file
-    IGNORE_NETWORKS=$(cat "$IGNORE_NETWORKS_FILE")
-    echo "Using ignore networks: $IGNORE_NETWORKS"
-
-    # Prepare elements string for blocked IPs set if not empty
-    ELEMENTS=""
-    if [ -s "$BLOCKED_FILE" ]; then
-        ELEMENTS=$(sed ':a;N;$!ba;s/\n/, /g' "$BLOCKED_FILE")
-    fi
-
-    # Create nftables configuration directory
-    NFT_CONF_DIR="/etc/nftables"
-    mkdir -p "$NFT_CONF_DIR"
-
-    # Create nftables configuration file
-    NFT_CONF_FILE="$NFT_CONF_DIR/portscan.conf"
-
-    # Clear the configuration file before writing new rules
-    cat <<EOL >"$NFT_CONF_FILE"
-table inet portscan {
-  set dynamic_block {
-    type ipv4_addr
-    flags timeout
-    timeout $BLOCK_TIMEOUT
-EOL
-
-     # Only add elements if there are IPs
-     if [ -n "$ELEMENTS" ]; then
-        cat <<EOL >>"$NFT_CONF_FILE"
-    elements = { $ELEMENTS }
-EOL
-    fi
-
-    cat <<EOL >>"$NFT_CONF_FILE"
-  }
-
-  chain input {
-    type filter hook input priority 0; policy accept;
-
-    # Allow established and related connections
-    ct state established,related accept
-
-    # Drop packets from dynamically blocked IPs
-    ip saddr @dynamic_block drop
-
-    # Use configured ports for detection
-    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
-
-    # Detect SYN packets from untrusted sources on the outside interface, excluding ignored ports
-    iifname "$OUTSIDE_INTERFACE" tcp dport != { $IGNORED_PORTS } tcp flags syn limit rate 10/minute log prefix "SYN Flood Detected: " counter
-  }
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
 }
-EOL
 
-    # Apply the new nftables configuration
-    /usr/sbin/nft -f "$NFT_CONF_FILE"
+# Determine the outside interface
+OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-    # Verify that the nftables configuration is applied
-    if ! nft list tables | grep -q "inet portscan"; then
-        echo "Error: The portscan table is not initialized. Exiting."
+if [[ -z "$OUTSIDE_INTERFACE" ]]; then
+    echo "Error: Could not determine the outside interface. Please check your connection names."
+    exit 1
+fi
+
+# Retry mechanism to get the external IP address with exponential backoff
+EXTERNAL_IP=""
+attempt=1
+delay=$INITIAL_DELAY
+
+while :; do
+    EXTERNAL_IP=$(ip -4 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+    if [[ -n "$EXTERNAL_IP" ]]; then
+        break
+    fi
+    if [[ $MAX_RETRIES -ne 0 && $attempt -gt $MAX_RETRIES ]]; then
+        echo "Error: Failed to determine the external IP address after $MAX_RETRIES attempts. Exiting."
         exit 1
     fi
+    echo "Attempt $attempt: Could not determine the external IP address for interface $OUTSIDE_INTERFACE. Retrying in $delay seconds..."
+    sleep "$delay"
+    ((attempt++))
+    delay=$((delay * RETRY_MULTIPLIER))
+done
 
-    # Create a pre-start script to log the outside interface and IP
-    PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
-    cat <<EOF >"$PRE_START_SCRIPT"
+echo "Protecting outside interface: $OUTSIDE_INTERFACE with IP: $EXTERNAL_IP"
+
+# Load ignore networks from the configuration file
+IGNORE_NETWORKS=$(cat "$IGNORE_NETWORKS_FILE")
+echo "Using ignore networks: $IGNORE_NETWORKS"
+
+# Prepare elements string for blocked IPs set if not empty
+ELEMENTS=""
+if [ -s "$BLOCKED_FILE" ]; then
+    ELEMENTS=$(sed ':a;N;$!ba;s/\n/, /g' "$BLOCKED_FILE")
+fi
+
+# Create nftables configuration directory
+NFT_CONF_DIR="/etc/nftables"
+mkdir -p "$NFT_CONF_DIR"
+
+# Define the path to the nftables configuration file
+NFT_CONF_FILE="$NFT_CONF_DIR/portscan.conf"
+
+# Create a pre-start script to log the outside interface and IP
+PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
+cat <<EOF >"$PRE_START_SCRIPT"
 #!/bin/bash
 
 # Configuration for retry mechanism
@@ -532,7 +477,7 @@ delay=\$INITIAL_DELAY
 
 while :; do
     OUTSIDE_INTERFACE=\$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '\$2 ~ suffix {print \$1}')
-    EXTERNAL_IP=\$(ip -4 addr show "\$OUTSIDE_INTERFACE" | grep -oP  '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+    EXTERNAL_IP=\$(ip -4 addr show "\$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
 
     # Log the current state
     echo "\$(date): Attempt \$attempt - Interface: \$OUTSIDE_INTERFACE, IP: \$EXTERNAL_IP" >> "\$LOG_FILE"
@@ -567,12 +512,12 @@ echo "\$(date): Starting service: Protecting outside interface: \$OUTSIDE_INTERF
 logger "rfwb-portscan: Protecting outside interface: \$OUTSIDE_INTERFACE with IP: \$EXTERNAL_IP"
 EOF
 
-    # Make the pre-start script executable
-    chmod +x "$PRE_START_SCRIPT"
+# Make the pre-start script executable
+chmod +x "$PRE_START_SCRIPT"
 
-    # Create a stop script to clean up nftables configuration
-    STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
-    cat <<'EOF' >"$STOP_SCRIPT"
+# Create a stop script to clean up nftables configuration
+STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
+cat <<'EOF' >"$STOP_SCRIPT"
 #!/bin/bash
 echo "Flushing and removing dynamic block set, and resetting hosts.blocked file."
 
@@ -591,12 +536,12 @@ truncate -s 0 /etc/nftables/hosts.blocked
 echo "Dynamic block and configurations have been removed."
 EOF
 
-    # Make the stop script executable
-    chmod +x "$STOP_SCRIPT"
+# Make the stop script executable
+chmod +x "$STOP_SCRIPT"
 
-    # Create a custom handler script to manage start action
-    HANDLER_SCRIPT="/usr/local/bin/rfwb-portscan-handler.sh"
-    cat <<EOF >"$HANDLER_SCRIPT"
+# Create a custom handler script to manage start action
+HANDLER_SCRIPT="/usr/local/bin/rfwb-portscan-handler.sh"
+cat <<EOF >"$HANDLER_SCRIPT"
 #!/bin/bash
 
 # Source configuration file
@@ -607,12 +552,6 @@ else
     echo "Configuration file \$CONFIG_FILE not found. Using default settings."
 fi
 
-# Check if the script is called with a restart action
-if [[ "\$1" == "restart" ]]; then
-    echo "Error: Restart action is not supported. Please use systemctl start and stop verbs."
-    exit 1
-fi
-
 OUTSIDE_INTERFACE="\$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '\$2 ~ suffix {print \$1}')"
 EXTERNAL_IP="\$(ip -4 addr show "\$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)"
 
@@ -621,23 +560,25 @@ if [[ -z "\$OUTSIDE_INTERFACE" || -z "\$EXTERNAL_IP" ]]; then
     exit 1
 fi
 
-# Flush existing rules to prevent duplicates
-if nft list tables | grep -q "inet portscan"; then
-    nft delete table inet portscan
-fi
+# Function to generate nftables configuration
+generate_nft_config() {
+    # Load ignored ports from the configuration file, filtering out comments and empty lines
+    IGNORED_PORTS=\$(grep -v '^#' "/etc/nftables/ignore_ports.conf" | tr -d '[:space:]' | tr ',' ', ')
 
-# Regenerate nftables configuration file
-NFT_CONF_FILE="/etc/nftables/portscan.conf"
-cat <<EOL >"\$NFT_CONF_FILE"
+    # Log the ports being ignored
+    echo "Ignored ports: \$IGNORED_PORTS"
+
+    # Create nftables configuration file
+    cat <<EOL >"/etc/nftables/portscan.conf"
 table inet portscan {
   set dynamic_block {
     type ipv4_addr
     flags timeout
-    timeout \$BLOCK_TIMEOUT
+    timeout $BLOCK_TIMEOUT
   }
 
   chain input {
-    type filter hook input priority 0; policy accept;
+    type filter hook input priority filter; policy accept;
 
     # Allow established and related connections
     ct state established,related accept
@@ -645,17 +586,40 @@ table inet portscan {
     # Drop packets from dynamically blocked IPs
     ip saddr @dynamic_block drop
 
-    # Detect SYN packets from untrusted sources on the outside interface, excluding ignored ports
-    iifname "\$OUTSIDE_INTERFACE" tcp dport != { $IGNORED_PORTS } tcp flags syn limit rate 10/minute log prefix "SYN Flood Detected: " counter
-
     # Use configured ports for detection
-    ip daddr \$EXTERNAL_IP tcp dport { \$MONITORED_PORTS } ct state new limit rate 3/minute log prefix "Port Scan Detected: " counter
+    ip daddr $EXTERNAL_IP tcp dport { $MONITORED_PORTS } ct state new limit rate 3/minute burst 5 packets log prefix "Port Scan Detected: " counter
+
+    # Accept packets to ignored ports
+    ip daddr $EXTERNAL_IP tcp dport != { \$IGNORED_PORTS } accept
+
+    # Detect SYN packets from untrusted sources on the outside interface
+    iifname "$OUTSIDE_INTERFACE" tcp flags syn limit rate 10/minute burst 5 packets log prefix "Port Scan Detected: " counter
   }
 }
 EOL
 
-# Apply the new nftables configuration
-/usr/sbin/nft -f "\$NFT_CONF_FILE"
+    # Log the creation of the configuration file
+    if [ -f "/etc/nftables/portscan.conf" ]; then
+        echo "Configuration file created: /etc/nftables/portscan.conf"
+    else
+        echo "Error: Failed to create configuration file: /etc/nftables/portscan.conf"
+        exit 1
+    fi
+}
+
+# Flush existing rules to prevent duplicates
+if nft list tables | grep -q "inet portscan"; then
+    nft delete table inet portscan
+fi
+
+# Regenerate and apply nftables configuration
+generate_nft_config
+if /usr/sbin/nft -f "/etc/nftables/portscan.conf"; then
+    echo "nftables configuration applied successfully."
+else
+    echo "Error: Failed to apply nftables configuration."
+    exit 1
+fi
 
 # Verify that the nftables configuration is applied
 if ! nft list tables | grep -q "inet portscan"; then
@@ -664,12 +628,12 @@ if ! nft list tables | grep -q "inet portscan"; then
 fi
 EOF
 
-    # Make the handler script executable
-    chmod +x "$HANDLER_SCRIPT"
+# Make the handler script executable
+chmod +x "$HANDLER_SCRIPT"
 
-    # Create systemd service file
-    SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
-    cat <<EOL >"$SYSTEMD_SERVICE_FILE"
+# Create systemd service file
+SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
+cat <<EOL >"$SYSTEMD_SERVICE_FILE"
 [Unit]
 Description=Port Scan Detection Service
 After=network-online.target
@@ -688,20 +652,20 @@ RestartSec=10
 WantedBy=multi-user.target
 EOL
 
-    # Reload systemd and enable service
-    systemctl daemon-reload
-    systemctl enable rfwb-portscan.service
-    systemctl start rfwb-portscan.service
+# Reload systemd and enable service
+systemctl daemon-reload
+systemctl enable rfwb-portscan.service
+systemctl start rfwb-portscan.service
 
-    echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
-    echo "Blocked IPs are logged to $BLOCKED_FILE."
+echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
+echo "Blocked IPs are logged to $BLOCKED_FILE."
 
-    # Setup logging notifications
-    echo "Port scan events will be logged with the prefix 'Port Scan Detected:' in the system logs."
-    echo "To view these logs, you can use a command such as: journalctl -xe | grep 'Port Scan Detected'"
+# Setup logging notifications
+echo "Port scan events will be logged with the prefix 'Port Scan Detected:' in the system logs."
+echo "To view these logs, you can use a command such as: journalctl -xe | grep 'Port Scan Detected'"
 
-    echo -e "Rocky Firewall Builder Port Scan Detection Complete..."
-    sleep 4
+echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
+sleep 4
     
  #Install the monitoring service for RFWB
  #!/bin/bash
