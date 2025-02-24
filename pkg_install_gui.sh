@@ -312,7 +312,6 @@ EOF
 }
 
 #Function to install rfwb-portscan detection
-# Function to install rfwb-portscan detection
 install_portscan() {
     # Script to set up nftables for detecting and blocking port scans on Red Hat systems
     clear
@@ -676,36 +675,6 @@ EOL
     systemctl enable rfwb-portscan.service
     systemctl start rfwb-portscan.service
 
-    # Function to append unique IPs to the blocked file, ignoring networks from ignore_networks.conf
-    append_blocked_ip() {
-        local ip="$1"
-        for ignore_network in $IGNORE_NETWORKS; do
-            if ipcalc -c "$ip" "$ignore_network" >/dev/null 2>&1; then
-                echo "Ignoring IP $ip from scanning"
-                return
-            fi
-        done
-        if ! grep -q "^$ip$" "$BLOCKED_FILE"; then
-            echo "$ip" >>"$BLOCKED_FILE"
-            echo "Blocked IP $ip added to $BLOCKED_FILE"
-            # Ensure the table and set are correctly initialized before adding elements
-            if nft list tables | grep -q "inet portscan"; then
-                nft add element inet portscan dynamic_block { $ip }
-            else
-                echo "Error: The portscan table or dynamic_block set is not initialized."
-            fi
-        fi
-    }
-
-    # Monitor logs and update dynamic block
-    journalctl -kf | while read -r line; do
-        if [[ "$line" == *"Port Scan Detected:"* ]]; then
-            ip=$(echo "$line" | grep -oP '(?<=SRC=)\d+\.\d+\.\d+\.\d+')
-            if [[ -n "$ip" ]]; then
-                append_blocked_ip "$ip"
-            fi
-        fi
-    done &
 
     echo "nftables port scan detection and blocking service has been installed and started for the outside interface."
     echo "Blocked IPs are logged to $BLOCKED_FILE."
