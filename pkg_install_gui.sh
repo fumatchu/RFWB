@@ -197,7 +197,7 @@ EOF
     systemctl start rfwb-qos.service
     echo -e "${GREEN}Service enabled and started.${TEXTRESET}" | tee -a $LOG_FILE
 
-    echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "${GREEN}QOS Install Complete...${TEXTRESET}" | tee -a $LOG_FILE
     sleep 4
 }
 
