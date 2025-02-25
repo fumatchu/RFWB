@@ -4,7 +4,9 @@
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 TEXTRESET="\033[0m"
-
+#Install Voice QOS 
+echo -e ${GREEN} Install QOS for Voice...${TEXTRESET}
+sleep 4
 # Define the configuration and script paths
 CONFIG_FILE="/etc/rfwb-qos.conf"
 SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
@@ -207,3 +209,4 @@ create_service
 enable_service
 
 echo -e "${GREEN}Installation complete.${TEXTRESET}" | tee -a $LOG_FILE
+sleep 4
