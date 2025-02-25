@@ -14,7 +14,7 @@ fi
 install_qos() {
 echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
     sleep 2
-    dnf -y install bc jq 
+    dnf -y install bc jq iproute-tc
     # Define the configuration and script paths
     CONFIG_FILE="/etc/rfwb-qos.conf"
     SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
