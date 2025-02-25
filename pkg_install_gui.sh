@@ -15,6 +15,7 @@ install_qos() {
 #Install Voice QOS 
 echo -e ${GREEN} Install QOS for Voice...${TEXTRESET}
 sleep 4
+dnf -y install bc jq
 # Define the configuration and script paths
 CONFIG_FILE="/etc/rfwb-qos.conf"
 SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
@@ -173,8 +174,6 @@ configure_qos() {
     echo "QoS configuration applied to $OUTSIDE_INTERFACE." | tee -a $LOG_FILE
     tc -s class show dev $OUTSIDE_INTERFACE | tee -a $LOG_FILE
 }
-
-configure_qos
 EOF
     chmod +x $SCRIPT_FILE
     echo -e "${GREEN}QoS adjustment script created.${TEXTRESET}" | tee -a $LOG_FILE
