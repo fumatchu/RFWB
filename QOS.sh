@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Define color variables
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+TEXTRESET="\033[0m"
+
 # Define the configuration and script paths
 CONFIG_FILE="/etc/rfwb-qos.conf"
 SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
@@ -9,7 +14,7 @@ ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
 
 # Function to create a configuration file with default settings
 create_config() {
-    echo "Creating configuration file at $CONFIG_FILE..." | tee -a $LOG_FILE
+    echo -e "${GREEN}Creating configuration file at $CONFIG_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<EOF > $CONFIG_FILE
 # /etc/rfwb-qos.conf
 
@@ -24,7 +29,7 @@ h323_port = 1720
 webrtc_ports = 16384-32767
 mpeg_ts_port = 1234
 EOF
-    echo "Configuration file created." | tee -a $LOG_FILE
+    echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
 }
 
 # Function to find the network interface based on connection name ending
@@ -40,17 +45,17 @@ initial_setup() {
     OUTSIDE_INTERFACE=$(find_interface "-outside")
 
     if [ -z "$OUTSIDE_INTERFACE" ]; then
-        echo "No outside interface found. Exiting." | tee -a $LOG_FILE
+        echo -e "${RED}No outside interface found. Exiting.${TEXTRESET}" | tee -a $LOG_FILE
         exit 1
     fi
 
-    echo "Selected outside interface: $OUTSIDE_INTERFACE" | tee -a $LOG_FILE
+    echo -e "${GREEN}Selected outside interface: $OUTSIDE_INTERFACE${TEXTRESET}" | tee -a $LOG_FILE
 
     echo "Running speed test to measure current throughput. This may take a moment..." | tee -a $LOG_FILE
     speedtest_output=$(speedtest --format=json 2>>$ERROR_LOG_FILE)
 
     if [ $? -ne 0 ]; then
-        echo "Speedtest failed. Check the network connection and speedtest-cli installation." | tee -a $ERROR_LOG_FILE
+        echo -e "${RED}Speedtest failed. Check the network connection and speedtest-cli installation.${TEXTRESET}" | tee -a $ERROR_LOG_FILE
         exit 1
     fi
 
@@ -60,8 +65,8 @@ initial_setup() {
     DOWNLOAD_SPEED_KBIT=$(($DOWNLOAD_SPEED * 8 / 1000))
     UPLOAD_SPEED_KBIT=$(($UPLOAD_SPEED * 8 / 1000))
 
-    echo "Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s." | tee -a $LOG_FILE
-    echo "Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s." | tee -a $LOG_FILE
+    echo -e "${GREEN}Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "${GREEN}Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
 
     if [ "$DOWNLOAD_SPEED_KBIT" -lt 10000 ]; then
         R2Q_VALUE=1
@@ -71,18 +76,18 @@ initial_setup() {
         R2Q_VALUE=10
     fi
 
-    echo "Setting r2q value to $R2Q_VALUE based on the download throughput." | tee -a $LOG_FILE
+    echo -e "${GREEN}Setting r2q value to $R2Q_VALUE based on the download throughput.${TEXTRESET}" | tee -a $LOG_FILE
 
     read -p "Enter the percentage of bandwidth you want to reserve for voice and video applications: " PERCENTAGE
 
-    echo "Setting up with $PERCENTAGE% reserved bandwidth." | tee -a $LOG_FILE
+    echo -e "${GREEN}Setting up with $PERCENTAGE% reserved bandwidth.${TEXTRESET}" | tee -a $LOG_FILE
 
     create_config
 }
 
 # Step 3: Create the QoS adjustment script
 create_script() {
-    echo "Creating QoS adjustment script at $SCRIPT_FILE..." | tee -a $LOG_FILE
+    echo -e "${GREEN}Creating QoS adjustment script at $SCRIPT_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<'EOF' > $SCRIPT_FILE
 #!/bin/bash
 
@@ -162,12 +167,12 @@ configure_qos() {
 configure_qos
 EOF
     chmod +x $SCRIPT_FILE
-    echo "QoS adjustment script created." | tee -a $LOG_FILE
+    echo -e "${GREEN}QoS adjustment script created.${TEXTRESET}" | tee -a $LOG_FILE
 }
 
 # Step 4: Create the systemd service
 create_service() {
-    echo "Creating systemd service at $SERVICE_FILE..." | tee -a $LOG_FILE
+    echo -e "${GREEN}Creating systemd service at $SERVICE_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<EOF > $SERVICE_FILE
 [Unit]
 Description=RFWB QoS Service
@@ -183,7 +188,7 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo "Systemd service created." | tee -a $LOG_FILE
+    echo -e "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
 }
 
 # Step 5: Enable and start the service
@@ -192,7 +197,7 @@ enable_service() {
     systemctl daemon-reload
     systemctl enable rfwb-qos.service
     systemctl start rfwb-qos.service
-    echo "Service enabled and started." | tee -a $LOG_FILE
+    echo -e "${GREEN}Service enabled and started.${TEXTRESET}" | tee -a $LOG_FILE
 }
 
 # Execute the steps
@@ -201,4 +206,4 @@ create_script
 create_service
 enable_service
 
-echo "Installation complete." | tee -a $LOG_FILE
+echo -e "${GREEN}Installation complete.${TEXTRESET}" | tee -a $LOG_FILE
