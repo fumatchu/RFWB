@@ -56,7 +56,7 @@ initial_setup() {
 
     echo "Setting r2q value to $R2Q_VALUE based on the download throughput."
 
-    read -p "Enter the percentage of bandwidth you want to reserve for voice and video applications: " PERCENTAGE
+    read -p "Enter the percentage of bandwidth you want to reserve for voice: " PERCENTAGE
 
     rm -f speedtest_result.json
 
