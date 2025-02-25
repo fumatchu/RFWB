@@ -12,19 +12,16 @@ if [[ $EUID -ne 0 ]]; then
 fi
 #Function to Install QOS for VOICE
 install_qos() {
-#Install Voice QOS 
-echo -e ${GREEN} Install QOS for Voice...${TEXTRESET}
-sleep 4
-dnf -y install bc jq
-# Define the configuration and script paths
-CONFIG_FILE="/etc/rfwb-qos.conf"
-SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
-SERVICE_FILE="/etc/systemd/system/rfwb-qos.service"
-LOG_FILE="/var/log/rfwb-qos.log"
-ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
+echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
+    sleep 2
+    # Define the configuration and script paths
+    CONFIG_FILE="/etc/rfwb-qos.conf"
+    SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
+    SERVICE_FILE="/etc/systemd/system/rfwb-qos.service"
+    LOG_FILE="/var/log/rfwb-qos.log"
+    ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
 
-# Function to create a configuration file with default settings
-
+    # Create a configuration file with default settings
     echo -e "${GREEN}Creating configuration file at $CONFIG_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<EOF > $CONFIG_FILE
 # /etc/rfwb-qos.conf
@@ -42,14 +39,13 @@ mpeg_ts_port = 1234
 EOF
     echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
 
+    # Function to find the network interface based on connection name ending
+    find_interface() {
+        local suffix="$1"
+        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+    }
 
-# Function to find the network interface based on connection name ending
-find_interface() {
-    local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-
-
-# Step 1: Perform initial setup and get user input
+    # Perform initial setup and get user input
     echo "Determining network interfaces..." | tee -a $LOG_FILE
     INSIDE_INTERFACE=$(find_interface "-inside")
     OUTSIDE_INTERFACE=$(find_interface "-outside")
@@ -92,9 +88,7 @@ find_interface() {
 
     echo -e "${GREEN}Setting up with $PERCENTAGE% reserved bandwidth.${TEXTRESET}" | tee -a $LOG_FILE
 
-
-# Step 3: Create the QoS adjustment script
-
+    # Create the QoS adjustment script
     echo -e "${GREEN}Creating QoS adjustment script at $SCRIPT_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<'EOF' > $SCRIPT_FILE
 #!/bin/bash
@@ -120,7 +114,7 @@ load_config() {
             declare "$key=$value"
         fi
     done < "$CONFIG_FILE"
-
+}
 
 # Function to find the network interface based on connection name ending
 find_interface() {
@@ -171,12 +165,13 @@ configure_qos() {
     echo "QoS configuration applied to $OUTSIDE_INTERFACE." | tee -a $LOG_FILE
     tc -s class show dev $OUTSIDE_INTERFACE | tee -a $LOG_FILE
 }
+
+configure_qos
 EOF
     chmod +x $SCRIPT_FILE
-    echo -e "${GREEN}QoS adjustment script created.${TEXTRESET}" | tee -a $LOG_FILE}
+    echo -e "${GREEN}QoS adjustment script created.${TEXTRESET}" | tee -a $LOG_FILE
 
-# Step 4: Create the systemd service
-
+    # Create the systemd service
     echo -e "${GREEN}Creating systemd service at $SERVICE_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<EOF > $SERVICE_FILE
 [Unit]
@@ -195,25 +190,17 @@ WantedBy=multi-user.target
 EOF
     echo -e "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
 
-
-# Step 5: Enable and start the service
-
+    # Enable and start the service
     echo "Enabling and starting the RFWB QoS service..." | tee -a $LOG_FILE
     systemctl daemon-reload
     systemctl enable rfwb-qos.service
     systemctl start rfwb-qos.service
     echo -e "${GREEN}Service enabled and started.${TEXTRESET}" | tee -a $LOG_FILE
 
-
-# Execute the steps
-initial_setup
-create_script
-create_service
-enable_service
-
-echo -e "${GREEN}Installation complete.${TEXTRESET}" | tee -a $LOG_FILE
-sleep 4
+    echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}" | tee -a $LOG_FILE
+    sleep 4
 }
+
 #Function to install Netdata
 install_netdata() {
     clear
