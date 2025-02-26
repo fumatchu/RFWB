@@ -12,6 +12,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 #Function to Install QOS for VOICE
 install_qos() {
+    clear
     echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
     sleep 4
     dnf -y install jq bc iproute-tc
@@ -213,7 +214,7 @@ EOF
 install_netdata() {
     clear
     echo -e "${GREEN}Installing Netdata...${TEXTRESET}"
-    sleep 2
+    sleep 4
     if ! sudo dnf -y update; then
         echo -e "${RED}System update failed. Exiting.${TEXTRESET}"
         exit 1
@@ -310,6 +311,8 @@ install_netdata() {
 #Function to install snmpd
 install_snmpd() {
     clear
+    echo -e "${GREEN}Installing and configuring SNMP Daemon...${TEXTRESET}"
+    sleep 4
     # Function to validate IP address or network
     function validate_ip_or_network() {
         local ip_network=$1
