@@ -19,6 +19,7 @@ clear
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
   echo -e "${GREEN}Running as root user.${RESET}"
+  sleep 2
 else
   echo -e "${RED}This program must be run as root.${RESET}"
   echo "Exiting..."
@@ -37,6 +38,7 @@ fi
 # Checking for version information
 if [ "$MAJOROS" -ge 9 ]; then
   echo -e "${GREEN}Detected compatible OS version: Rocky 9.x or greater${RESET}"
+  sleep 2
 else
   echo -e "${RED}Sorry, but this installer only works on Rocky 9.X or greater${RESET}"
   echo -e "Please upgrade to ${GREEN}Rocky 9.x${RESET} or later"
