@@ -10,50 +10,49 @@ if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root"
     exit 1
 fi
-#Function to Install QOS for VOICE
-install_qos () {
-clear
-echo -e "${GREEN}Installing QOS for Voice..${TEXTRESET}"
-sleep 4
+install_qos() {
+    clear
+    echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
+    sleep 4
 
-# File paths
-CONFIG_FILE="/etc/rfwb-qos.conf"
-SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
-SERVICE_FILE="/etc/systemd/system/rfwb-qos.service"
-TIMER_FILE="/etc/systemd/system/rfwb-qos.timer"
-LOG_FILE="/var/log/rfwb-qos.log"
-ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
+    # File paths
+    CONFIG_FILE="/etc/rfwb-qos.conf"
+    SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
+    SERVICE_FILE="/etc/systemd/system/rfwb-qos.service"
+    TIMER_FILE="/etc/systemd/system/rfwb-qos.timer"
+    LOG_FILE="/var/log/rfwb-qos.log"
+    ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
 
-# Function to load configuration
-load_config() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "Configuration file not found. Creating a default configuration."
-        create_config 20  # Create a default config with 20% bandwidth reservation
-    fi
-
-    percentage_bandwidth=0
-    adjust_interval_hours=0.25  # Default value is 15 minutes (0.25 hours)
-    wifi_calling_ports=""
-    sip_ports=""
-    rtp_ports=""
-    rtsp_ports=""
-    h323_port=""
-    webrtc_ports=""
-    mpeg_ts_port=""
-
-    while IFS='= ' read -r key value; do
-        if [[ $key =~ ^[a-zA-Z_]+$ ]]; then
-            value="${value//\"/}"
-            declare "$key=$value"
+    # Load configuration function
+    load_config() {
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+            echo "Configuration file not found. Creating a default configuration."
+            create_config 20  # Create a default config with 20% bandwidth reservation
         fi
-    done < "$CONFIG_FILE"
-}
 
-# Function to create configuration file
-create_config() {
-    local percentage_bandwidth=$1
-    echo -e "${GREEN}Creating configuration file at $CONFIG_FILE with ${percentage_bandwidth}% reserved bandwidth...${TEXTRESET}" | tee -a $LOG_FILE
-    cat <<EOF > $CONFIG_FILE
+        percentage_bandwidth=0
+        adjust_interval_hours=0.25  # Default value is 15 minutes (0.25 hours)
+        wifi_calling_ports=""
+        sip_ports=""
+        rtp_ports=""
+        rtsp_ports=""
+        h323_port=""
+        webrtc_ports=""
+        mpeg_ts_port=""
+
+        while IFS='= ' read -r key value; do
+            if [[ $key =~ ^[a-zA-Z_]+$ ]]; then
+                value="${value//\"/}"
+                declare "$key=$value"
+            fi
+        done < "$CONFIG_FILE"
+    }
+
+    # Create configuration file function
+    create_config() {
+        local percentage_bandwidth=$1
+        echo -e "${GREEN}Creating configuration file at $CONFIG_FILE with ${percentage_bandwidth}% reserved bandwidth...${TEXTRESET}" | tee -a $LOG_FILE
+        cat <<EOF > $CONFIG_FILE
 # /etc/rfwb-qos.conf
 
 percentage_bandwidth = $percentage_bandwidth
@@ -67,15 +66,15 @@ h323_port = 1720
 webrtc_ports = 16384-32767
 mpeg_ts_port = 1234
 EOF
-    echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
-}
+        echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
+    }
 
-# Function to create systemd timer
-create_timer() {
-    local interval=$1
-    local interval_minutes=$(echo "$interval * 60" | bc)
+    # Create systemd timer function
+    create_timer() {
+        local interval=$1
+        local interval_minutes=$(echo "$interval * 60" | bc)
 
-    cat <<EOF > $TIMER_FILE
+        cat <<EOF > $TIMER_FILE
 [Unit]
 Description=Run RFWB QoS Service every ${interval_minutes} minutes
 
@@ -87,88 +86,84 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-    echo -e "${GREEN}Systemd timer created with an interval of every ${interval_minutes} minutes.${TEXTRESET}" | tee -a $LOG_FILE
-}
+        echo -e "${GREEN}Systemd timer created with an interval of every ${interval_minutes} minutes.${TEXTRESET}" | tee -a $LOG_FILE
+    }
 
-# Function to configure QoS
-configure_qos() {
-    load_config
-    local OUTSIDE_INTERFACE=$(find_interface "-outside")
+    # Configure QoS function
+    configure_qos() {
+        load_config
+        local OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-    if [ -z "$OUTSIDE_INTERFACE" ]; then
-        echo "No outside interface found." | tee -a $ERROR_LOG_FILE
-        exit 1
-    fi
+        if [ -z "$OUTSIDE_INTERFACE" ]; then
+            echo "No outside interface found." | tee -a $ERROR_LOG_FILE
+            exit 1
+        fi
 
-    echo "Running speed test to measure current throughput..." | tee -a $LOG_FILE
-    speedtest_output=$(speedtest --format=json 2>>$ERROR_LOG_FILE)
+        echo "Running speed test to measure current throughput..." | tee -a $LOG_FILE
+        speedtest_output=$(speedtest --format=json 2>>$ERROR_LOG_FILE)
 
-    if [ $? -ne 0 ]; then
-        echo "Speedtest failed. Check the network connection and speedtest-cli installation." | tee -a $ERROR_LOG_FILE
-        exit 1
-    fi
+        if [ $? -ne 0 ]; then
+            echo "Speedtest failed. Check the network connection and speedtest-cli installation." | tee -a $ERROR_LOG_FILE
+            exit 1
+        fi
 
-    DOWNLOAD_SPEED=$(echo "$speedtest_output" | jq '.download.bandwidth')
-    UPLOAD_SPEED=$(echo "$speedtest_output" | jq '.upload.bandwidth')
+        DOWNLOAD_SPEED=$(echo "$speedtest_output" | jq '.download.bandwidth')
+        UPLOAD_SPEED=$(echo "$speedtest_output" | jq '.upload.bandwidth')
 
-    DOWNLOAD_SPEED_KBIT=$(($DOWNLOAD_SPEED * 8 / 1000))
-    UPLOAD_SPEED_KBIT=$(($UPLOAD_SPEED * 8 / 1000))
+        DOWNLOAD_SPEED_KBIT=$(($DOWNLOAD_SPEED * 8 / 1000))
+        UPLOAD_SPEED_KBIT=$(($UPLOAD_SPEED * 8 / 1000))
 
-    echo -e "${GREEN}Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
-    echo -e "${GREEN}Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "${GREEN}Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "${GREEN}Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
 
-    # Adjust r2q value based on download speed
-    if [ "$DOWNLOAD_SPEED_KBIT" -lt 10000 ]; then
-        R2Q_VALUE=1
-    elif [ "$DOWNLOAD_SPEED_KBIT" -lt 100000 ]; then
-        R2Q_VALUE=2
-    else
-        R2Q_VALUE=10
-    fi
+        # Adjust r2q value based on download speed
+        if [ "$DOWNLOAD_SPEED_KBIT" -lt 10000 ]; then
+            R2Q_VALUE=1
+        elif [ "$DOWNLOAD_SPEED_KBIT" -lt 100000 ]; then
+            R2Q_VALUE=2
+        else
+            R2Q_VALUE=10
+        fi
 
-    echo -e "${GREEN}Setting r2q value to $R2Q_VALUE based on the download throughput.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "${GREEN}Setting r2q value to $R2Q_VALUE based on the download throughput.${TEXTRESET}" | tee -a $LOG_FILE
 
-    # Determine download and upload ceilings
-    CEIL_DOWNLOAD=$(($DOWNLOAD_SPEED_KBIT / 1000 - 1))
-    CEIL_UPLOAD=$(($UPLOAD_SPEED_KBIT / 1000 - 1))
+        # Determine download and upload ceilings
+        CEIL_DOWNLOAD=$(($DOWNLOAD_SPEED_KBIT / 1000 - 1))
+        CEIL_UPLOAD=$(($UPLOAD_SPEED_KBIT / 1000 - 1))
 
-    RESERVED_DOWNLOAD_BANDWIDTH=$(($CEIL_DOWNLOAD * 1000 * $percentage_bandwidth / 100))
-    RESERVED_UPLOAD_BANDWIDTH=$(($CEIL_UPLOAD * 1000 * $percentage_bandwidth / 100))
+        RESERVED_DOWNLOAD_BANDWIDTH=$(($CEIL_DOWNLOAD * 1000 * $percentage_bandwidth / 100))
+        RESERVED_UPLOAD_BANDWIDTH=$(($CEIL_UPLOAD * 1000 * $percentage_bandwidth / 100))
 
-    echo "Configuring QoS on $OUTSIDE_INTERFACE..." | tee -a $LOG_FILE
-    tc qdisc del dev $OUTSIDE_INTERFACE root 2>>$ERROR_LOG_FILE || true
-    tc qdisc add dev $OUTSIDE_INTERFACE root handle 1: htb default 20 r2q $R2Q_VALUE 2>>$ERROR_LOG_FILE
+        echo "Configuring QoS on $OUTSIDE_INTERFACE..." | tee -a $LOG_FILE
+        tc qdisc del dev $OUTSIDE_INTERFACE root 2>>$ERROR_LOG_FILE || true
+        tc qdisc add dev $OUTSIDE_INTERFACE root handle 1: htb default 20 r2q $R2Q_VALUE 2>>$ERROR_LOG_FILE
 
-    # Create classes for download and upload
-    tc class add dev $OUTSIDE_INTERFACE parent 1: classid 1:1 htb rate ${CEIL_DOWNLOAD}Mbit ceil ${CEIL_DOWNLOAD}Mbit 2>>$ERROR_LOG_FILE
-    tc class add dev $OUTSIDE_INTERFACE parent 1: classid 1:2 htb rate ${CEIL_UPLOAD}Mbit ceil ${CEIL_UPLOAD}Mbit 2>>$ERROR_LOG_FILE
+        # Create classes for download and upload
+        tc class add dev $OUTSIDE_INTERFACE parent 1: classid 1:1 htb rate ${CEIL_DOWNLOAD}Mbit ceil ${CEIL_DOWNLOAD}Mbit 2>>$ERROR_LOG_FILE
+        tc class add dev $OUTSIDE_INTERFACE parent 1: classid 1:2 htb rate ${CEIL_UPLOAD}Mbit ceil ${CEIL_UPLOAD}Mbit 2>>$ERROR_LOG_FILE
 
-    # Apply port-specific QoS rules
-    echo "Applying port-specific QoS rules..." | tee -a $LOG_FILE
-    for port in ${wifi_calling_ports//,/ }; do
-        tc filter add dev $OUTSIDE_INTERFACE protocol ip parent 1:0 prio 1 u32 match ip dport $port 0xffff flowid 1:1
-    done
+        # Apply port-specific QoS rules
+        echo "Applying port-specific QoS rules..." | tee -a $LOG_FILE
+        for port in ${wifi_calling_ports//,/ }; do
+            tc filter add dev $OUTSIDE_INTERFACE protocol ip parent 1:0 prio 1 u32 match ip dport $port 0xffff flowid 1:1
+        done
 
-    for port in ${sip_ports//,/ }; do
-        tc filter add dev $OUTSIDE_INTERFACE protocol ip parent 1:0 prio 1 u32 match ip dport $port 0xffff flowid 1:1
-    done
+        for port in ${sip_ports//,/ }; do
+            tc filter add dev $OUTSIDE_INTERFACE protocol ip parent 1:0 prio 1 u32 match ip dport $port 0xffff flowid 1:1
+        done
 
-    # Add similar rules for other port types (rtp_ports, rtsp_ports, etc.)
-    echo "QoS configuration applied to $OUTSIDE_INTERFACE." | tee -a $LOG_FILE
-    tc -s class show dev $OUTSIDE_INTERFACE | tee -a $LOG_FILE
-}
+        # Add similar rules for other port types (rtp_ports, rtsp_ports, etc.)
+        echo "QoS configuration applied to $OUTSIDE_INTERFACE." | tee -a $LOG_FILE
+        tc -s class show dev $OUTSIDE_INTERFACE | tee -a $LOG_FILE
+    }
 
-# Function to find the network interface based on connection name ending
-find_interface() {
-    local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-}
+    # Find the network interface function
+    find_interface() {
+        local suffix="$1"
+        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+    }
 
-# Main function to install and configure QoS
-install_qos() {
-    clear
-    echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
-    sleep 4
+    # Main script execution starts here
     dnf -y install jq bc iproute-tc
 
     # Check and create the configuration file if necessary
@@ -312,7 +307,7 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo -e  "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
 
     # Enable and start the service and timer
     echo "Enabling and starting the RFWB QoS service and timer..." | tee -a $LOG_FILE
