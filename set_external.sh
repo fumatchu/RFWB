@@ -27,17 +27,17 @@ fi
 connections=$(nmcli -t -f NAME,DEVICE,TYPE connection show)
 
 # Display all interfaces that will be checked
-echo -e "${YELLOW}Checking the following network interfaces for autoconnect settings:${TEXTRESET}"
+echo -e "Checking the following network interfaces for autoconnect settings:"
 
 while IFS=: read -r name device type; do
     # Only show valid ethernet or wifi connections
     if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
-        echo -e "${YELLOW}- $device ($name): Type $type${TEXTRESET}"
+        echo -e "- $device ($name): Type $type"
     fi
 done <<<"$connections"
 
 # Check and modify autoconnect settings
-echo -e "\n${YELLOW}Modifying interfaces that are not set to autoconnect...${TEXTRESET}"
+echo -e "\nModifying interfaces that are not set to autoconnect..."
 
 while IFS=: read -r name device type; do
     # Process valid ethernet or wifi connections
@@ -64,11 +64,11 @@ echo -e "${GREEN}Completed checking and updating autoconnect settings.${TEXTRESE
 
 # Get currently connected interfaces
 existing_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
-echo -e "${YELLOW}Existing connected interfaces:${TEXTRESET}"
+echo -e "Existing connected interfaces:"
 echo "$existing_connections"
 
-echo -e "${YELLOW}Please plug in your Internet connection into the firewall. It should be in a separate subnet.${TEXTRESET}"
-echo -e "${YELLOW}Waiting for a new interface to come up...${TEXTRESET}"
+echo -e "Please plug in your Internet connection into the firewall. It should be in a separate subnet."
+echo -e "Waiting for a new interface to come up..."
 
 # Monitor for a new connection
 while true; do
@@ -87,7 +87,7 @@ while true; do
         if [ -n "$current_profile" ]; then
             # Update the connection profile name to include '-outside'
             new_profile_name="${new_connection}-outside"
-            echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
+            echo -e "Updating connection profile name to: $new_profile_name"
             nmcli connection modify "$current_profile" connection.id "$new_profile_name"
             nmcli connection reload
         else
@@ -112,7 +112,7 @@ find_outside_interface() {
     echo "$outside_interface"
 }
 
-##Load nftables with confguration and install threat lists
+##Load nftables with configuration and install threat lists
 # Define variables for threat list management
 THREAT_LISTS=(
     "https://iplists.firehol.org/files/firehol_level1.netset"
@@ -126,7 +126,7 @@ TMP_FILE="$TMP_DIR/threat_list.txt"
 # Function to find the network interface based on connection name ending
 find_interface() {
     local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+     nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
 }
 
 # Function to find sub-interfaces based on main interface
@@ -136,7 +136,7 @@ find_sub_interfaces() {
 }
 
 # Setup the FW: Determine inside and outside interfaces
-echo -e "${YELLOW}Determining network interfaces...${RESET}" | tee >(logger)
+echo -e "Determining network interfaces..." | tee >(logger)
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
@@ -152,12 +152,12 @@ fi
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Enable IP forwarding
-echo -e "${YELLOW}Enabling IP forwarding...${RESET}" | tee >(logger)
+echo -e "Enabling IP forwarding..." | tee >(logger)
 echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
 # Apply nftables ruleset
-echo -e "${YELLOW}Applying nftables ruleset...${RESET}" | tee >(logger)
+echo -e "Applying nftables ruleset..." | tee >(logger)
 
 # Create and configure the inet filter table if not exists
 sudo nft add table inet filter 2>/dev/null
@@ -174,7 +174,7 @@ sudo nft add rule inet filter input ct state established,related accept
 # Allow inbound traffic on the inside interface(s)
 sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    echo -e "${YELLOW}Allowing inbound traffic for sub-interface: $sub_interface${RESET}" | tee >(logger)
+    echo -e "Allowing inbound traffic for sub-interface: $sub_interface" | tee >(logger)
     sudo nft add rule inet filter input iif "$sub_interface" accept
 done
 
@@ -207,7 +207,7 @@ sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \
 sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
 # Log and drop unsolicited incoming traffic on the outside interface
-echo -e "${YELLOW}Logging and blocking unsolicited incoming traffic on the outside interface...${RESET}" | tee >(logger)
+echo -e "Logging and blocking unsolicited incoming traffic on the outside interface..." | tee >(logger)
 sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
 
 # Create a named set for threat blocking
@@ -219,11 +219,11 @@ sudo nft add rule inet filter input ip saddr @$BLOCK_SET drop
 echo -e "${GREEN}nftables ruleset applied successfully.${RESET}" | tee >(logger)
 
 # Save the current ruleset
-echo -e "${YELLOW}Saving the current nftables ruleset...${RESET}" | tee >(logger)
+echo -e "Saving the current nftables ruleset..." | tee >(logger)
 sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
-echo -e "${YELLOW}Enabling nftables service...${RESET}" | tee >(logger)
+echo -e "Enabling nftables service..." | tee >(logger)
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
@@ -237,7 +237,7 @@ cat <<'EOF' >/usr/local/bin/update_nft_threatlist.sh
 # Define variables
 THREAT_LISTS=(
     "https://iplists.firehol.org/files/firehol_level1.netset"
-    "https://www.abuseipdb.com/blacklist.csv"
+     "https://www.abuseipdb.com/blacklist.csv"
     "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
 )
 BLOCK_SET="threat_block"
