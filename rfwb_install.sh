@@ -396,8 +396,11 @@ sleep 3
 clear
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
+dnf -y install epel-release
+dnf -y config-manager --set-enabled crb
 dnf -y update
-dnf -y install net-tools dmidecode ipcalc bind-utils expect fail2ban
+dnf -y install ntsysv iptraf fail2ban tuned net-tools dmidecode ipcalc bind-utils expect fail2ban
+dnf -y clean all
 clear
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
 sleep 4
