@@ -2928,13 +2928,12 @@ options=(
     4 "Install Webmin" off
     5 "Install ntopng" off
     6 "Install DDNS Client" off
-    7 "Install required Packages" on
-    8 "Install Suricata (Only Suricata Engine)" off
-    9 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    10 "Install RFWB Portscan detection" off
-    11 "Install SNMP Daemon" off
-    12 "Install Netdata" off
-    13 "Install/Configure QOS for VOICE" off
+    7 "Install Suricata (Only Suricata Engine)" off
+    8 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    9 "Install RFWB Portscan detection" off
+   10 "Install SNMP Daemon" off
+   11 "Install Netdata" off
+   12 "Install/Configure QOS for VOICE" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2961,24 +2960,21 @@ for choice in $choices; do
         install_ddclient
         ;;
     7)
-        install_required
-        ;;
-    8)
         install_suricata
         ;;
-    9)
+    8)
         install_elastic
         ;;
-    10)
+    9)
         install_portscan
         ;;
-    11)
+    10)
         install_snmpd
         ;;
-    12)
+    11)
         install_netdata
         ;;
-    13)
+    12)
         install_qos
         ;;
     esac
