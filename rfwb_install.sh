@@ -475,6 +475,7 @@ enable_nftables() {
 # Main script execution
 disable_firewalld
 enable_nftables
+sleep 4
 clear
 #set the inside interface
 # Get all active connections managed by NetworkManager
