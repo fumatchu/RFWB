@@ -5,6 +5,7 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 RESET='\033[0m'
+FQDN=(hostname -I)
 # Ensure the script is run as root
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root"
@@ -2913,7 +2914,7 @@ EOF
     echo -e "The password is:"
     cat /root/elastic_password
     echo " "
-    echo -e "One last step to get your dashboards are to login to Kibana http://localhost:5601 (the dashboard you logged into earlier),"
+    echo -e "One last step to get your dashboards are to login to Kibana http://${FQDN}:5601 (the dashboard you logged into earlier),"
     echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
     echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
     read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
