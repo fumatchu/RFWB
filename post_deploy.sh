@@ -6,7 +6,7 @@ GREEN="\033[0;32m"
 TEXTRESET="\033[0m"
 
 #Install dnf-auomatic and lock down 
-echo -e ${GREEN}Configuring system for security updates only${TEXTRESET}"
+echo -e "${GREEN}Configuring system for security updates only${TEXTRESET}"
 # Install dnf-automatic
 sudo dnf -y install dnf-automatic
 
@@ -32,7 +32,10 @@ Hostname: \n
 IP Address: \4
 EOF
 
+clear
 #SETUP DNS
+echo -e "${GREEN}Configuring Inside interface for DNS Resolution.${TEXTRESET}"
+sleep 4 
 # Function to manage inside interfaces and update DNS settings
 manage_inside_dns() {
     # Find the main interface with a connection name ending in '-inside'
@@ -74,11 +77,14 @@ manage_inside_dns() {
         nmcli connection modify "$connection_name" ipv4.dns "$dns_servers"
         echo -e "${GREEN}Set new DNS servers for connection: $connection_name${TEXTRESET}"
     done
+    sleep 4
 }
 manage_inside_dns
 
-#Move the IP EKF Check for Startup
 # Move the IP EKF Check for Startup
+clear
+echo -e "${GREEN}Installing Startup scripts to rc.local...${TEXTRESET}"
+sleep 4 
 # Define paths
 SRC_SCRIPT1="/root/RFWB/check_ip_EKF.sh"
 DEST_SCRIPT1="/opt/check_ip_EKF.sh"
@@ -158,8 +164,10 @@ systemctl status rc-local
 echo "Setup complete. The scripts $DEST_SCRIPT1 and $DEST_SCRIPT2 will run at startup."
 sleep 4
 
+
 # Function to manage inside interfaces and remove gateway entries
-echo -e "${GREEN}Updating the Gateways.. removing INSIDE interface Gateway entries.${TEXTRESET}"
+clear
+echo -e "${GREEN}Updating the Inside Gateway Entries.. removing INSIDE interface Gateway entries.${TEXTRESET}"
 sleep 4
 manage_inside_gw() {
     # Find the main interface with a connection name ending in '-inside'
@@ -275,6 +283,7 @@ sleep 4
 
 
 #Reorganize nftables to best practice for input chain 
+clear
 echo -e "${GREEN}Organizing nftables for efficiency prcoessing${TEXTRESET}"
 sleep 4
 # Define variables for file paths
