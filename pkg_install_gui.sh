@@ -1078,20 +1078,6 @@ systemctl status rfwb-ps-mon.service
 
 }
 
-
-# Function to install REQUIRED
-install_required() {
-    clear
-    echo -e "${GREEN}Installing Required OS packages...${TEXTRESET}"
-    sleep 2
-    dnf -y config-manager --set-enabled crb
-    dnf -y install epel-release
-    dnf -y clean all
-    dnf -y update
-    dnf -y install ntsysv iptraf fail2ban tuned
-    echo -e "${GREEN}Required Package installation complete.${TEXTRESET}"
-    sleep 4
-}
 # Function to install ddns
 install_ddclient() {
     clear
