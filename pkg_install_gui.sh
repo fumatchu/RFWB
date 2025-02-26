@@ -11,6 +11,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 #Function to Install QOS for VOICE
+install_qos () {
 clear
 echo -e "${GREEN}Installing QOS for Voice..${TEXTRESET}"
 sleep 4
