@@ -397,7 +397,7 @@ clear
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 dnf -y update
-dnf -y install net-tools dmidecode ipcalc bind-utils
+dnf -y install net-tools dmidecode ipcalc bind-utils expect fail2ban
 clear
 echo -e ${GREEN}"Installing Speedtest${TEXTRESET}"
 sleep 4
