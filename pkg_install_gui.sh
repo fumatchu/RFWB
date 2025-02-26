@@ -1940,8 +1940,9 @@ iled|E: logopenfile
 install_elastic() {
     # Inform the user that the process is starting
     clear
-    echo -e "${YELLOW}Starting the installation of Elasticsearch and Kibana...${TEXTRESET}"
-    sleep 2
+     clear
+    echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
+    sleep 4
     # Step 1: Import the Elastic GPG key
     echo -e "${YELLOW}Importing the Elastic GPG key...${TEXTRESET}"
     if sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch; then
@@ -1973,9 +1974,7 @@ EOF
     fi
 
     # Step 3: Install Elasticsearch and Kibana
-    clear
-    echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
-    sleep 2
+   
     if sudo dnf install --enablerepo=elasticsearch elasticsearch kibana -y; then
         echo -e "${GREEN}Elasticsearch and Kibana installed successfully.${TEXTRESET}"
     else
