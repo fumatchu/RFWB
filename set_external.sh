@@ -136,15 +136,15 @@ find_sub_interfaces() {
 }
 
 # Setup the FW: Determine inside and outside interfaces
-echo -e "Determining network interfaces..." | tee >(logger)
+echo -e "${YELLOW}Determining network interfaces...${TEXTRESET}" | tee >(logger)
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${RESET}" | tee >(logger)
-echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${RESET}" | tee >(logger)
+echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
+echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
 
 if [[ -z "$INSIDE_INTERFACE" || -z "$OUTSIDE_INTERFACE" ]]; then
-    echo -e "${RED}Error: Could not determine one or both interfaces. Please check your connection names.${RESET}" | tee >(logger)
+    echo -e "${RED}Error: Could not determine one or both interfaces. Please check your connection names.${TEXTRESET}" | tee >(logger)
     exit 1
 fi
 
