@@ -11,10 +11,8 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 #Function to Install QOS for VOICE
-install_qos () {
-clear 
-echo -e "${GREEN}Installing QOS for Voice...${TEXTRESET}"
-sleep 4
+#!/bin/bash
+
 # File paths
 CONFIG_FILE="/etc/rfwb-qos.conf"
 SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
@@ -23,31 +21,15 @@ TIMER_FILE="/etc/systemd/system/rfwb-qos.timer"
 LOG_FILE="/var/log/rfwb-qos.log"
 ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
 
-# Function to create configuration file
-create_config() {
-    local percentage_bandwidth=$1
-    echo -e "${GREEN}Creating configuration file at $CONFIG_FILE with ${percentage_bandwidth}% reserved bandwidth...${TEXTRESET}" | tee -a $LOG_FILE
-    cat <<EOF > $CONFIG_FILE
-# /etc/rfwb-qos.conf
-
-percentage_bandwidth = $percentage_bandwidth
-adjust_interval_hours = 1
-
-wifi_calling_ports = 500,4500
-sip_ports = 5060
-rtp_ports = 10000-20000
-rtsp_ports = 554,8554
-h323_port = 1720
-webrtc_ports = 16384-32767
-mpeg_ts_port = 1234
-EOF
-    echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
-}
-
 # Function to load configuration
 load_config() {
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "Configuration file not found. Creating a default configuration."
+        create_config 20  # Create a default config with 20% bandwidth reservation
+    fi
+
     percentage_bandwidth=0
-    adjust_interval_hours=4  # Default value if not specified
+    adjust_interval_hours=0.25  # Default value is 15 minutes (0.25 hours)
     wifi_calling_ports=""
     sip_ports=""
     rtp_ports=""
@@ -64,10 +46,45 @@ load_config() {
     done < "$CONFIG_FILE"
 }
 
-# Function to find the network interface based on connection name ending
-find_interface() {
-    local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+# Function to create configuration file
+create_config() {
+    local percentage_bandwidth=$1
+    echo -e "${GREEN}Creating configuration file at $CONFIG_FILE with ${percentage_bandwidth}% reserved bandwidth...${TEXTRESET}" | tee -a $LOG_FILE
+    cat <<EOF > $CONFIG_FILE
+# /etc/rfwb-qos.conf
+
+percentage_bandwidth = $percentage_bandwidth
+adjust_interval_hours = 0.25
+
+wifi_calling_ports = 500,4500
+sip_ports = 5060
+rtp_ports = 10000-20000
+rtsp_ports = 554,8554
+h323_port = 1720
+webrtc_ports = 16384-32767
+mpeg_ts_port = 1234
+EOF
+    echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
+}
+
+# Function to create systemd timer
+create_timer() {
+    local interval=$1
+    local interval_minutes=$(echo "$interval * 60" | bc)
+
+    cat <<EOF > $TIMER_FILE
+[Unit]
+Description=Run RFWB QoS Service every ${interval_minutes} minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=${interval_minutes}min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    echo -e "${GREEN}Systemd timer created with an interval of every ${interval_minutes} minutes.${TEXTRESET}" | tee -a $LOG_FILE
 }
 
 # Function to configure QoS
@@ -138,21 +155,10 @@ configure_qos() {
     tc -s class show dev $OUTSIDE_INTERFACE | tee -a $LOG_FILE
 }
 
-# Function to create systemd timer
-create_timer() {
-    local interval=$1
-    cat <<EOF > $TIMER_FILE
-[Unit]
-Description=Run RFWB QoS Service every ${interval} hours
-
-[Timer]
-OnBootSec=10min
-OnUnitActiveSec=${interval}h
-
-[Install]
-WantedBy=timers.target
-EOF
-    echo -e "${GREEN}Systemd timer created with an interval of every ${interval} hours.${TEXTRESET}" | tee -a $LOG_FILE
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
 }
 
 # Main function to install and configure QoS
@@ -162,7 +168,13 @@ install_qos() {
     sleep 4
     dnf -y install jq bc iproute-tc
 
-    # Perform initial setup and get user input
+    # Check and create the configuration file if necessary
+    load_config
+
+    # Create timer based on the loaded configuration
+    create_timer $adjust_interval_hours
+
+    # Determine and verify network interfaces
     echo "Determining network interfaces..." | tee -a $LOG_FILE
     INSIDE_INTERFACE=$(find_interface "-inside")
     OUTSIDE_INTERFACE=$(find_interface "-outside")
@@ -180,10 +192,6 @@ install_qos() {
 
     create_config $PERCENTAGE
 
-    # Load configuration and create timer
-    load_config
-    create_timer $adjust_interval_hours
-
     # Create the QoS adjustment script
     echo -e "${GREEN}Creating QoS adjustment script at $SCRIPT_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<'EOF' > $SCRIPT_FILE
@@ -195,7 +203,7 @@ ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
 
 load_config() {
     percentage_bandwidth=0
-    adjust_interval_hours=4
+    adjust_interval_hours=0.25  # Default value is 15 minutes (0.25 hours)
     wifi_calling_ports=""
     sip_ports=""
     rtp_ports=""
@@ -301,7 +309,7 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo -e "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e  "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
 
     # Enable and start the service and timer
     echo "Enabling and starting the RFWB QoS service and timer..." | tee -a $LOG_FILE
