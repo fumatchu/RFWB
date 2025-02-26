@@ -132,7 +132,11 @@ echo "Checking status of rc-local service..."
 systemctl status rc-local
 
 echo "Setup complete. The scripts $DEST_SCRIPT1 and $DEST_SCRIPT2 will run at startup."
+sleep 4
+
 # Function to manage inside interfaces and remove gateway entries
+echo -e "${GREEN}Updating the Gateways.. removing INSIDE interface Gateway entries.${TEXTRESET}"
+sleep 4
 manage_inside_gw() {
     # Find the main interface with a connection name ending in '-inside'
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
@@ -160,11 +164,14 @@ manage_inside_gw() {
         echo -e "${GREEN}Removed gateway for connection: $connection_name${TEXTRESET}"
     done
 }
-
+sleep 4
 # Execute the function
 manage_inside_gw
 
 #Set Avahi on the inside interfaces
+clear
+echo -e "${GREEN}Configuring and installing Avahi...${TEXTRESET}"
+sleep 4
 # Function to find the network interface based on connection name ending
 find_interface() {
     local suffix="$1"
@@ -240,7 +247,80 @@ sudo systemctl enable nftables
 sudo systemctl start nftables
 
 echo -e "${GREEN}Setup complete. Avahi is configured for mDNS reflection on internal interfaces, and nftables are configured to allow mDNS traffic only on those interfaces.${TEXTRESET}"
+sleep 4
 
+
+#Reorganize nftables to best practice for input chain 
+echo -e "${GREEN}Organizing nftables for efficiency prcoessing${TEXTRESET}"
+sleep 4
+# Define variables for file paths
+NFTABLES_FILE="/etc/sysconfig/nftables.conf"  # The actual nftables file path
+BACKUP_FILE="/etc/sysconfig/nftables.conf.bak"  # Backup file path
+TMP_FILE="/tmp/nftables_chain_input_filtered.tmp"  # Temporary file to store extracted information
+
+# Backup the original nftables file
+cp "$NFTABLES_FILE" "$BACKUP_FILE"
+echo "Backup created at $BACKUP_FILE."
+
+# Extract, rearrange, and save the specific 'input' chain content
+awk '
+  BEGIN {
+    # Define priorities for specific lines to rearrange
+    rule_order["type filter hook input priority filter; policy drop;"] = 1
+    rule_order["iif \"lo\" accept"] = 2
+    rule_order["ct state established,related accept"] = 3
+  }
+  /chain input/ {in_block=1; block=""; next}
+  in_block && /}/ {
+    if (block ~ /log prefix "Blocked: " drop/) {
+      split(block, lines, "\n")
+      # Process each line
+      for (i in lines) {
+        trimmed = lines[i]
+        sub(/^[ \t]+/, "", trimmed)  # Trim leading whitespace
+        sub(/\r$/, "", trimmed)  # Remove carriage returns if present
+        if (trimmed == "") continue  # Skip empty lines
+        if (rule_order[trimmed] > 0) {
+          ordered_rules[rule_order[trimmed]] = trimmed
+        } else if (trimmed ~ /ip saddr @threat_block drop/) {
+          ip_saddr_line = trimmed
+        } else if (trimmed ~ /log prefix "Blocked: " drop/) {
+          log_prefix_line = trimmed
+        } else {
+          other_rules[++other_rules_count] = trimmed
+        }
+      }
+      # Construct the new block with formatting
+      formatted_block = "\tchain input {\n"
+      for (i = 1; i <= length(ordered_rules); i++) {
+        formatted_block = formatted_block "\t\t" ordered_rules[i] "\n"
+      }
+      for (i = 1; i <= other_rules_count; i++) {
+        formatted_block = formatted_block "\t\t" other_rules[i] "\n"
+      }
+      if (ip_saddr_line) formatted_block = formatted_block "\t\t" ip_saddr_line "\n"
+      if (log_prefix_line) formatted_block = formatted_block "\t\t" log_prefix_line "\n"
+      formatted_block = formatted_block "\t}"
+
+      print formatted_block
+    }
+    exit
+  }
+  in_block {block=block "\n" $0}
+' "$NFTABLES_FILE" > "$TMP_FILE"
+
+# Replace the original block with the rearranged and formatted content in the nftables.conf file
+awk -v RS= -v ORS='\n\n' -v new_block="$(cat $TMP_FILE)" '
+  /chain input.*{/,/}/ {
+    if ($0 ~ /log prefix "Blocked: " drop/) {
+      $0 = new_block
+    }
+  }
+  { print }
+' "$BACKUP_FILE" > "$NFTABLES_FILE"
+
+echo "Reformatted content has been placed back into $NFTABLES_FILE."
+sleep 4
 clear
 # Notify the user that the firewall setup is complete
 echo "Firewall setup complete."
