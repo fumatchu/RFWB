@@ -1584,6 +1584,7 @@ install_suricata() {
             echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${RESET}"
             return 1
         fi
+    sleep 4
     }
 
     # Run checks
