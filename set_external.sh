@@ -37,7 +37,7 @@ while IFS=: read -r name device type; do
 done <<<"$connections"
 
 # Check and modify autoconnect settings
-echo -e "\nModifying interfaces that are not set to autoconnect..."
+echo -e "\n${YELLOW}Modifying interfaces that are not set to autoconnect...${TEXTRESET}"
 
 while IFS=: read -r name device type; do
     # Process valid ethernet or wifi connections
