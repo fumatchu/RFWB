@@ -5,6 +5,23 @@ RED="\033[0;31m"
 GREEN="\033[0;32m"
 TEXTRESET="\033[0m"
 
+#Install dnf-auomatic and lock down 
+echo -e ${GREEN}Configuring system for security updates only${TEXTRESET}"
+# Install dnf-automatic
+sudo dnf -y install dnf-automatic
+
+# Backup the existing automatic.conf file
+sudo cp /etc/dnf/automatic.conf /etc/dnf/automatic.conf.bak
+
+# Edit the automatic.conf to set upgrade_type to security
+sudo sed -i 's/^upgrade_type.*/upgrade_type = security/' /etc/dnf/automatic.conf
+
+# Enable and start the dnf-automatic.timer to apply security updates automatically
+sudo systemctl enable --now dnf-automatic.timer
+
+echo -e "${GREEN}dnf-automatic is installed and configured to apply only security updates.${TEXTRESET}"
+sleep 4 
+
 #Update /etc/issue so we can see the hostname and IP address Before logging in
 rm -r -f /etc/issue
 touch /etc/issue
