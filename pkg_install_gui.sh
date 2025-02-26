@@ -357,8 +357,6 @@ install_snmpd() {
     }
 
     # Install SNMP daemon
-    echo -e "${GREEN}Installing SNMP daemon...${TEXTRESET}"
-    sleep 2
     yum install -y net-snmp net-snmp-utils
 
     # Ask user for SNMP version
@@ -498,7 +496,7 @@ disk / 10000000  # Ensure at least 10GB of space
 EOF
 
     # Start and enable SNMP service
-    echo -e "${YELLOW}Starting SNMP service...${TEXTRESET}"
+    echo -e "${GREEN}Starting SNMP service...${TEXTRESET}"
     systemctl start snmpd
     systemctl enable snmpd
 
@@ -515,11 +513,10 @@ EOF
 
 #Function to install rfwb-portscan detection
 install_portscan() {
-#!/bin/bash
 # Script to set up nftables for detecting and blocking port scans on Red Hat systems
 clear
 echo -e "Installing RFWB-Portscan Detection engine..."
-sleep 2
+sleep 4
 
 # Ensure the script is run as root
 if [[ $EUID -ne 0 ]]; then
