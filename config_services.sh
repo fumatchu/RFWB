@@ -165,7 +165,7 @@ done
             echo -e "${YELLOW}Rule already exists: Allow Chrony (UDP) on interface $iface${TEXTRESET}"
         fi
     done
-
+    
     # Check and handle rfwb-portscan service
     rfwb_status=$(systemctl is-active rfwb-portscan)
     if [ "$rfwb_status" == "active" ]; then
@@ -186,6 +186,7 @@ done
     # Show the added rules in the input chain
     echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
+    sleep 4
 }
 
 #Call Time Function
