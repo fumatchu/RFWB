@@ -53,6 +53,15 @@ manage_inside_dns() {
         exit 1
     fi
 
+    # Check if named is installed and running
+    if systemctl is-active --quiet named; then
+        dns_servers="127.0.0.1 208.67.222.222 208.67.220.220"
+        echo -e "${GREEN}Using DNS servers: $dns_servers (named is active)${TEXTRESET}"
+    else
+        dns_servers="208.67.222.222 208.67.220.220"
+        echo -e "${YELLOW}Using DNS servers: $dns_servers (named is not active)${TEXTRESET}"
+    fi
+
     # Loop through each connection and update DNS settings
     for connection_name in $connection_names; do
         echo -e "${GREEN}Processing connection: $connection_name${TEXTRESET}"
@@ -62,12 +71,10 @@ manage_inside_dns() {
         echo -e "${GREEN}Cleared existing DNS settings for connection: $connection_name${TEXTRESET}"
 
         # Add new DNS servers
-        nmcli connection modify "$connection_name" ipv4.dns "127.0.0.1 208.67.222.222 208.67.220.220"
+        nmcli connection modify "$connection_name" ipv4.dns "$dns_servers"
         echo -e "${GREEN}Set new DNS servers for connection: $connection_name${TEXTRESET}"
     done
 }
-
-# Execute the function
 manage_inside_dns
 
 #Move the IP EKF Check for Startup
