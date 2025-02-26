@@ -216,7 +216,7 @@ sudo nft add set inet filter $BLOCK_SET { type ipv4_addr\; flags timeout\; } 2>/
 # Add a rule to drop traffic from IPs in the threat list
 sudo nft add rule inet filter input ip saddr @$BLOCK_SET drop
 
-echo -e "${GREEN}nftables ruleset applied successfully.${RESET}" | tee >(logger)
+echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}" | tee >(logger)
 
 # Save the current ruleset
 echo -e "Saving the current nftables ruleset..." | tee >(logger)
@@ -227,9 +227,8 @@ echo -e "Enabling nftables service..." | tee >(logger)
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "nftables ruleset applied and saved successfully." | tee >(logger)
-echo -e "The Next step may take a minute we are downloading updates, be patient."
-echo -e "Creating and downloading threat lists for nftables"
+echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}" | tee >(logger)
+echo -e "Creating and downloading threat lists for nftables...Please Wait"
 # Create the threat list update script
 cat <<'EOF' >/usr/local/bin/update_nft_threatlist.sh
 #!/bin/bash
@@ -311,13 +310,13 @@ sudo systemctl start rfwb-nft-threatlist.service
 sudo systemctl enable rfwb-nft-threatlist.timer
 sudo systemctl start rfwb-nft-threatlist.timer
 
-echo -e "${GREEN}Threat list update service and timer configured successfully.${RESET}" | tee >(logger)
+echo -e "${GREEN}Threat list update service and timer configured successfully.${TEXTRESET}" | tee >(logger)
 
 
 # Validate the update
 if [[ $? -eq 0 ]]; then
-    echo -e "${GREEN}Threat list updated and loaded into nftables successfully.${RESET}" | tee >(logger)
-    echo -e "${GREEN}Threat list updates will run everyday at 4:00 (A.M.)${RESET}" | tee >(logger)
+    echo -e "${GREEN}Threat list updated and loaded into nftables successfully.${TEXTRESET}" | tee >(logger)
+    echo -e "Threat list updates will run everyday at 4:00 (A.M.)" | tee >(logger)
 else
-    echo -e "${RED}Failed to update the threat list.${RESET}" | tee >(logger)
+    echo -e "${RED}Failed to update the threat list.${TEXTRESET}" | tee >(logger)
 fi
