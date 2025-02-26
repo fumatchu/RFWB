@@ -723,6 +723,7 @@ echo "Restarting nftables service..."
 sudo systemctl restart nftables
 
 echo "nftables configuration completed successfully."
+sleep 4
 # Main script execution
 find_private_ip
 setup_nftables
