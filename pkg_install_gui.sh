@@ -12,11 +12,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 #Function to Install QOS for VOICE
 install_qos() {
-    # Define color variables
-    GREEN="\033[0;32m"
-    RED="\033[0;31m"
-    TEXTRESET="\033[0m"
-
+    echo -e "${GREEN}Installing and Configuring QOS for Voice${TEXTRESET}"
+    sleep 2
     # Define the configuration and script paths
     CONFIG_FILE="/etc/rfwb-qos.conf"
     SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
@@ -405,7 +402,9 @@ EOF
     systemctl start rfwb-qos.service
     echo -e "${GREEN}Service enabled and started.${TEXTRESET}" | tee -a $LOG_FILE
 
-    echo -e "${GREEN}Installation complete.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "${GREEN}Service Installation complete.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "${GREEN}Installing and Configuring QOS for Voice Complete...${TEXTRESET}"
+    sleep 4
 }
 
 #Function to install Netdata
