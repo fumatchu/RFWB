@@ -727,7 +727,7 @@ echo "nftables configuration completed successfully."
 find_private_ip
 setup_nftables
 /root/RFWB/set_external.sh
-
+echo " "
 read -p "Press Enter to install applications and services"
 /root/RFWB/pkg_install_gui.sh
 /root/RFWB/config_services.sh
