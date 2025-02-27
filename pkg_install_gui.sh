@@ -2208,8 +2208,7 @@ EOF
     # Run the main function
     main
     clear
-    echo -e "${GREEN}Generating Password for the elastic account.${TEXTRESET}"
-    echo -e "${Yellow}This will be forced to reset when first logging in.${TEXTRESET}"
+    echo -e "Generating Password for the elastic account."
     # Function to generate a random password
     generate_password() {
         # Generate a 6-character password with upper and lowercase letters
@@ -2262,7 +2261,7 @@ EOF
         local cert_path="/etc/elasticsearch/certs/http_ca.crt"
         local url="https://localhost:9200"
 
-        echo -e "${YELLOW}Testing Elasticsearch response...${TEXTRESET}"
+        echo -e "${YELLOW}Testing Elasticsearch response ${RED}Your Password input WILL NOT be visible${TEXTRESET}"
 
         # Prompt for the password of the elastic user
         read -sp "Enter password for elastic user: " password
