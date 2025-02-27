@@ -46,6 +46,7 @@ else
   exit 1
 fi
 #Detect Static or DHCP (IF not Static, change it)
+clear
 cat <<EOF
 Checking for static IP Address
 EOF
