@@ -1560,11 +1560,13 @@ install_suricata() {
         # Check if the memory is at least 8 GB
         if ((total_mem_gb >= 8)); then
             echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${RESET}"
+            sleep 4
             return 0
         else
             needed_ram=$((8 - total_mem_gb))
             echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${RESET}"
-            echo -e "${YELLOW}Additional RAM needed: ${needed_ram} GB${RESET}"
+            echo -e "${RED}Additional RAM needed: ${needed_ram} GB${RESET}"
+            sleep 4
             return 1
         fi
     }
@@ -1577,11 +1579,13 @@ install_suricata() {
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
             echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${RESET}"
+            sleep 4
             return 0
         else
             needed_cpus=$((2 - cpu_count))
             echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${RESET}"
             echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${RESET}"
+            sleep 4
             return 1
         fi
     sleep 4
@@ -1610,7 +1614,7 @@ install_suricata() {
 
     # Update the server
     clear
-    echo -e "${YELLOW}Updating the server...${TEXTRESET}"
+    echo -e "Updating the server..."
     if sudo dnf update -y; then
         echo -e "${GREEN}Server updated successfully.${TEXTRESET}"
     else
@@ -1620,7 +1624,7 @@ install_suricata() {
 
     # Install essential packages
     clear
-    echo -e "${YELLOW}Installing essential suricata packages...${TEXTRESET}"
+    echo -e "Installing essential suricata packages..."
     sleep 2
     if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
         echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
@@ -1632,10 +1636,10 @@ install_suricata() {
 
     # Install Suricata
     clear
-    echo -e "${YELLOW}Installing Suricata...${TEXTRESET}"
+    echo -e "Installing Suricata..."
     sleep 2
     # Enable copr command for dnf
-    echo -e "${YELLOW}Enabling dnf copr command...${TEXTRESET}"
+    echo -e "Enabling dnf copr command..."
     if sudo dnf install -y 'dnf-command(copr)'; then
         echo -e "${GREEN}dnf copr command enabled.${TEXTRESET}"
     else
@@ -1644,7 +1648,7 @@ install_suricata() {
     fi
 
     # Enable the OISF repository for Suricata
-    echo -e "${YELLOW}Enabling OISF Suricata repository...${TEXTRESET}"
+    echo -e "Enabling OISF Suricata repository..."
     if echo 'y' | sudo dnf copr enable @oisf/suricata-7.0; then
         echo -e "${GREEN}OISF Suricata repository enabled.${TEXTRESET}"
     else
@@ -1653,7 +1657,7 @@ install_suricata() {
     fi
 
     # Add the EPEL repository
-    echo -e "${YELLOW}Adding EPEL repository...${TEXTRESET}"
+    echo -e "Adding EPEL repository..."
     if sudo dnf install -y epel-release dnf-plugins-core; then
         echo -e "${GREEN}EPEL repository added successfully.${TEXTRESET}"
     else
@@ -1662,7 +1666,7 @@ install_suricata() {
     fi
 
     # Install Suricata
-    echo -e "${YELLOW}Installing Suricata package...${TEXTRESET}"
+    echo -e "Installing Suricata package..."
     if sudo dnf install -y suricata; then
         echo -e "${GREEN}Suricata installed successfully.${TEXTRESET}"
     else
@@ -1671,7 +1675,7 @@ install_suricata() {
     fi
 
     # Enable Suricata service
-    echo -e "${YELLOW}Enabling Suricata service...${TEXTRESET}"
+    echo -e "Enabling Suricata service..."
     if sudo systemctl enable suricata; then
         echo -e "${GREEN}Suricata service enabled.${TEXTRESET}"
     else
@@ -1686,7 +1690,7 @@ install_suricata() {
     sudo cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
 
     # Enable Community ID in suricata.yaml
-    echo -e "${YELLOW}Enabling Community ID feature in Suricata...${TEXTRESET}"
+    echo -e "Enabling Community ID feature in Suricata..."
     sudo sed -i 's/# \(community-id:\) false/\1 true/' /etc/suricata/suricata.yaml
 
     # Detect the inside network interface using nmcli and awk
@@ -1700,19 +1704,19 @@ install_suricata() {
     echo -e "${GREEN}Detected inside interface: $INSIDE_INTERFACE${TEXTRESET}"
 
     # Update the pcap interface in suricata.yaml
-    echo -e "${YELLOW}Updating pcap interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "Updating pcap interface to use ${GREEN}$INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Cross platform libpcap capture support/,/interface:/ s/interface: eth0/interface: $INSIDE_INTERFACE/" /etc/suricata/suricata.yaml
 
     # Update the af-packet interface in suricata.yaml
-    echo -e "${YELLOW}Updating af-packet interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "Updating af-packet interface to use ${GREEN}$INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Linux high speed capture support/,/af-packet:/ {n; s/interface: eth0/interface: $INSIDE_INTERFACE/}" /etc/suricata/suricata.yaml
 
     # Update the inside interface in /etc/sysconfig/suricata
-    echo -e "${YELLOW}Updating inside interface in /etc/sysconfig/suricata...${TEXTRESET}"
+    echo -e "Updating inside interface in /etc/sysconfig/suricata..."
     sudo sed -i "s/eth0/$INSIDE_INTERFACE/g" /etc/sysconfig/suricata
 
     # Configure directory permissions for Suricata
-    echo -e "${YELLOW}Configuring directory permissions for Suricata...${TEXTRESET}"
+    echo -e "Configuring directory permissions for Suricata..."
     sudo chgrp -R suricata /etc/suricata
     sudo chgrp -R suricata /var/lib/suricata
     sudo chgrp -R suricata /var/log/suricata
@@ -1721,11 +1725,11 @@ install_suricata() {
     sudo chmod -R g+rw /var/log/suricata
 
     # Add current user to the suricata group
-    echo -e "${YELLOW}Adding current user to the suricata group...${TEXTRESET}"
+    echo -e "Adding current user to the suricata group..."
     sudo usermod -a -G suricata $USER
 
     # Validate that the user was added to the suricata group
-    echo -e "${YELLOW}Validating user group membership...${TEXTRESET}"
+    echo -e "Validating user group membership..."
     if id -nG "$USER" | grep -qw "suricata"; then
         echo -e "${GREEN}User $USER is successfully added to the suricata group.${TEXTRESET}"
     else
@@ -1734,7 +1738,7 @@ install_suricata() {
     fi
 
     # Run suricata-update
-    echo -e "${YELLOW}Running suricata-update update-sources...${TEXTRESET}"
+    echo -e "Running suricata-update update-sources..."
     if sudo suricata-update update-sources; then
         echo -e "${GREEN}suricata-update update-sources completed successfully.${TEXTRESET}"
     else
@@ -1743,7 +1747,7 @@ install_suricata() {
     fi
 
     # Run suricata-update
-    echo -e "${YELLOW}Running suricata-update...${TEXTRESET}"
+    echo -e "Running suricata-update..."
     if sudo suricata-update; then
         echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
     else
@@ -1858,11 +1862,11 @@ iled|E: logopenfile
             echo -e "\n${RED}Warning: There are permission issues with Suricata log files.${TEXTRESET}"
             echo -e "${YELLOW}Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
             sudo chown -R suricata:suricata /var/log/suricata
-            echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
+            echo -e "Permissions have been reset. Restarting Suricata service..."
             sudo systemctl restart suricata
             sleep 10
             # Check again after attempting to fix permissions
-            echo -e "${YELLOW}Re-checking Suricata service status...${TEXTRESET}"
+            echo -e "Re-checking Suricata service status..."
             check_and_fix_permissions
             if [ $? -eq 0 ]; then
                 echo -e "\n${GREEN}Permissions successfully fixed. Suricata service is running without issues.${TEXTRESET}"
