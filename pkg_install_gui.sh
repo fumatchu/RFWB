@@ -2296,7 +2296,7 @@ EOF
 
     # Function to copy Elasticsearch certificate to Kibana directory
     copy_certificate() {
-        echo -e "${YELLOW}Copying Elasticsearch certificate to Kibana directory...${TEXTRESET}"
+        echo -e "Copying Elasticsearch certificate to Kibana directory..."
         if sudo cp "$ELASTIC_CERT_PATH" "$KIBANA_DIR/http_ca.crt"; then
             echo -e "${GREEN}Certificate copied successfully.${TEXTRESET}"
         else
@@ -2307,7 +2307,7 @@ EOF
 
     # Function to generate Kibana encryption keys
     generate_encryption_keys() {
-        echo -e "${YELLOW}Generating Kibana encryption keys...${TEXTRESET}"
+        echo -e "${YELLOWGenerating Kibana encryption keys...${TEXTRESET}"
 
         # Capture only the lines with encryption keys from the output
         keys_output=$(sudo "$KIBANA_BIN_DIR/kibana-encryption-keys" generate -q 2>/dev/null | grep -E '^xpack\.')
@@ -2324,7 +2324,7 @@ EOF
     # Function to update Kibana configuration
     update_kibana_config() {
         local keys="$1"
-        echo -e "${YELLOW}Updating Kibana configuration...${TEXTRESET}"
+        echo -e "Updating Kibana configuration..."
 
         # Add encryption keys to the configuration file
         if echo -e "\n$keys" | sudo tee -a "$KIBANA_CONFIG" >/dev/null; then
@@ -2358,7 +2358,6 @@ EOF
 
     # Function to validate Kibana configuration changes
     validate_config_changes() {
-        echo -e "${YELLOW}Validating Kibana configuration changes...${TEXTRESET}"
 
         # Validate encryption keys
         for key in xpack.encryptedSavedObjects.encryptionKey xpack.reporting.encryptionKey xpack.security.encryptionKey; do
@@ -2498,7 +2497,7 @@ EOF
 
     # Function to generate the enrollment token
     generate_enrollment_token() {
-        echo -e "${YELLOW}Generating Kibana enrollment token...${TEXTRESET}"
+        echo -e "Generating Kibana enrollment token..."
         token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
 
         if [ -z "$token" ]; then
@@ -2526,7 +2525,7 @@ EOF
 
     # Function to check the status of the Kibana service
     check_kibana_status() {
-        echo -e "${YELLOW}Checking Kibana service status...${TEXTRESET}"
+        echo -e "Checking Kibana service status..."
         sudo systemctl status kibana --no-pager
 
         if [ $? -ne 0 ]; then
@@ -2648,7 +2647,7 @@ EOF
     # Copy the http_ca.crt file locally
     copy_certificate_locally() {
         if [ -f "$SOURCE_CERT_PATH" ]; then
-            echo -e "${YELLOW}Copying http_ca.crt from $SOURCE_CERT_PATH to $DEST_CERT_DIR...${TEXTRESET}"
+            echo -e "Copying http_ca.crt from $SOURCE_CERT_PATH to $DEST_CERT_DIR..."
             sudo cp "$SOURCE_CERT_PATH" "$DEST_CERT_PATH"
 
             if [ $? -eq 0 ]; then
@@ -2675,10 +2674,10 @@ EOF
         local elastic_password
         elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
 
-        echo -e "${YELLOW}Backing up the original Filebeat configuration...${TEXTRESET}"
+        echo -e "Backing up the original Filebeat configuration..."
         sudo cp "$FILEBEAT_YML" "${FILEBEAT_YML}.bak"
 
-        echo -e "${YELLOW}Updating the Filebeat configuration...${TEXTRESET}"
+        echo -e "Updating the Filebeat configuration..."
         sudo awk -v ip="$private_ip" -v password="$elastic_password" '
     BEGIN {in_elasticsearch=0; inserted_kibana=0}
     {
@@ -2720,7 +2719,7 @@ EOF
 
     # Modify Suricata module configuration
     configure_suricata_module() {
-        echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
+        echo -e "Configuring Suricata module..."
         sudo awk '
     BEGIN {in_eve=0}
     {
@@ -2755,7 +2754,7 @@ EOF
         local elastic_password
         elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
 
-        echo -e "${YELLOW}Verifying Elasticsearch connection...${TEXTRESET}"
+        echo -e "Verifying Elasticsearch connection..."
         curl -v --cacert "$DEST_CERT_PATH" "https://$private_ip:9200" -u elastic:"$elastic_password"
 
         if [ $? -eq 0 ]; then
@@ -2798,7 +2797,7 @@ EOF
 
     # Enable the Filebeat Suricata module
     enable_suricata_module() {
-        echo -e "${YELLOW}Enabling Filebeat Suricata module...${TEXTRESET}"
+        echo -e "Enabling Filebeat Suricata module..."
         sudo filebeat modules enable suricata
 
         if [ $? -eq 0 ]; then
@@ -2813,7 +2812,7 @@ EOF
     edit_suricata_config() {
         local config_file="/etc/filebeat/modules.d/suricata.yml"
 
-        echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
+        echo -e "Configuring Suricata module..."
         sudo awk '
     BEGIN {in_eve=0}
     {
@@ -2847,7 +2846,7 @@ EOF
     # Setup Filebeat (load dashboards and pipelines)
     setup_filebeat() {
         clear
-        echo -e "${GREEN}Setting up Filebeat...${TEXTRESET}"
+        echo -e "Setting up Filebeat..."
 
         # Start the spinner in the background
         sudo filebeat setup &
@@ -2863,7 +2862,7 @@ EOF
 
     # Start and enable the Filebeat service
     start_filebeat_service() {
-        echo -e "${YELLOW}Starting and enabling Filebeat service...${TEXTRESET}"
+        echo -e "Starting and enabling Filebeat service..."
         sudo systemctl enable filebeat --now
 
         if [ $? -eq 0 ]; then
