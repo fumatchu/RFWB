@@ -1580,13 +1580,13 @@ install_suricata() {
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
             echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${TEXTRESET}"
-            sleep 4
+            sleep 2
             return 0
         else
             needed_cpus=$((2 - cpu_count))
             echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${TEXTRESET}"
             echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${TEXTRESET}"
-            sleep 4
+            sleep 2
             return 1
         fi
     }
@@ -1599,7 +1599,7 @@ install_suricata() {
     cpu_status=$?
 
     # Evaluate results
-    clear
+    
     echo -e "${CYAN}\nSummary:${TEXTRESET}"
     if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
         echo -e "${GREEN}System meets the minimum requirements.${TEXTRESET}"
