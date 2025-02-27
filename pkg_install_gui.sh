@@ -1734,6 +1734,15 @@ install_suricata() {
     fi
 
     # Run suricata-update
+    echo -e "${YELLOW}Running suricata-update update-sources...${TEXTRESET}"
+    if sudo suricata-update update-sources; then
+        echo -e "${GREEN}suricata-update update-sources completed successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to run suricata-update update-sources .${TEXTRESET}"
+        exit 1
+    fi
+
+    # Run suricata-update
     echo -e "${YELLOW}Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
         echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
