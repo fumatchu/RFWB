@@ -333,25 +333,21 @@ install_netdata() {
         exit 1
     fi
 
-    echo -e "${YELLOW}Installing EPEL repository...${TEXTRESET}"
     if ! sudo dnf -y install epel-release; then
         echo -e "${RED}EPEL repository installation failed. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Enabling CodeReady Builder repository...${TEXTRESET}"
     if ! sudo dnf config-manager --set-enabled crb; then
         echo -e "${RED}Failed to enable CodeReady Builder repository. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Installing required packages...${TEXTRESET}"
     if ! sudo dnf -y install wget; then
         echo -e "${RED}Required packages installation failed. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Downloading and executing Netdata installation script...${TEXTRESET}"
     if wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; then
         if ! sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive; then
             echo -e "${RED}Netdata installation failed. Exiting.${TEXTRESET}"
@@ -367,7 +363,6 @@ install_netdata() {
 
     echo -e "${GREEN}Netdata installation completed successfully.${TEXTRESET}"
 
-    echo -e "${YELLOW}Locating inside interfaces...${TEXTRESET}"
     inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
     if [ -z "$inside_interfaces" ]; then
@@ -376,8 +371,6 @@ install_netdata() {
     fi
 
     echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
-
-    echo -e "${YELLOW}Configuring nftables rules for Netdata...${TEXTRESET}"
 
     sudo systemctl enable nftables
     sudo systemctl start nftables
@@ -395,27 +388,23 @@ install_netdata() {
             sudo nft add rule inet filter input iifname "$iface" tcp dport 19999 accept
             echo -e "${GREEN}Rule added: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
+            echo "Rule already exists: Allow Netdata on port 19999 for interface $iface"
         fi
     done
 
     rfwb_status=$(systemctl is-active rfwb-portscan)
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
         systemctl stop rfwb-portscan
     fi
 
     sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
-    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
     sudo systemctl restart nftables
 
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
         systemctl start rfwb-portscan
     fi
 
-    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
     echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}"
     sleep 4
@@ -453,7 +442,7 @@ install_snmpd() {
         # Find the interface ending with -inside
         interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
-        if [ -z "$interface" ]; then
+        if  [ -z "$interface" ]; then
             echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
             exit 1
         fi
@@ -473,7 +462,7 @@ install_snmpd() {
     yum install -y net-snmp net-snmp-utils
 
     # Ask user for SNMP version
-    echo -e "${YELLOW}Select SNMP version to run:${TEXTRESET}"
+    echo "Select SNMP version to run:"
     echo "1) SNMPv1"
     echo "2) SNMPv2c"
     echo "3) SNMPv3"
@@ -518,38 +507,31 @@ install_snmpd() {
             sudo nft add rule inet filter input iifname "$iface" udp dport 161 accept
             echo -e "${GREEN}Rule added: Allow SNMP (UDP) on interface $iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow SNMP (UDP) on interface $iface${TEXTRESET}"
+            echo "Rule already exists: Allow SNMP (UDP) on interface $iface"
         fi
     done
 
     # Check and handle rfwb-portscan service
     rfwb_status=$(systemctl is-active rfwb-portscan)
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
         systemctl stop rfwb-portscan
     fi
 
     # Save nftables configuration
-    echo -e "${YELLOW}Saving nftables configuration...${TEXTRESET}"
     nft list ruleset >/etc/sysconfig/nftables.conf
 
     # Restart rfwb-portscan service if it was active
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
         systemctl start rfwb-portscan
     fi
 
     # Show the added rules in the input chain
-    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
 
     # Backup existing configuration
-    echo -e "${YELLOW}Backing up existing configuration file...${TEXTRESET}"
     cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup
 
     # Create a new configuration file based on user input and the provided template
-    echo -e "${YELLOW}Configuring SNMP...${TEXTRESET}"
-
     cat <<EOF >/etc/snmp/snmpd.conf
 ###############################################################################
 # System contact information
@@ -773,7 +755,7 @@ PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
 cat <<EOF >"$PRE_START_SCRIPT"
 #!/bin/bash
 
-# Configuration for retry mechanism
+# Configuration  for retry mechanism
 MAX_RETRIES=10
 INITIAL_DELAY=5
 RETRY_MULTIPLIER=2
@@ -921,7 +903,7 @@ EOL
 }
 
 # Flush existing rules to prevent duplicates
-if nft list tables | grep -q "inet portscan"; then
+if nft list tables | grep -q  "inet portscan"; then
     nft delete table inet portscan
 fi
 
@@ -1087,6 +1069,7 @@ install_ddclient() {
     echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
     sleep 4
 }
+
 # Function to install BIND
 install_bind() {
     clear
@@ -1136,35 +1119,31 @@ install_bind() {
                 sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
                 echo -e "${GREEN}Rule added: Allow DNS (UDP) on interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow DNS (UDP) on interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow DNS (UDP) on interface $iface"
             fi
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
                 echo -e "${GREEN}Rule added: Allow DNS (TCP) on interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow DNS (TCP) on interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow DNS (TCP) on interface $iface"
             fi
         done
 
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
 
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -1175,8 +1154,8 @@ install_bind() {
     # Continue with the rest of the script
     echo -e "${GREEN}BIND Install Complete...${TEXTRESET}"
     sleep 4
-    
 }
+
 # Function to install ISC KEA
 install_isc_kea() {
     clear
@@ -1230,34 +1209,30 @@ install_isc_kea() {
                 sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
                 echo -e "${GREEN}Rule added: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow DHCP (IPv4) on interface $iface"
             fi
             # Allow DHCP for IPv6 (UDP port 547)
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
                 echo -e "${GREEN}Rule added: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow DHCP (IPv6) on interface $iface"
             fi
         done
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -1312,27 +1287,23 @@ install_cockpit() {
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
                 echo -e "${GREEN}Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow Cockpit on port 9090 for interface $iface"
             fi
         done
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -1345,9 +1316,10 @@ install_cockpit() {
     systemctl start cockpit.socket
 
     # Continue with the rest of the script
-     echo -e "${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    echo -e "${GREEN}Cockpit Install Complete...${TEXTRESET}"
     sleep 4
 }
+
 # Function to install WEBMIN
 install_webmin() {
     clear
@@ -1394,27 +1366,23 @@ install_webmin() {
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 10000 accept
                 echo -e "${GREEN}Rule added: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow Webmin on port 10000 for interface $iface"
             fi
         done
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -1423,9 +1391,10 @@ install_webmin() {
     setup_nftables_for_webmin
 
     # Continue with the rest of the script
-     echo -e "${GREEN}Webmin Install Complete...${TEXTRESET}"
+    echo -e "${GREEN}Webmin Install Complete...${TEXTRESET}"
     sleep 4
 }
+
 # Function to install NTOPNG
 install_ntopng() {
     clear
@@ -1450,7 +1419,7 @@ install_ntopng() {
     fi
 
     # Modify the line in the configuration file
-    echo -e "${GREEN}Modifying $CONFIG_FILE...${TEXTRESET}"
+    echo -e "$Modifying ${GREEN}$CONFIG_FILE...${TEXTRESET}"
     sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
 
     # Verify the change
@@ -1462,7 +1431,7 @@ install_ntopng() {
     fi
 
     # Enable ntopng service
-    echo -e "${GREEN}Enabling ntopng service...${TEXTRESET}"
+    echo -e "$Enabling ntopng service..."
     systemctl enable ntopng
 
     # Start ntopng service
@@ -1512,27 +1481,23 @@ install_ntopng() {
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 3000 accept
                 echo -e "${GREEN}Rule added: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
             else
-                echo -e "${YELLOW}Rule already exists: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
+                echo "Rule already exists: Allow ntopng on port 3000 for interface $iface"
             fi
         done
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -1541,13 +1506,13 @@ install_ntopng() {
     setup_nftables_for_ntopng
 
     # Continue with the rest of the script
-     echo -e "${GREEN}ntopng Install Complete...${TEXTRESET}"
+    echo -e "${GREEN}ntopng Install Complete...${TEXTRESET}"
     sleep 4
 }
 # Function to install Suricata
 install_suricata() {
     clear
-    echo -e "${YELLOW}Installing Suricata Engine${RESET}"
+    echo -e "Installing Suricata Engine${RESET}"
     sleep 2
     dnf -y install bc
     # Function to check if the system has at least 8 GB of RAM
@@ -1564,7 +1529,7 @@ install_suricata() {
         else
             needed_ram=$((8 - total_mem_gb))
             echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${RESET}"
-            echo -e "${YELLOW}Additional RAM needed: ${needed_ram} GB${RESET}"
+            echo -e "Additional RAM needed: ${needed_ram} GB${RESET}"
             return 1
         fi
     }
@@ -1581,7 +1546,7 @@ install_suricata() {
         else
             needed_cpus=$((2 - cpu_count))
             echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${RESET}"
-            echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${RESET}"
+            echo -e "Additional CPUs needed: ${needed_cpus}${RESET}"
             return 1
         fi
     sleep 4
@@ -1602,15 +1567,15 @@ install_suricata() {
         sleep 4
     else
         echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
-        [ "$ram_status" -ne 0 ] && echo -e "${YELLOW}Please add more RAM.${RESET}"
-        [ "$cpu_status" -ne 0 ] && echo -e "${YELLOW}Please add more CPUs.${RESET}"
+        [ "$ram_status" -ne 0 ] && echo -e "Please add more RAM.${RESET}"
+        [ "$cpu_status" -ne 0 ] && echo -e "Please add more CPUs.${RESET}"
         sleep 3
         exit 1
     fi
 
     # Update the server
     clear
-    echo -e "${YELLOW}Updating the server...${TEXTRESET}"
+    echo -e "Updating the server...${TEXTRESET}"
     if sudo dnf update -y; then
         echo -e "${GREEN}Server updated successfully.${TEXTRESET}"
     else
@@ -1620,7 +1585,7 @@ install_suricata() {
 
     # Install essential packages
     clear
-    echo -e "${YELLOW}Installing essential suricata packages...${TEXTRESET}"
+    echo -e "Installing essential suricata packages...${TEXTRESET}"
     sleep 2
     if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
         echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
@@ -1632,10 +1597,10 @@ install_suricata() {
 
     # Install Suricata
     clear
-    echo -e "${YELLOW}Installing Suricata...${TEXTRESET}"
+    echo -e "Installing Suricata...${TEXTRESET}"
     sleep 2
     # Enable copr command for dnf
-    echo -e "${YELLOW}Enabling dnf copr command...${TEXTRESET}"
+    echo -e "Enabling dnf copr command...${TEXTRESET}"
     if sudo dnf install -y 'dnf-command(copr)'; then
         echo -e "${GREEN}dnf copr command enabled.${TEXTRESET}"
     else
@@ -1644,7 +1609,7 @@ install_suricata() {
     fi
 
     # Enable the OISF repository for Suricata
-    echo -e "${YELLOW}Enabling OISF Suricata repository...${TEXTRESET}"
+    echo -e "Enabling OISF Suricata repository...${TEXTRESET}"
     if echo 'y' | sudo dnf copr enable @oisf/suricata-7.0; then
         echo -e "${GREEN}OISF Suricata repository enabled.${TEXTRESET}"
     else
@@ -1653,7 +1618,7 @@ install_suricata() {
     fi
 
     # Add the EPEL repository
-    echo -e "${YELLOW}Adding EPEL repository...${TEXTRESET}"
+    echo -e "Adding EPEL repository...${TEXTRESET}"
     if sudo dnf install -y epel-release dnf-plugins-core; then
         echo -e "${GREEN}EPEL repository added successfully.${TEXTRESET}"
     else
@@ -1662,7 +1627,7 @@ install_suricata() {
     fi
 
     # Install Suricata
-    echo -e "${YELLOW}Installing Suricata package...${TEXTRESET}"
+    echo -e "Installing Suricata package...${TEXTRESET}"
     if sudo dnf install -y suricata; then
         echo -e "${GREEN}Suricata installed successfully.${TEXTRESET}"
     else
@@ -1671,7 +1636,7 @@ install_suricata() {
     fi
 
     # Enable Suricata service
-    echo -e "${YELLOW}Enabling Suricata service...${TEXTRESET}"
+    echo -e "Enabling Suricata service...${TEXTRESET}"
     if sudo systemctl enable suricata; then
         echo -e "${GREEN}Suricata service enabled.${TEXTRESET}"
     else
@@ -1680,13 +1645,13 @@ install_suricata() {
     fi
 
     # Configure Suricata
-    echo -e "${YELLOW}Configuring Suricata...${TEXTRESET}"
+    echo -e "Configuring Suricata...${TEXTRESET}"
 
     # Backup the original Suricata configuration file
     sudo cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
 
     # Enable Community ID in suricata.yaml
-    echo -e "${YELLOW}Enabling Community ID feature in Suricata...${TEXTRESET}"
+    echo -e "Enabling Community ID feature in Suricata...${TEXTRESET}"
     sudo sed -i 's/# \(community-id:\) false/\1 true/' /etc/suricata/suricata.yaml
 
     # Detect the inside network interface using nmcli and awk
@@ -1700,19 +1665,19 @@ install_suricata() {
     echo -e "${GREEN}Detected inside interface: $INSIDE_INTERFACE${TEXTRESET}"
 
     # Update the pcap interface in suricata.yaml
-    echo -e "${YELLOW}Updating pcap interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "Updating pcap interface to use $INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Cross platform libpcap capture support/,/interface:/ s/interface: eth0/interface: $INSIDE_INTERFACE/" /etc/suricata/suricata.yaml
 
     # Update the af-packet interface in suricata.yaml
-    echo -e "${YELLOW}Updating af-packet interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "Updating af-packet interface to use $INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Linux high speed capture support/,/af-packet:/ {n; s/interface: eth0/interface: $INSIDE_INTERFACE/}" /etc/suricata/suricata.yaml
 
     # Update the inside interface in /etc/sysconfig/suricata
-    echo -e "${YELLOW}Updating inside interface in /etc/sysconfig/suricata...${TEXTRESET}"
+    echo -e "Updating inside interface in /etc/sysconfig/suricata...${TEXTRESET}"
     sudo sed -i "s/eth0/$INSIDE_INTERFACE/g" /etc/sysconfig/suricata
 
     # Configure directory permissions for Suricata
-    echo -e "${YELLOW}Configuring directory permissions for Suricata...${TEXTRESET}"
+    echo -e "Configuring directory permissions for Suricata...${TEXTRESET}"
     sudo chgrp -R suricata /etc/suricata
     sudo chgrp -R suricata /var/lib/suricata
     sudo chgrp -R suricata /var/log/suricata
@@ -1721,11 +1686,11 @@ install_suricata() {
     sudo chmod -R g+rw /var/log/suricata
 
     # Add current user to the suricata group
-    echo -e "${YELLOW}Adding current user to the suricata group...${TEXTRESET}"
+    echo -e "Adding current user to the suricata group...${TEXTRESET}"
     sudo usermod -a -G suricata $USER
 
     # Validate that the user was added to the suricata group
-    echo -e "${YELLOW}Validating user group membership...${TEXTRESET}"
+    echo -e "Validating user group membership...${TEXTRESET}"
     if id -nG "$USER" | grep -qw "suricata"; then
         echo -e "${GREEN}User $USER is successfully added to the suricata group.${TEXTRESET}"
     else
@@ -1734,7 +1699,7 @@ install_suricata() {
     fi
 
     # Run suricata-update
-    echo -e "${YELLOW}Running suricata-update...${TEXTRESET}"
+    echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
         echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
     else
@@ -1744,18 +1709,18 @@ install_suricata() {
 
     # Loop to allow adding additional rule sources
     while true; do
-        echo -e "${YELLOW}Do you want to add additional rule sources? (y/n)${TEXTRESET}"
+        echo -e "Do you want to add additional rule sources? (y/n)${TEXTRESET}"
         read -p "Your choice: " add_rules
 
         if [[ "$add_rules" == "y" || "$add_rules" == "Y" ]]; then
-            echo -e "${YELLOW}Listing available rule sources...${TEXTRESET}"
+            echo -e "Listing available rule sources...${TEXTRESET}"
             sudo suricata-update list-sources
 
-            echo -e "${YELLOW}Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
+            echo -e "Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
             read -r rule_sources
 
             for source in $rule_sources; do
-                echo -e "${YELLOW}Adding source $source...${TEXTRESET}"
+                echo -e "Adding source $source...${TEXTRESET}"
                 sudo suricata-update enable-source "$source"
             done
 
@@ -1765,7 +1730,7 @@ install_suricata() {
     done
 
     # Run suricata-update after the loop
-    echo -e "${YELLOW}Running suricata-update...${TEXTRESET}"
+    echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
         echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
     else
@@ -1774,7 +1739,7 @@ install_suricata() {
 
     echo -e "${GREEN}Suricata has been configured with the inside interface $INSIDE_INTERFACE and proper permissions.${TEXTRESET}"
     # Inform the user that the configuration validation is starting
-    echo -e "${YELLOW}Validating Suricata configuration...${TEXTRESET}"
+    echo -e "Validating Suricata configuration...${TEXTRESET}"
 
     # Define the command to run Suricata with the test configuration
     COMMAND="suricata -T -c /etc/suricata/suricata.yaml -v"
@@ -1796,11 +1761,11 @@ install_suricata() {
         exit 1
     fi
     # Start the Suricata service
-    echo -e "${YELLOW}Starting Suricata service...${TEXTRESET}"
+    echo -e "Starting Suricata service...${TEXTRESET}"
     sudo systemctl start suricata
 
     # Show the status of the Suricata service
-    echo -e "${YELLOW}Checking Suricata service status...${TEXTRESET}"
+    echo -e "Checking Suricata service status...${TEXTRESET}"
     status_output=$(sudo systemctl status suricata --no-pager)
 
     # Display the status output
@@ -1815,18 +1780,10 @@ install_suricata() {
         status_output=$(sudo systemctl status suricata --no-pager)
 
         # Check for permission denied errors in the status output
-        if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output
- module \"fast\": s
-etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup fa
-iled|E: logopenfile
-: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+        if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
             # Display the specific lines indicating permission errors
             echo -e "${RED}Detected permission issues in the following log entries:${TEXTRESET}"
-            echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output
- module \"fast\": s
-etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup fa
-iled|E: logopenfile
-: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
+            echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
             return 1
         else
             return 0
@@ -1847,13 +1804,13 @@ iled|E: logopenfile
             break
         else
             echo -e "\n${RED}Warning: There are permission issues with Suricata log files.${TEXTRESET}"
-            echo -e "${YELLOW}Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
+            echo -e "Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
             sudo chown -R suricata:suricata /var/log/suricata
-            echo -e "${YELLOW}Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
+            echo -e "Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
             sudo systemctl restart suricata
             sleep 10
             # Check again after attempting to fix permissions
-            echo -e "${YELLOW}Re-checking Suricata service status...${TEXTRESET}"
+            echo -e "Re-checking Suricata service status...${TEXTRESET}"
             check_and_fix_permissions
             if [ $? -eq 0 ]; then
                 echo -e "\n${GREEN}Permissions successfully fixed. Suricata service is running without issues.${TEXTRESET}"
@@ -1866,14 +1823,13 @@ iled|E: logopenfile
     done
 
     if [ $attempts -eq $max_attempts ]; then
-        echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}
-"
+        echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
         exit 1
     fi
 
     # Inform the user about the test
-    echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
-    echo -e "${YELLOW}Waiting for the engine to start...${TEXTRESET}"
+    echo -e "Testing Suricata rule...${TEXTRESET}"
+    echo -e "Waiting for the engine to start...${TEXTRESET}"
     # Total duration for the progress bar
     duration=15
 
@@ -1918,7 +1874,7 @@ iled|E: logopenfile
         sleep 5
         # Capture the last line of the fast.log containing the specified ID
         last_log_line=$(grep 2100498 /var/log/suricata/fast.log | tail -n 1)
-        echo -e "${YELLOW}Last log line with ID 2100498: ${last_log_line}${TEXTRESET}" # Debug: Print the last line for verification
+        echo -e "Last log line with ID 2100498: ${last_log_line}${TEXTRESET}" # Debug: Print the last line for verification
 
         # Check the log line for the classification
         if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
@@ -1935,15 +1891,14 @@ iled|E: logopenfile
     echo -e "${GREEN}Suricata Install Complete...${TEXTRESET}"
     sleep 4
 }
-
 # Function to install ElasticSearch
 install_elastic() {
     # Inform the user that the process is starting
     clear
-    echo -e "${YELLOW}Starting the installation of Elasticsearch and Kibana...${TEXTRESET}"
+    echo -e "Starting the installation of Elasticsearch and Kibana...${TEXTRESET}"
     sleep 2
     # Step 1: Import the Elastic GPG key
-    echo -e "${YELLOW}Importing the Elastic GPG key...${TEXTRESET}"
+    echo -e "Importing the Elastic GPG key...${TEXTRESET}"
     if sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch; then
         echo -e "${GREEN}Elastic GPG key imported successfully.${TEXTRESET}"
     else
@@ -1952,7 +1907,7 @@ install_elastic() {
     fi
 
     # Step 2: Create the Elasticsearch repository file
-    echo -e "${YELLOW}Creating the Elasticsearch repository file...${TEXTRESET}"
+    echo -e "Creating the Elasticsearch repository file...${TEXTRESET}"
     repo_file="/etc/yum.repos.d/elasticsearch.repo"
     sudo bash -c "cat > $repo_file" <<EOF
 [elasticsearch]
@@ -2016,11 +1971,11 @@ EOF
     configure_elasticsearch() {
         local private_ip="$1"
 
-        echo -e "${YELLOW}Backing up the original Elasticsearch configuration...${TEXTRESET}"
+        echo -e "Backing up the original Elasticsearch configuration...${TEXTRESET}"
         # Backup the original Elasticsearch configuration file
         sudo cp "$ELASTIC_YML" "${ELASTIC_YML}.bak"
 
-        echo -e "${YELLOW}Updating the Elasticsearch configuration...${TEXTRESET}"
+        echo -e "Updating the Elasticsearch configuration...${TEXTRESET}"
         # Use awk to insert the network.bind_host line below the specified comments
         sudo awk -v ip="$private_ip" '
     BEGIN {inserted=0}
@@ -2047,7 +2002,7 @@ EOF
 
     # Function to set JVM heap size
     configure_jvm_heap() {
-        echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+        echo -e "Configuring JVM heap size...${TEXTRESET}"
         # Create the JVM options directory if it doesn't exist
         sudo mkdir -p "$JVM_OPTIONS_DIR"
 
@@ -2058,7 +2013,7 @@ EOF
 
     # Main script execution
     main() {
-        echo -e "${YELLOW}Locating the server's private IP address...${TEXTRESET}"
+        echo -e "Locating the server's private IP address...${TEXTRESET}"
         private_ip=$(find_private_ip)
 
         if [ -z "$private_ip" ]; then
@@ -2068,10 +2023,10 @@ EOF
 
         echo -e "${GREEN}Private IP identified as: $private_ip${TEXTRESET}"
 
-        echo -e "${YELLOW}Configuring Elasticsearch...${TEXTRESET}"
+        echo -e "Configuring Elasticsearch...${TEXTRESET}"
         configure_elasticsearch "$private_ip"
 
-        echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+        echo -e "Configuring JVM heap size...${TEXTRESET}"
         configure_jvm_heap
     }
 
@@ -2094,7 +2049,7 @@ EOF
     configure_nftables() {
         local interface="$1"
 
-        echo -e "${YELLOW}Configuring nftables for interface: $interface...${TEXTRESET}"
+        echo -e "Configuring nftables for interface: $interface...${TEXTRESET}"
 
         # Ensure the nftables service is enabled and started
         sudo systemctl enable nftables
@@ -2115,26 +2070,22 @@ EOF
             sudo nft add rule inet filter input iifname "$interface" tcp dport 5601 accept
             echo -e "${GREEN}Rule added: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow TCP traffic on port 5601 for interface $interface${TEXTRESET}"
+            echo "Rule already exists: Allow TCP traffic on port 5601 for interface $interface"
         fi
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
             systemctl stop rfwb-portscan
         fi
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
-        echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
         sudo systemctl restart nftables
         # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
-            echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
             systemctl start rfwb-portscan
         fi
         # Show the added rules in the input chain
-        echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
         sudo nft list chain inet filter input
     }
 
@@ -2146,7 +2097,7 @@ EOF
 
     # Main script execution
     main() {
-        echo -e "${YELLOW}Locating the network interface...${TEXTRESET}"
+        echo -e "Locating the network interface...${TEXTRESET}"
         interface=$(find_interface)
 
         echo -e "${GREEN}Firewall configuration complete.${TEXTRESET}"
@@ -2157,7 +2108,7 @@ EOF
 
     # Function to reload systemd daemon
     reload_daemon() {
-        echo -e "${YELLOW}Reloading systemd daemon...${TEXTRESET}"
+        echo -e "Reloading systemd daemon...${TEXTRESET}"
         if sudo systemctl daemon-reload; then
             echo -e "${GREEN}Systemd daemon reloaded successfully.${TEXTRESET}"
         else
@@ -2168,7 +2119,7 @@ EOF
 
     # Function to enable and start Elasticsearch service
     enable_start_elasticsearch() {
-        echo -e "${YELLOW}Enabling and starting Elasticsearch service...${TEXTRESET}"
+        echo -e "Enabling and starting Elasticsearch service...${TEXTRESET}"
         if sudo systemctl enable elasticsearch --now; then
             echo -e "${GREEN}Elasticsearch service enabled and start command issued.${TEXTRESET}"
         else
@@ -2179,14 +2130,14 @@ EOF
 
     # Function to check the status of Elasticsearch service
     check_status() {
-        echo -e "${YELLOW}Checking Elasticsearch service status...${TEXTRESET}"
+        echo -e "Checking Elasticsearch service status...${TEXTRESET}"
         while true; do
             status=$(sudo systemctl is-active elasticsearch)
             if [ "$status" == "active" ]; then
                 echo -e "${GREEN}Elasticsearch service is active and running.${TEXTRESET}"
                 break
             else
-                echo -e "${YELLOW}Waiting for Elasticsearch service to start...${TEXTRESET}"
+                echo -e "Waiting for Elasticsearch service to start...${TEXTRESET}"
                 sleep 5
             fi
         done
@@ -2207,7 +2158,7 @@ EOF
     main
     clear
     echo -e "${GREEN}Generating Password for the elastic account.${TEXTRESET}"
-    echo -e "${Yellow}This will be forced to reset when first logging in.${TEXTRESET}"
+    echo -e "This will be forced to reset when first logging in.${TEXTRESET}"
     # Function to generate a random password
     generate_password() {
         # Generate a 6-character password with upper and lowercase letters
@@ -2217,7 +2168,7 @@ EOF
     # Function to reset the password for the elastic user
     reset_elastic_password() {
         local password="$1"
-        echo -e "${YELLOW}Resetting password for the elastic user...${TEXTRESET}"
+        echo -e "Resetting password for the elastic user...${TEXTRESET}"
 
         # Use here-document to provide input to the password reset command
         sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i <<EOF
@@ -2228,7 +2179,7 @@ EOF
 
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}Password for the elastic user successfully reset.${TEXTRESET}"
-            echo -e "${YELLOW}The Password is:${TEXTRESET}"
+            echo -e "The Password is:${TEXTRESET}"
             echo -e "$password"
             echo -e "${RED}You will need this password for the next step.${TEXTRESET}"
             read -p "Press Enter Once you have it written down"
@@ -2260,7 +2211,7 @@ EOF
         local cert_path="/etc/elasticsearch/certs/http_ca.crt"
         local url="https://localhost:9200"
 
-        echo -e "${YELLOW}Testing Elasticsearch response...${TEXTRESET}"
+        echo -e "Testing Elasticsearch response...${TEXTRESET}"
 
         # Prompt for the password of the elastic user
         read -sp "Enter password for elastic user: " password
@@ -2296,7 +2247,7 @@ EOF
 
     # Function to copy Elasticsearch certificate to Kibana directory
     copy_certificate() {
-        echo -e "${YELLOW}Copying Elasticsearch certificate to Kibana directory...${TEXTRESET}"
+        echo -e "Copying Elasticsearch certificate to Kibana directory...${TEXTRESET}"
         if sudo cp "$ELASTIC_CERT_PATH" "$KIBANA_DIR/http_ca.crt"; then
             echo -e "${GREEN}Certificate copied successfully.${TEXTRESET}"
         else
@@ -2307,7 +2258,7 @@ EOF
 
     # Function to generate Kibana encryption keys
     generate_encryption_keys() {
-        echo -e "${YELLOW}Generating Kibana encryption keys...${TEXTRESET}"
+        echo -e "Generating Kibana encryption keys...${TEXTRESET}"
 
         # Capture only the lines with encryption keys from the output
         keys_output=$(sudo "$KIBANA_BIN_DIR/kibana-encryption-keys" generate -q 2>/dev/null | grep -E '^xpack\.')
@@ -2324,7 +2275,7 @@ EOF
     # Function to update Kibana configuration
     update_kibana_config() {
         local keys="$1"
-        echo -e "${YELLOW}Updating Kibana configuration...${TEXTRESET}"
+        echo -e "Updating Kibana configuration...${TEXTRESET}"
 
         # Add encryption keys to the configuration file
         if echo -e "\n$keys" | sudo tee -a "$KIBANA_CONFIG" >/dev/null; then
@@ -2358,7 +2309,7 @@ EOF
 
     # Function to validate Kibana configuration changes
     validate_config_changes() {
-        echo -e "${YELLOW}Validating Kibana configuration changes...${TEXTRESET}"
+        echo -e "Validating Kibana configuration changes...${TEXTRESET}"
 
         # Validate encryption keys
         for key in xpack.encryptedSavedObjects.encryptionKey xpack.reporting.encryptionKey xpack.security.encryptionKey; do
@@ -2452,7 +2403,7 @@ EOF
         current_group=$(stat -c "%G" "$FILE_PATH")
 
         if [ "$current_group" != "kibana" ]; then
-            echo -e "${YELLOW}Current group of $FILE_PATH is $current_group. Changing it to 'kibana'...${TEXTRESET}"
+            echo -e "Current group of $FILE_PATH is $current_group. Changing it to 'kibana'...${TEXTRESET}"
             sudo chgrp kibana "$FILE_PATH"
 
             if [ $? -eq 0 ]; then
@@ -2474,7 +2425,7 @@ EOF
         group_permissions=$(((current_permissions / 10) % 10))
 
         if ((group_permissions != 6)); then
-            echo -e "${YELLOW}Current group permissions of $FILE_PATH are not 'rw'. Changing permissions...${TEXTRESET}"
+            echo -e "Current group permissions of $FILE_PATH are not 'rw'. Changing permissions...${TEXTRESET}"
             sudo chmod g+rw "$FILE_PATH"
 
             if [ $? -eq 0 ]; then
@@ -2498,7 +2449,7 @@ EOF
 
     # Function to generate the enrollment token
     generate_enrollment_token() {
-        echo -e "${YELLOW}Generating Kibana enrollment token...${TEXTRESET}"
+        echo -e "Generating Kibana enrollment token...${TEXTRESET}"
         token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
 
         if [ -z "$token" ]; then
@@ -2513,7 +2464,7 @@ EOF
 
     # Function to start and enable the Kibana service
     start_kibana_service() {
-        echo -e "${YELLOW}Starting and enabling Kibana service...${TEXTRESET}"
+        echo -e "Starting and enabling Kibana service...${TEXTRESET}"
         sudo systemctl enable kibana --now
 
         if [ $? -ne 0 ]; then
@@ -2526,7 +2477,7 @@ EOF
 
     # Function to check the status of the Kibana service
     check_kibana_status() {
-        echo -e "${YELLOW}Checking Kibana service status...${TEXTRESET}"
+        echo -e "Checking Kibana service status...${TEXTRESET}"
         sudo systemctl status kibana --no-pager
 
         if [ $? -ne 0 ]; then
@@ -2547,7 +2498,7 @@ EOF
     # Function to display initial instructions
     display_instructions() {
         echo -e "${GREEN}The Kibana Service is now running${TEXTRESET}"
-        echo -e "${YELLOW}The next step is to enable the Elastic dashboard/services.${TEXTRESET}"
+        echo -e "The next step is to enable the Elastic dashboard/services.${TEXTRESET}"
         echo -e "${RED}PLEASE DO NOT LOGIN TO THE DASHBOARD YET${TEXTRESET}"
         echo -e "We are only starting the elasdtic service and we must provide an enrollment token and Verification code"
         echo ""
@@ -2564,7 +2515,7 @@ EOF
 
     # Function to generate a new enrollment token
     generate_enrollment_token() {
-        echo -e "${YELLOW}Generating a new enrollment token...${TEXTRESET}"
+        echo -e "Generating a new enrollment token...${TEXTRESET}"
         token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
         echo "$token" >/root/kibana_enrollment_token
         echo -e "${GREEN}New token generated and saved to /root/kibana_enrollment_token.${TEXTRESET}"
@@ -2572,7 +2523,7 @@ EOF
 
     # Function to get a verification code
     get_verification_code() {
-        echo -e "${YELLOW}Generating a verification code...${TEXTRESET}"
+        echo -e "Generating a verification code...${TEXTRESET}"
         sudo /usr/share/kibana/bin/kibana-verification-code
     }
 
@@ -2596,12 +2547,12 @@ EOF
 
         read -p "Do you need a new verification code? (yes/no): " code_needed
         if [[ "$code_needed" == "no" ]]; then
-            break
+             break
         fi
     done
 
     echo -e "${GREEN}Kibana Setup completed...${TEXTRESET}"
-
+    
     #INSTALL FILEBEAT
     # Paths and file variables
     SOURCE_CERT_PATH="/etc/elasticsearch/certs/http_ca.crt"
@@ -2631,280 +2582,280 @@ EOF
     }
 
     # Install Filebeat
-    install_filebeat() {
-        clear
-        echo -e "${GREEN}Installing Filebeat...${TEXTRESET}"
-        sleep 2
-        sudo dnf install --enablerepo=elasticsearch filebeat -y
+install_filebeat() {
+    clear
+    echo -e "${GREEN}Installing Filebeat...${TEXTRESET}"
+    sleep 2
+    sudo dnf install --enablerepo=elasticsearch filebeat -y
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat installed successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to install Filebeat.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Copy the http_ca.crt file locally
+copy_certificate_locally() {
+    if [ -f "$SOURCE_CERT_PATH" ]; then
+        echo -e "Copying http_ca.crt from $SOURCE_CERT_PATH to $DEST_CERT_DIR...${TEXTRESET}"
+        sudo cp "$SOURCE_CERT_PATH" "$DEST_CERT_PATH"
 
         if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat installed successfully.${TEXTRESET}"
+            echo -e "${GREEN}Certificate copied successfully to $DEST_CERT_PATH.${TEXTRESET}"
         else
-            echo -e "${RED}Error: Failed to install Filebeat.${TEXTRESET}"
+            echo -e "${RED}Error: Failed to copy certificate to $DEST_CERT_PATH.${TEXTRESET}"
             exit 1
         fi
+    else
+        echo -e "${RED}Error: Certificate file not found at $SOURCE_CERT_PATH.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Configure Filebeat
+configure_filebeat() {
+    local private_ip="$1"
+
+    if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
+        echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
+        exit 1
+    fi
+
+    local elastic_password
+    elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
+
+    echo -e "Backing up the original Filebeat configuration...${TEXTRESET}"
+    sudo cp "$FILEBEAT_YML" "${FILEBEAT_YML}.bak"
+
+    echo -e "Updating the Filebeat configuration...${TEXTRESET}"
+    sudo awk -v ip="$private_ip" -v password="$elastic_password" '
+BEGIN {in_elasticsearch=0; inserted_kibana=0}
+{
+    if ($0 ~ /^setup.kibana:/) {
+        in_elasticsearch=0
     }
-
-    # Copy the http_ca.crt file locally
-    copy_certificate_locally() {
-        if [ -f "$SOURCE_CERT_PATH" ]; then
-            echo -e "${YELLOW}Copying http_ca.crt from $SOURCE_CERT_PATH to $DEST_CERT_DIR...${TEXTRESET}"
-            sudo cp "$SOURCE_CERT_PATH" "$DEST_CERT_PATH"
-
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}Certificate copied successfully to $DEST_CERT_PATH.${TEXTRESET}"
-            else
-                echo -e "${RED}Error: Failed to copy certificate to $DEST_CERT_PATH.${TEXTRESET}"
-                exit 1
-            fi
-        else
-            echo -e "${RED}Error: Certificate file not found at $SOURCE_CERT_PATH.${TEXTRESET}"
-            exit 1
-        fi
+    if ($0 ~ /^output.elasticsearch:/) {
+        in_elasticsearch=1
     }
-
-    # Configure Filebeat
-    configure_filebeat() {
-        local private_ip="$1"
-
-        if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
-            echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
-            exit 1
-        fi
-
-        local elastic_password
-        elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
-
-        echo -e "${YELLOW}Backing up the original Filebeat configuration...${TEXTRESET}"
-        sudo cp "$FILEBEAT_YML" "${FILEBEAT_YML}.bak"
-
-        echo -e "${YELLOW}Updating the Filebeat configuration...${TEXTRESET}"
-        sudo awk -v ip="$private_ip" -v password="$elastic_password" '
-    BEGIN {in_elasticsearch=0; inserted_kibana=0}
-    {
-        if ($0 ~ /^setup.kibana:/) {
-            in_elasticsearch=0
+    if (!inserted_kibana && $0 ~ /^  #host: "localhost:5601"$/) {
+        print "  host: \"" ip ":5601\""
+        print "  protocol: \"http\""
+        print "  ssl.enabled: true"
+        print "  ssl.certificate_authorities: [\"/etc/filebeat/http_ca.crt\"]"
+        inserted_kibana=1
+    }
+    if (in_elasticsearch) {
+        if ($0 ~ /^  hosts:/) {
+            print "  hosts: [\"" ip ":9200\"]"
+            next
         }
-        if ($0 ~ /^output.elasticsearch:/) {
-            in_elasticsearch=1
+        if ($0 ~ /^  # Protocol/) {
+            print "  protocol: \"https\""
         }
-        if (!inserted_kibana && $0 ~ /^  #host: "localhost:5601"$/) {
-            print "  host: \"" ip ":5601\""
-            print "  protocol: \"http\""
-            print "  ssl.enabled: true"
+        if ($0 ~ /^  #api_key:/) {
+            print "  username: \"elastic\""
+            print "  password: \"" password "\""
             print "  ssl.certificate_authorities: [\"/etc/filebeat/http_ca.crt\"]"
-            inserted_kibana=1
+            print "  ssl.verification_mode: full"
         }
-        if (in_elasticsearch) {
-            if ($0 ~ /^  hosts:/) {
-                print "  hosts: [\"" ip ":9200\"]"
-                next
-            }
-            if ($0 ~ /^  # Protocol/) {
-                print "  protocol: \"https\""
-            }
-            if ($0 ~ /^  #api_key:/) {
-                print "  username: \"elastic\""
-                print "  password: \"" password "\""
-                print "  ssl.certificate_authorities: [\"/etc/filebeat/http_ca.crt\"]"
-                print "  ssl.verification_mode: full"
-            }
-        }
-        print $0
     }
-    END {
-        print "\nsetup.ilm.overwrite: true"
+    print $0
+}
+END {
+    print "\nsetup.ilm.overwrite: true"
+}
+' "$FILEBEAT_YML" >/tmp/filebeat.yml && sudo mv /tmp/filebeat.yml "$FILEBEAT_YML"
+}
+
+# Modify Suricata module configuration
+configure_suricata_module() {
+    echo -e "Configuring Suricata module...${TEXTRESET}"
+    sudo awk '
+BEGIN {in_eve=0}
+{
+    if ($0 ~ /^- module: suricata$/) {
+        in_eve=0
     }
-    ' "$FILEBEAT_YML" >/tmp/filebeat.yml && sudo mv /tmp/filebeat.yml "$FILEBEAT_YML"
+    if ($0 ~ /^  eve:$/) {
+        in_eve=1
     }
-
-    # Modify Suricata module configuration
-    configure_suricata_module() {
-        echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
-        sudo awk '
-    BEGIN {in_eve=0}
-    {
-        if ($0 ~ /^- module: suricata$/) {
-            in_eve=0
-        }
-        if ($0 ~ /^  eve:$/) {
-            in_eve=1
-        }
-        if (in_eve && $0 ~ /^    #enabled: false$/) {
-            print "    enabled: true"
-            next
-        }
-        if (in_eve && $0 ~ /^    #var.paths:/) {
-            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
-            next
-        }
-        print $0
+    if (in_eve && $0 ~ /^    #enabled: false$/) {
+        print "    enabled: true"
+        next
     }
-    ' "$SURICATA_MODULE_YML" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$SURICATA_MODULE_YML"
+    if (in_eve && $0 ~ /^    #var.paths:/) {
+        print "    var.paths: [\"/var/log/suricata/eve.json\"]"
+        next
     }
+    print $0
+}
+' "$SURICATA_MODULE_YML" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$SURICATA_MODULE_YML"
+}
 
-    # Verify Elasticsearch connection and enable Suricata module
-    verify_and_enable_module() {
-        local private_ip="$1"
+# Verify Elasticsearch connection and enable Suricata module
+verify_and_enable_module() {
+    local private_ip="$1"
 
-        if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
-            echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
-            exit 1
-        fi
+    if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
+        echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
+        exit 1
+    fi
 
-        local elastic_password
-        elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
+    local elastic_password
+    elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
 
-        echo -e "${YELLOW}Verifying Elasticsearch connection...${TEXTRESET}"
-        curl -v --cacert "$DEST_CERT_PATH" "https://$private_ip:9200" -u elastic:"$elastic_password"
+    echo -e "Verifying Elasticsearch connection...${TEXTRESET}"
+    curl -v --cacert "$DEST_CERT_PATH" "https://$private_ip:9200" -u elastic:"$elastic_password"
 
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Elasticsearch connection verified successfully.${TEXTRESET}"
-            echo -e "${YELLOW}Enabling Suricata module in Filebeat...${TEXTRESET}"
-            sudo filebeat modules enable suricata
-
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
-                configure_suricata_module
-            else
-                echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
-            fi
-        else
-            echo -e "${RED}Error: Failed to verify Elasticsearch connection.${TEXTRESET}"
-        fi
-    }
-
-    # Main script execution
-    install_filebeat
-    copy_certificate_locally
-    private_ip=$(find_private_ip)
-    configure_filebeat "$private_ip"
-    verify_and_enable_module "$private_ip"
-
-    # Spinner function for animation
-    spinner() {
-        local pid=$1
-        local delay=0.1
-        local spinstr='|/-\'
-        while [ "$(ps a | awk '{print $1}' | grep "$pid")" ]; do
-            local temp=${spinstr#?}
-            printf " [%c]  " "$spinstr"
-            local spinstr=$temp${spinstr%"$temp"}
-            sleep $delay
-            printf "\b\b\b\b\b\b"
-        done
-        printf "    \b\b\b\b"
-    }
-
-    # Enable the Filebeat Suricata module
-    enable_suricata_module() {
-        echo -e "${YELLOW}Enabling Filebeat Suricata module...${TEXTRESET}"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Elasticsearch connection verified successfully.${TEXTRESET}"
+        echo -e "Enabling Suricata module in Filebeat...${TEXTRESET}"
         sudo filebeat modules enable suricata
 
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
+            configure_suricata_module
         else
             echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
-            exit 1
         fi
+    else
+        echo -e "${RED}Error: Failed to verify Elasticsearch connection.${TEXTRESET}"
+    fi
+}
+
+# Main script execution
+install_filebeat
+copy_certificate_locally
+private_ip=$(find_private_ip)
+configure_filebeat "$private_ip"
+verify_and_enable_module "$private_ip"
+
+# Spinner function for animation
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    while [ "$(ps a | awk '{print $1}' | grep "$pid")" ]; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+}
+
+# Enable the Filebeat Suricata module
+enable_suricata_module() {
+    echo -e "Enabling Filebeat Suricata module...${TEXTRESET}"
+    sudo filebeat modules enable suricata
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Edit the Suricata module configuration
+edit_suricata_config() {
+    local config_file="/etc/filebeat/modules.d/suricata.yml"
+
+    echo -e "Configuring Suricata module...${TEXTRESET}"
+    sudo awk '
+BEGIN {in_eve=0}
+{
+    if ($0 ~ /^- module: suricata$/) {
+        in_eve=0
     }
-
-    # Edit the Suricata module configuration
-    edit_suricata_config() {
-        local config_file="/etc/filebeat/modules.d/suricata.yml"
-
-        echo -e "${YELLOW}Configuring Suricata module...${TEXTRESET}"
-        sudo awk '
-    BEGIN {in_eve=0}
-    {
-        if ($0 ~ /^- module: suricata$/) {
-            in_eve=0
-        }
-        if ($0 ~ /^  eve:$/) {
-            in_eve=1
-        }
-        if (in_eve && $0 ~ /^    enabled: false$/) {
-            print "    enabled: true"
-            next
-        }
-        if (in_eve && $0 ~ /^    #var.paths:/) {
-            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
-            next
-        }
-        print $0
+    if ($0 ~ /^  eve:$/) {
+        in_eve=1
     }
-    ' "$config_file" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$config_file"
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Suricata module configuration updated successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to update Suricata module configuration.${TEXTRESET}"
-            exit 1
-        fi
-        sleep 2
+    if (in_eve && $0 ~ /^    enabled: false$/) {
+        print "    enabled: true"
+        next
     }
-
-    # Setup Filebeat (load dashboards and pipelines)
-    setup_filebeat() {
-        clear
-        echo -e "${GREEN}Setting up Filebeat...${TEXTRESET}"
-
-        # Start the spinner in the background
-        sudo filebeat setup &
-        spinner $!
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Filebeat setup failed.${TEXTRESET}"
-            exit 1
-        fi
+    if (in_eve && $0 ~ /^    #var.paths:/) {
+        print "    var.paths: [\"/var/log/suricata/eve.json\"]"
+        next
     }
+    print $0
+}
+' "$config_file" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$config_file"
 
-    # Start and enable the Filebeat service
-    start_filebeat_service() {
-        echo -e "${YELLOW}Starting and enabling Filebeat service...${TEXTRESET}"
-        sudo systemctl enable filebeat --now
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Suricata module configuration updated successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to update Suricata module configuration.${TEXTRESET}"
+        exit 1
+    fi
+    sleep 2
+}
 
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat service started and enabled successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to start and enable Filebeat service.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Check the status of the Filebeat service
-    check_filebeat_status() {
-        echo -e "${YELLOW}Checking Filebeat service status...${TEXTRESET}"
-        sudo systemctl status filebeat --no-pager
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat service is running.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Filebeat service is not running.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Main script execution
-    enable_suricata_module
-    edit_suricata_config
-    setup_filebeat
-    start_filebeat_service
-    check_filebeat_status
+# Setup Filebeat (load dashboards and pipelines)
+setup_filebeat() {
     clear
-    echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
-    echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
-    echo -e
-    echo -e "Your generated password for this installation is located in the file /root/elastic_password"
-    echo -e "The password is:"
-    cat /root/elastic_password
-    echo " "
-    echo -e "One last step to get your dashboards are to login to Kibana http://${FQDN}:5601 (the dashboard you logged into earlier),"
-    echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
-    echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
-    read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
+    echo -e "${GREEN}Setting up Filebeat...${TEXTRESET}"
+
+    # Start the spinner in the background
+    sudo filebeat setup &
+    spinner $!
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Filebeat setup failed.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Start and enable the Filebeat service
+start_filebeat_service() {
+    echo -e "Starting and enabling Filebeat service...${TEXTRESET}"
+    sudo systemctl enable filebeat --now
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat service started and enabled successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Failed to start and enable Filebeat service.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Check the status of the Filebeat service
+check_filebeat_status() {
+    echo -e "Checking Filebeat service status...${TEXTRESET}"
+    sudo systemctl status filebeat --no-pager
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Filebeat service is running.${TEXTRESET}"
+    else
+        echo -e "${RED}Error: Filebeat service is not running.${TEXTRESET}"
+        exit 1
+    fi
+}
+
+# Main script execution
+enable_suricata_module
+edit_suricata_config
+setup_filebeat
+start_filebeat_service
+check_filebeat_status
+clear
+echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
+echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
+echo -e
+echo -e "Your generated password for this installation is located in the file /root/elastic_password"
+echo -e "The password is:"
+cat /root/elastic_password
+echo " "
+echo -e "One last step to get your dashboards are to login to Kibana http://${FQDN}:5601 (the dashboard you logged into earlier),"
+echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
+echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
+read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
 }
 
 # Use dialog to prompt the user
@@ -2967,3 +2918,4 @@ for choice in $choices; do
         ;;
     esac
 done
+
