@@ -333,25 +333,25 @@ install_netdata() {
         exit 1
     fi
 
-    echo -e "${YELLOW}Installing EPEL repository...${TEXTRESET}"
+    echo -e "${GREEN}Installing EPEL repository...${TEXTRESET}"
     if ! sudo dnf -y install epel-release; then
         echo -e "${RED}EPEL repository installation failed. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Enabling CodeReady Builder repository...${TEXTRESET}"
+    echo -e "${GREEN}Enabling CodeReady Builder repository...${TEXTRESET}"
     if ! sudo dnf config-manager --set-enabled crb; then
         echo -e "${RED}Failed to enable CodeReady Builder repository. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Installing required packages...${TEXTRESET}"
+    echo -e "${GREEN}Installing required packages...${TEXTRESET}"
     if ! sudo dnf -y install wget; then
         echo -e "${RED}Required packages installation failed. Exiting.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${YELLOW}Downloading and executing Netdata installation script...${TEXTRESET}"
+    echo -e "${GREEN}Downloading and executing Netdata installation script...${TEXTRESET}"
     if wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; then
         if ! sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive; then
             echo -e "${RED}Netdata installation failed. Exiting.${TEXTRESET}"
@@ -367,7 +367,7 @@ install_netdata() {
 
     echo -e "${GREEN}Netdata installation completed successfully.${TEXTRESET}"
 
-    echo -e "${YELLOW}Locating inside interfaces...${TEXTRESET}"
+    echo -e "${GREEN}Locating inside interfaces...${TEXTRESET}"
     inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
     if [ -z "$inside_interfaces" ]; then
@@ -377,7 +377,7 @@ install_netdata() {
 
     echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
 
-    echo -e "${YELLOW}Configuring nftables rules for Netdata...${TEXTRESET}"
+    echo -e "${GREEN}Configuring nftables rules for Netdata...${TEXTRESET}"
 
     sudo systemctl enable nftables
     sudo systemctl start nftables
@@ -395,27 +395,27 @@ install_netdata() {
             sudo nft add rule inet filter input iifname "$iface" tcp dport 19999 accept
             echo -e "${GREEN}Rule added: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
+            echo -e "${GREEN}Rule already exists: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
         fi
     done
 
     rfwb_status=$(systemctl is-active rfwb-portscan)
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        echo -e "${GREEN}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
         systemctl stop rfwb-portscan
     fi
 
     sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
-    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+    echo -e "${GREEN}Restarting nftables service to apply changes...${TEXTRESET}"
     sudo systemctl restart nftables
 
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+        echo -e "${GREEN}Restarting rfwb-portscan service...${TEXTRESET}"
         systemctl start rfwb-portscan
     fi
 
-    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
+    echo -e "${GREEN}Current rules in the input chain:${TEXTRESET}"
     sudo nft list chain inet filter input
     echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}"
     sleep 4
