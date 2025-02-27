@@ -1947,7 +1947,7 @@ install_elastic() {
     echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
     sleep 4
     # Step 1: Import the Elastic GPG key
-    echo -e "${YELLOW}Importing the Elastic GPG key...${TEXTRESET}"
+    echo -e "Importing the Elastic GPG key..."
     if sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch; then
         echo -e "${GREEN}Elastic GPG key imported successfully.${TEXTRESET}"
     else
@@ -1956,7 +1956,7 @@ install_elastic() {
     fi
 
     # Step 2: Create the Elasticsearch repository file
-    echo -e "${YELLOW}Creating the Elasticsearch repository file...${TEXTRESET}"
+    echo -e "Creating the Elasticsearch repository file..."
     repo_file="/etc/yum.repos.d/elasticsearch.repo"
     sudo bash -c "cat > $repo_file" <<EOF
 [elasticsearch]
@@ -2018,11 +2018,11 @@ EOF
     configure_elasticsearch() {
         local private_ip="$1"
 
-        echo -e "${YELLOW}Backing up the original Elasticsearch configuration...${TEXTRESET}"
+        echo -e "Backing up the original Elasticsearch configuration..."
         # Backup the original Elasticsearch configuration file
         sudo cp "$ELASTIC_YML" "${ELASTIC_YML}.bak"
 
-        echo -e "${YELLOW}Updating the Elasticsearch configuration...${TEXTRESET}"
+        echo -e "Updating the Elasticsearch configuration..."
         # Use awk to insert the network.bind_host line below the specified comments
         sudo awk -v ip="$private_ip" '
     BEGIN {inserted=0}
@@ -2049,7 +2049,7 @@ EOF
 
     # Function to set JVM heap size
     configure_jvm_heap() {
-        echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+        echo -e "Configuring JVM heap size..."
         # Create the JVM options directory if it doesn't exist
         sudo mkdir -p "$JVM_OPTIONS_DIR"
 
@@ -2060,7 +2060,7 @@ EOF
 
     # Main script execution
     main() {
-        echo -e "${YELLOW}Locating the server's private IP address...${TEXTRESET}"
+        echo -e "Locating the server's private IP address..."
         private_ip=$(find_private_ip)
 
         if [ -z "$private_ip" ]; then
@@ -2068,12 +2068,12 @@ EOF
             exit 1
         fi
 
-        echo -e "${GREEN}Private IP identified as: $private_ip${TEXTRESET}"
+        echo -e "Private IP identified as: ${GREEN}$private_ip${TEXTRESET}"
 
-        echo -e "${YELLOW}Configuring Elasticsearch...${TEXTRESET}"
+        echo -e "Configuring Elasticsearch..."
         configure_elasticsearch "$private_ip"
 
-        echo -e "${YELLOW}Configuring JVM heap size...${TEXTRESET}"
+        echo -e "Configuring JVM heap size..."
         configure_jvm_heap
     }
 
@@ -2096,7 +2096,7 @@ EOF
     configure_nftables() {
         local interface="$1"
 
-        echo -e "${YELLOW}Configuring nftables for interface: $interface...${TEXTRESET}"
+        echo -e "Configuring nftables for interface: ${GREEN}$interface...${TEXTRESET}"
 
         # Ensure the nftables service is enabled and started
         sudo systemctl enable nftables
