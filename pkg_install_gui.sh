@@ -1547,9 +1547,10 @@ install_ntopng() {
 # Function to install Suricata
 install_suricata() {
     clear
-    echo -e "${YELLOW}Installing Suricata Engine${RESET}"
+    echo -e "${YELLOW}Installing Suricata Engine${TEXTRESET}"
     sleep 2
     dnf -y install bc
+
     # Function to check if the system has at least 8 GB of RAM
     check_ram() {
         # Get the total memory in KB
@@ -1559,13 +1560,13 @@ install_suricata() {
 
         # Check if the memory is at least 8 GB
         if ((total_mem_gb >= 8)); then
-            echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${RESET}"
+            echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${TEXTRESET}"
             sleep 4
             return 0
         else
             needed_ram=$((8 - total_mem_gb))
-            echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${RESET}"
-            echo -e "${RED}Additional RAM needed: ${needed_ram} GB${RESET}"
+            echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${TEXTRESET}"
+            echo -e "${RED}Additional RAM needed: ${needed_ram} GB${TEXTRESET}"
             sleep 4
             return 1
         fi
@@ -1578,17 +1579,16 @@ install_suricata() {
 
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
-            echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${RESET}"
+            echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${TEXTRESET}"
             sleep 4
             return 0
         else
             needed_cpus=$((2 - cpu_count))
-            echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${RESET}"
-            echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${RESET}"
+            echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${TEXTRESET}"
+            echo -e "${YELLOW}Additional CPUs needed: ${needed_cpus}${TEXTRESET}"
             sleep 4
             return 1
         fi
-    sleep 4
     }
 
     # Run checks
@@ -1600,14 +1600,14 @@ install_suricata() {
 
     # Evaluate results
     clear
-    echo -e "${CYAN}\nSummary:${RESET}"
+    echo -e "${CYAN}\nSummary:${TEXTRESET}"
     if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
-        echo -e "${GREEN}System meets the minimum requirements.${RESET}"
+        echo -e "${GREEN}System meets the minimum requirements.${TEXTRESET}"
         sleep 4
     else
-        echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
-        [ "$ram_status" -ne 0 ] && echo -e "${YELLOW}Please add more RAM.${RESET}"
-        [ "$cpu_status" -ne 0 ] && echo -e "${YELLOW}Please add more CPUs.${RESET}"
+        echo -e "${RED}System does not meet the minimum requirements (8GB of RAM, 2 CPUs).${TEXTRESET}"
+        [ "$ram_status" -ne 0 ] && echo -e "${YELLOW}Please add more RAM.${TEXTRESET}"
+        [ "$cpu_status" -ne 0 ] && echo -e "${YELLOW}Please add more CPUs.${TEXTRESET}"
         sleep 3
         exit 1
     fi
@@ -1742,7 +1742,7 @@ install_suricata() {
     if sudo suricata-update update-sources; then
         echo -e "${GREEN}suricata-update update-sources completed successfully.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to run suricata-update update-sources .${TEXTRESET}"
+        echo -e "${RED}Failed to run suricata-update update-sources.${TEXTRESET}"
         exit 1
     fi
 
@@ -1808,6 +1808,7 @@ install_suricata() {
         echo "$OUTPUT"
         exit 1
     fi
+
     # Start the Suricata service
     echo -e "Starting Suricata service..."
     sudo systemctl start suricata
@@ -1819,7 +1820,7 @@ install_suricata() {
     # Display the status output
     echo "$status_output"
 
-    #Delay checking the log file for xseconds
+    # Delay checking the log file for x seconds
     sleep 10
 
     # Function to check for permission errors and fix them
@@ -1828,18 +1829,10 @@ install_suricata() {
         status_output=$(sudo systemctl status suricata --no-pager)
 
         # Check for permission denied errors in the status output
-        if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output
- module \"fast\": s
-etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup fa
-iled|E: logopenfile
-: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
+        if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
             # Display the specific lines indicating permission errors
             echo -e "${RED}Detected permission issues in the following log entries:${TEXTRESET}"
-            echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output
- module \"fast\": s
-etup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup fa
-iled|E: logopenfile
-: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
+            echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
             return 1
         else
             return 0
@@ -1879,8 +1872,7 @@ iled|E: logopenfile
     done
 
     if [ $attempts -eq $max_attempts ]; then
-        echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}
-"
+        echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
         exit 1
     fi
 
@@ -1921,8 +1913,6 @@ iled|E: logopenfile
     # Run the curl command and capture the response
     response=$(curl -s http://testmynids.org/uid/index.html)
 
-    # Run the curl command and capture the response
-    response=$(curl -s http://testmynids.org/uid/index.html)
     # Validate the response
     expected_response="uid=0(root) gid=0(root) groups=0(root)"
     if [ "$response" == "$expected_response" ]; then
@@ -1935,7 +1925,7 @@ iled|E: logopenfile
 
         # Check the log line for the classification
         if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
-            echo -e "${GREEN}Suricata rule was successful.${TEXTRESET}" The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498"
+            echo -e "${GREEN}Suricata rule was successful.${TEXTRESET} The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498"
         else
             echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
             exit 1
