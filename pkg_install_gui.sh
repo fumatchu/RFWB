@@ -1753,14 +1753,14 @@ install_suricata() {
 
     # Loop to allow adding additional rule sources
     while true; do
-        echo -e "${YELLOW}Do you want to add additional rule sources? (y/n)${TEXTRESET}"
+        echo -e "Do you want to add additional rule sources? (y/n)"
         read -p "Your choice: " add_rules
 
         if [[ "$add_rules" == "y" || "$add_rules" == "Y" ]]; then
             echo -e "${YELLOW}Listing available rule sources...${TEXTRESET}"
             sudo suricata-update list-sources
 
-            echo -e "${YELLOW}Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
+            echo -e "Please enter the source names you want to add, separated by spaces:"
             read -r rule_sources
 
             for source in $rule_sources; do
@@ -1774,14 +1774,14 @@ install_suricata() {
     done
 
     # Run suricata-update after the loop
-    echo -e "${YELLOW}Running suricata-update...${TEXTRESET}"
+    echo -e "Running suricata-update..."
     if sudo suricata-update; then
         echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
     else
         echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
     fi
 
-    echo -e "${GREEN}Suricata has been configured with the inside interface $INSIDE_INTERFACE and proper permissions.${TEXTRESET}"
+    echo -e "Suricata has been configured with the inside interface ${GREEN}$INSIDE_INTERFACE${TEXTRESET} and proper permissions."
     # Inform the user that the configuration validation is starting
     echo -e "${YELLOW}Validating Suricata configuration...${TEXTRESET}"
 
@@ -1805,7 +1805,7 @@ install_suricata() {
         exit 1
     fi
     # Start the Suricata service
-    echo -e "${YELLOW}Starting Suricata service...${TEXTRESET}"
+    echo -e "Starting Suricata service..."
     sudo systemctl start suricata
 
     # Show the status of the Suricata service
@@ -1882,9 +1882,9 @@ iled|E: logopenfile
 
     # Inform the user about the test
     echo -e "${YELLOW}Testing Suricata rule...${TEXTRESET}"
-    echo -e "${YELLOW}Waiting for the engine to start...${TEXTRESET}"
+    echo -e "Waiting for the engine to start..."
     # Total duration for the progress bar
-    duration=15
+    duration=30
 
     # Total number of steps in the progress bar
     steps=30
@@ -1922,7 +1922,7 @@ iled|E: logopenfile
     # Validate the response
     expected_response="uid=0(root) gid=0(root) groups=0(root)"
     if [ "$response" == "$expected_response" ]; then
-        echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
+        echo -e "${GREEN}Curl command was successful.${TEXTRESET} Expected response received:"
         echo -e "${GREEN}$response${TEXTRESET}"
         sleep 5
         # Capture the last line of the fast.log containing the specified ID
@@ -1931,7 +1931,7 @@ iled|E: logopenfile
 
         # Check the log line for the classification
         if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
-            echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TEXTRESET}"
+            echo -e "${GREEN}Suricata rule was successful.${TEXTRESET}" The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498"
         else
             echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
             exit 1
