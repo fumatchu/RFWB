@@ -1549,7 +1549,6 @@ install_suricata() {
     clear
     echo -e "${YELLOW}Installing Suricata Engine${TEXTRESET}"
     sleep 2
-    dnf -y install bc
 
     # Function to check if the system has at least 8 GB of RAM
     check_ram() {
@@ -1561,13 +1560,13 @@ install_suricata() {
         # Check if the memory is at least 8 GB
         if ((total_mem_gb >= 8)); then
             echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${TEXTRESET}"
-            sleep 4
+            sleep 2
             return 0
         else
             needed_ram=$((8 - total_mem_gb))
             echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${TEXTRESET}"
             echo -e "${RED}Additional RAM needed: ${needed_ram} GB${TEXTRESET}"
-            sleep 4
+            sleep 2
             return 1
         fi
     }
