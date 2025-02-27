@@ -1697,7 +1697,14 @@ install_suricata() {
         echo -e "${RED}Failed to add user $USER to the suricata group.${TEXTRESET}"
         exit 1
     fi
-
+    # Run suricata-update update-sources
+    echo -e "Running suricata-update update-sources...${TEXTRESET}"
+    if sudo suricata-update update-sources; then
+        echo -e "${GREEN}suricata-update update-sources completed successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
+        exit 1
+    fi
     # Run suricata-update
     echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
