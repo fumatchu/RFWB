@@ -1739,12 +1739,12 @@ install_suricata() {
     # Run suricata-update after the loop
     echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
-        echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
+        echo -e "suricata-update completed successfully."
     else
         echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
     fi
 
-    echo -e "${GREEN}Suricata has been configured with the inside interface $INSIDE_INTERFACE and proper permissions.${TEXTRESET}"
+    echo -e "Suricata has been configured with the inside interface ${YELLOW}$INSIDE_INTERFACE${TEXTRESET} and proper permissions."
     # Inform the user that the configuration validation is starting
     echo -e "Validating Suricata configuration...${TEXTRESET}"
 
