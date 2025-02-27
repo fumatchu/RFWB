@@ -2852,7 +2852,7 @@ echo -e "Your generated password for this installation is located in the file /r
 echo -e "The password is:"
 cat /root/elastic_password
 echo " "
-echo -e "One last step to get your dashboards are to login to Kibana http://${FQDN}:5601 (the dashboard you logged into earlier),"
+echo -e "One last step to get your dashboards are to login to Kibana http://$ip:5601 (the dashboard you logged into earlier),"
 echo -e "Input "type:dashboard suricata" (without quotes) in the search box at the top, and select"
 echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
 read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
