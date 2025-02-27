@@ -706,6 +706,7 @@ setup_nftables() {
     if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
       sudo nft add rule inet filter input iifname "$iface" tcp dport 22 accept
       echo -e "${GREEN}Rule added: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
+      sleep 4
     else
       echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
     fi
