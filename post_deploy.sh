@@ -171,7 +171,8 @@ sleep 4
 
 # Function to manage inside interfaces and remove gateway entries
 clear
-echo -e "${GREEN}Updating the Inside Gateway Entries.. removing INSIDE interface Gateway entries.${TEXTRESET}"
+echo -e "${GREEN}Updating the Inside Gateway Entries..${TEXTRESET} 
+echo -e "Removing ${YELLOW}INSIDE${TEXTRESET} interface Gateway entries."
 sleep 4
 manage_inside_gw() {
     # Find the main interface with a connection name ending in '-inside'
@@ -194,10 +195,10 @@ manage_inside_gw() {
 
     # Loop through each connection and remove any gateway settings
     for connection_name in $connection_names; do
-        echo -e "${GREEN}Processing connection: $connection_name${TEXTRESET}"
+        echo -e "${GREEN}Processing connection:${TEXTRESET} $connection_name"
         # Remove the gateway for this connection
         nmcli connection modify "$connection_name" ipv4.gateway ""
-        echo -e "${GREEN}Removed gateway for connection: $connection_name${TEXTRESET}"
+        echo -e "${GREEN}Removed gateway for connection:${TEXTRESET} $connection_name"
     done
 }
 sleep 4
