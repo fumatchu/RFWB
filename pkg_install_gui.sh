@@ -40,11 +40,11 @@ echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Install Avahi and Avahi Tools
-echo -e "${YELLOW}Installing Avahi and Avahi Tools...${TEXTRESET}"
+echo -e "Installing Avahi and Avahi Tools..."
 sudo yum install -y avahi avahi-tools
 
 # Configure Avahi to enable mDNS reflection on internal interfaces
-echo -e "${YELLOW}Configuring Avahi to enable mDNS reflection...${TEXTRESET}"
+echo -e "Configuring Avahi to enable mDNS reflection..."
 # Backup existing configuration
 sudo cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.bak
 
