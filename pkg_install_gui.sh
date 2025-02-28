@@ -2896,6 +2896,7 @@ options=(
    10 "Install SNMP Daemon" off
    11 "Install Netdata" off
    12 "Install/Configure QOS for VOICE" off
+   13 "Install mDNS Reflector (Avahi)" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2938,6 +2939,9 @@ for choice in $choices; do
         ;;
     12)
         install_qos
+        ;;
+    13)
+        install_avahi
         ;;
     esac
 done
