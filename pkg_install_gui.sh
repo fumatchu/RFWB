@@ -2779,7 +2779,7 @@ EOF
     check_filebeat_status
     clear
     echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
-    cat << EOF
+    echo " "
     echo -e ${GREEN}###################################################################
     echo -e      Elastic/Kibana/Filebeat Installation successful!
     echo -e ###################################################################${TEXTRESET}"
