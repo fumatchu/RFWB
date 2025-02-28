@@ -33,8 +33,8 @@ find_sub_interfaces() {
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}"
-echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}"
+echo -e "${GREEN}Inside interface:${TEXTRESET} $INSIDE_INTERFACE"
+echo -e "${GREEN}Outside interface:${TEXTRESET} $OUTSIDE_INTERFACE"
 
 # Find sub-interfaces for the inside interface
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
