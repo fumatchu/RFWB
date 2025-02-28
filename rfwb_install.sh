@@ -549,7 +549,7 @@ function validate_ip() {
 
 # Function to display a graphical representation of mapped VLANs
 function display_vlan_map() {
-  echo -e "${GREEN}Existing VLAN Mappings:${TEXTRESET}"
+  echo -e "${GREEN}VLAN Mappings:${TEXTRESET}"
   nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep ":vlan:" | sort | uniq | while IFS=: read -r con_name con_type con_iface; do
     # Extract VLAN ID from the interface name
     vlan_id="${con_iface##*.}"
