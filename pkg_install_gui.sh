@@ -2433,7 +2433,7 @@ EOF
         echo -e "${GREEN}The Kibana Service is now running${TEXTRESET}"
         echo -e "The next step is to enable the Elastic dashboard/services.${TEXTRESET}"
         echo -e "${RED}PLEASE DO NOT LOGIN TO THE DASHBOARD YET${TEXTRESET}"
-        echo -e "We are only starting the elasdtic service and we must provide an enrollment token and Verification code"
+        echo -e "We must provide an enrollment token and Verification code"
         echo ""
         echo "#1 - Open a browser (Leave this terminal open)"
         echo ""
@@ -2465,7 +2465,7 @@ EOF
 
     # Loop to manage enrollment token generation
     while true; do
-        read -p "Was the enrollment token successful? If it was you're being asked for a verification code (yes/no): " token_success
+        read -p "Was the Enrollment Token successful? (yes/no): " token_success
         if [[ "$token_success" == "no" ]]; then
             generate_enrollment_token
         else
@@ -2475,7 +2475,7 @@ EOF
 
     # Prompt for verification code
     while true; do
-        read -p "Press Enter to get your Verification Code When Ready: "
+        read -p "When ready, press enter to get your Verification Code: "
         get_verification_code
 
         read -p "Do you need a new verification code? (yes/no): " code_needed
