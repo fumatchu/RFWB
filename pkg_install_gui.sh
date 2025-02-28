@@ -2783,7 +2783,7 @@ EOF
     echo " "
     echo -e "Login Credentials:"
     echo -e "${GREEN}User:${TEXTRESET}elastic"
-    echo -e "${GREEN}Password:${TEXTRESET}" cat /root/elastic_password
+    echo -e "${GREEN}Password:${TEXTRESET} $(cat /root/elastic_password)"
     echo -e "Your generated password for this installation is located in the file /root/elastic_password"
     echo " "
     echo -e "Login to Kibana http://$private_ip:5601 (the dashboard you logged into earlier),"
