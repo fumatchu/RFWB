@@ -2779,15 +2779,18 @@ EOF
     check_filebeat_status
     clear
     echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
-    echo -e "${GREEN}Setup completed successfully.${TEXTRESET}"
-    echo -e
-    echo -e "Your generated password for this installation is located in the file /root/elastic_password"
-    echo -e "The password is:"
-    cat /root/elastic_password
+    echo -e "${GREEN}Elastic/Kibana/Filebeat Installation successful!${TEXTRESET}"
     echo " "
-    echo -e "One last step to get your dashboards are to login to Kibana http://$private_ip:5601 (the dashboard you logged into earlier),"
+    echo -e "Login Credentials:"
+    echo -e "${GREEN}User:${TEXTRESET}elastic"
+    echo -e "${GREEN}Password:${TEXTRESET}" cat /root/elastic_password
+    echo -e "Your generated password for this installation is located in the file /root/elastic_password"
+    echo " "
+    echo -e "Login to Kibana http://$private_ip:5601 (the dashboard you logged into earlier),"
     echo -e "Input \"type:dashboard suricata\" (without quotes) in the search box at the top, and select"
-    echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard- Go ahead and do that now"
+    echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard"
+    echo " "
+    
     read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
 }
 
