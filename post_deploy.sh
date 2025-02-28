@@ -4,9 +4,10 @@
 RED="\033[0;31m"
 GREEN="\033[0;32m"
 TEXTRESET="\033[0m"
-
+clear
 #Install dnf-auomatic and lock down 
 echo -e "${GREEN}Configuring system for security updates only${TEXTRESET}"
+sleep 3
 # Install dnf-automatic
 sudo dnf -y install dnf-automatic
 
@@ -46,7 +47,7 @@ manage_inside_dns() {
         exit 1
     fi
 
-    echo -e "${GREEN}Main inside interface found: $main_interface${TEXTRESET}"
+    echo -e "${GREEN}Main inside interface found:${TEXTRESET} $main_interface"
 
     # Get all connections and identify those associated with the inside interface
     connection_names=$(nmcli -g NAME,DEVICE connection show | awk -F: -v main_intf="$main_interface" '$2 ~ main_intf {print $1}')
@@ -59,10 +60,12 @@ manage_inside_dns() {
     # Check if named is installed and running
     if systemctl is-active --quiet named; then
         dns_servers="127.0.0.1 208.67.222.222 208.67.220.220"
-        echo -e "${GREEN}Using DNS servers: $dns_servers (named is active)${TEXTRESET}"
+        echo -e "${GREEN}Using DNS servers:${TEXTRESET} $dns_servers (named is active)"
+        sleep 2
     else
         dns_servers="208.67.222.222 208.67.220.220"
-        echo -e "${YELLOW}Using DNS servers: $dns_servers (named is not active)${TEXTRESET}"
+        echo -e "${YELLOW}Using DNS servers:${TEXTRESET} $dns_servers (named is not active)"
+        sleep 2
     fi
 
     # Loop through each connection and update DNS settings
@@ -71,11 +74,12 @@ manage_inside_dns() {
 
         # Remove any existing DNS settings
         nmcli connection modify "$connection_name" ipv4.dns ""
-        echo -e "${GREEN}Cleared existing DNS settings for connection: $connection_name${TEXTRESET}"
+        echo -e "${GREEN}Cleared existing DNS settings for connection:${TEXTRESET} $connection_name"
+        sleep 2
 
         # Add new DNS servers
         nmcli connection modify "$connection_name" ipv4.dns "$dns_servers"
-        echo -e "${GREEN}Set new DNS servers for connection: $connection_name${TEXTRESET}"
+        echo -e "${GREEN}Set new DNS servers for connection:${TEXTRESET} $connection_name"
     done
     sleep 4
 }
