@@ -259,7 +259,7 @@ This script can be used to create a SOHO firewall implementation on Rocky Linux 
 
 #1-Make sure you have ${YELLOW}two HARDWARE/VIRTUAL interfaces${RESET} on your system that are detected by nmcli
 #2-The ${YELLOW}FIRST, connected interface${RESET} will be designated as your inside interface (This interface you are probably SSH'd into right now)
-It's imperative your Internet facing interface be ${YELLOW}UNPLUGGED${RESET} (We will configure it later)
+It's imperative all other interfaces be ${YELLOW}UNPLUGGED${RESET} (We will configure it later)
 "
 
 read -p "Press Enter to start the installer"
