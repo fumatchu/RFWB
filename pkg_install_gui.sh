@@ -1514,7 +1514,6 @@ install_suricata() {
     clear
     echo -e "Installing Suricata Engine${RESET}"
     sleep 2
-    dnf -y install bc
     # Function to check if the system has at least 8 GB of RAM
     check_ram() {
         # Get the total memory in KB
@@ -1525,6 +1524,7 @@ install_suricata() {
         # Check if the memory is at least 8 GB
         if ((total_mem_gb >= 8)); then
             echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${RESET}"
+            sleep 1
             return 0
         else
             needed_ram=$((8 - total_mem_gb))
@@ -1542,6 +1542,7 @@ install_suricata() {
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
             echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${RESET}"
+            sleep 1
             return 0
         else
             needed_cpus=$((2 - cpu_count))
@@ -1560,11 +1561,10 @@ install_suricata() {
     cpu_status=$?
 
     # Evaluate results
-    clear
     echo -e "${CYAN}\nSummary:${RESET}"
     if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
         echo -e "${GREEN}System meets the minimum requirements.${RESET}"
-        sleep 4
+        sleep 3
     else
         echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
         [ "$ram_status" -ne 0 ] && echo -e "Please add more RAM.${RESET}"
@@ -2795,7 +2795,7 @@ EOF
 }
 
 # Use dialog to prompt the user
-cmd=(dialog --separate-output --checklist "Select services to install:" 22 80 16)
+cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
 options=(
     1 "Install BIND" off
     2 "Install ISC KEA" off
