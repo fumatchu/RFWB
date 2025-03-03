@@ -1338,81 +1338,6 @@ install_cockpit() {
     sleep 4
 }
 
-# Function to install WEBMIN
-install_webmin() {
-    clear
-    echo -e "${GREEN}Installing Webmin...${TEXTRESET}"
-    sleep 2
-    curl -o webmin-setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repos.sh
-    yes y | sh webmin-setup-repos.sh
-    dnf -y install webmin
-    echo -e "${GREEN}Enabling Webmin at boot up${TEXTRESET}"
-    systemctl enable webmin
-
-    # Function to locate the inside interfaces
-    find_inside_interfaces() {
-        # Find all active interfaces with a name ending in '-inside'
-        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-        if [ -z "$inside_interfaces" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
-            exit 1
-        fi
-
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
-    }
-
-    # Function to set up nftables rules for Webmin on the inside interfaces
-    setup_nftables_for_webmin() {
-        # Ensure the nftables service is enabled and started
-        sudo systemctl enable nftables
-        sudo systemctl start nftables
-
-        # Create a filter table if it doesn't exist
-        if ! sudo nft list tables | grep -q 'inet filter'; then
-            sudo nft add table inet filter
-        fi
-
-        # Create an input chain if it doesn't exist
-        if ! sudo nft list chain inet filter input &>/dev/null; then
-            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
-        fi
-
-        # Add rules to allow Webmin on the inside interfaces using port 10000
-        for iface in $inside_interfaces; do
-            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 10000 accept"; then
-                sudo nft add rule inet filter input iifname "$iface" tcp dport 10000 accept
-                echo -e "${GREEN}Rule added: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
-            else
-                echo "Rule already exists: Allow Webmin on port 10000 for interface $iface"
-            fi
-        done
-        # Check and handle rfwb-portscan service
-        rfwb_status=$(systemctl is-active rfwb-portscan)
-        if [ "$rfwb_status" == "active" ]; then
-            systemctl stop rfwb-portscan
-        fi
-        # Save the current nftables configuration
-        sudo nft list ruleset >/etc/sysconfig/nftables.conf
-        # Restart the nftables service to apply changes
-        sudo systemctl restart nftables
-        # Restart rfwb-portscan service if it was active
-        if [ "$rfwb_status" == "active" ]; then
-            systemctl start rfwb-portscan
-        fi
-        # Show the added rules in the input chain
-        sudo nft list chain inet filter input
-    }
-
-    # Execute functions
-    find_inside_interfaces
-    setup_nftables_for_webmin
-
-    # Continue with the rest of the script
-    echo -e "${GREEN}Webmin Install Complete...${TEXTRESET}"
-    sleep 4
-}
-
 # Function to install NTOPNG
 install_ntopng() {
     clear
@@ -2820,16 +2745,15 @@ cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16
 options=(
     1 "Install BIND and ISC KEA (DHCP)" off
     2 "Install Cockpit" off
-    3 "Install Webmin" off
-    4 "Install ntopng" off
-    5 "Install DDNS Client" off
-    6 "Install Suricata (Only Suricata Engine)" off
-    7 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    8 "Install RFWB Portscan detection" off
-    9 "Install SNMP Daemon" off
-   10 "Install Netdata" off
-   11 "Install QOS for VOICE" off
-   12 "Install mDNS Reflector (Avahi)" off
+    3 "Install ntopng" off
+    4 "Install DDNS Client" off
+    5 "Install Suricata (Only Suricata Engine)" off
+    6 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    7 "Install RFWB Portscan detection" off
+    8 "Install SNMP Daemon" off
+    9 "Install Netdata" off
+   10 "Install QOS for VOICE" off
+   11 "Install mDNS Reflector (Avahi)" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2844,33 +2768,30 @@ for choice in $choices; do
         install_cockpit
         ;;
     3)
-        install_webmin
-        ;;
-    4)
         install_ntopng
         ;;
-    5)
+    4)
         install_ddclient
         ;;
-    6)
+    5)
         install_suricata
         ;;
-    7)
+    6)
         install_elastic
         ;;
-    8)
+    7)
         install_portscan
         ;;
-    9)
+    8)
         install_snmpd
         ;;
-    10)
+    9)
         install_netdata
         ;;
-    11)
+    10)
         install_qos
         ;;
-    12)
+    11)
         install_avahi
         ;;
     esac
