@@ -228,7 +228,7 @@ sudo systemctl enable nftables
 sudo systemctl start nftables
 
 echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}" | tee >(logger)
-echo -e "Creating and downloading threat lists for nftables...Please Wait"
+echo -e "${YELLOW]Downloading and compiling threat lists for nftables...Please Wait${TEXTRESET}"
 # Create the threat list update script
 cat <<'EOF' >/usr/local/bin/update_nft_threatlist.sh
 #!/bin/bash
