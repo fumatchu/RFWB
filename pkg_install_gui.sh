@@ -1154,17 +1154,97 @@ install_ddclient() {
     sleep 4
 }
 
-# Function to install BIND and KEA
-install_bind_kea() {
+# Function to install BIND
+install_bind() {
     clear
-    echo -e "${GREEN}Installing BIND and ISC KEA...${TEXTRESET}"
+    echo -e "${GREEN}Installing BIND...${TEXTRESET}"
     sleep 2
-
-    # Install BIND
     dnf -y install bind
     echo -e "${GREEN}BIND installation complete.${TEXTRESET}"
 
-    # Install ISC KEA
+    # Function to locate the inside interface and its sub-interfaces
+    find_inside_interfaces() {
+        # Find the main interface with a connection name ending in '-inside'
+        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+        if [ -z "$main_interface" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
+
+        # Find all sub-interfaces (e.g., VLANs) associated with the main interface
+        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
+
+        # Combine main interface and sub-interfaces into a single list
+        inside_interfaces="$main_interface $sub_interfaces"
+
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
+
+    # Function to set up nftables rules for DNS on the inside interfaces
+    setup_nftables_for_dns() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        # Add rules to allow DNS on the inside interfaces
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
+                echo -e "${GREEN}Rule added: Allow DNS (UDP) on interface $iface${TEXTRESET}"
+            else
+                echo "Rule already exists: Allow DNS (UDP) on interface $iface"
+            fi
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
+                echo -e "${GREEN}Rule added: Allow DNS (TCP) on interface $iface${TEXTRESET}"
+            else
+                echo "Rule already exists: Allow DNS (TCP) on interface $iface"
+            fi
+        done
+
+        # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+
+        # Save the current nftables configuration
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+        # Show the added rules in the input chain
+        sudo nft list chain inet filter input
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_dns
+
+    # Continue with the rest of the script
+    echo -e "${GREEN}BIND Install Complete...${TEXTRESET}"
+    sleep 4
+}
+
+# Function to install ISC KEA
+install_isc_kea() {
+    clear
+    echo -e "${GREEN}Installing ISC KEA...${TEXTRESET}"
+    sleep 2
     dnf -y install epel-release
     curl -1sLf 'https://dl.cloudsmith.io/public/isc/kea-2-6/cfg/setup/bash.rpm.sh' | sudo bash
     sudo dnf -y update
@@ -1190,8 +1270,8 @@ install_bind_kea() {
         echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
     }
 
-    # Function to set up nftables rules for DNS and DHCP on the inside interfaces
-    setup_nftables() {
+    # Function to set up nftables rules for DHCP on the inside interfaces
+    setup_nftables_for_dhcp() {
         # Ensure the nftables service is enabled and started
         sudo systemctl enable nftables
         sudo systemctl start nftables
@@ -1206,18 +1286,8 @@ install_bind_kea() {
             sudo nft add chain inet filter input { type filter hook input priority 0 \; }
         fi
 
-        # Add rules to allow DNS and DHCP on the inside interfaces
+        # Add rules to allow DHCP on the inside interfaces
         for iface in $inside_interfaces; do
-            # Allow DNS
-            for proto in udp tcp; do
-                if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" $proto dport 53 accept"; then
-                    sudo nft add rule inet filter input iifname "$iface" $proto dport 53 accept
-                    echo -e "${GREEN}Rule added: Allow DNS ($proto) on interface $iface${TEXTRESET}"
-                else
-                    echo "Rule already exists: Allow DNS ($proto) on interface $iface"
-                fi
-            done
-
             # Allow DHCP for IPv4 (UDP port 67)
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
@@ -1225,7 +1295,6 @@ install_bind_kea() {
             else
                 echo "Rule already exists: Allow DHCP (IPv4) on interface $iface"
             fi
-
             # Allow DHCP for IPv6 (UDP port 547)
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
@@ -1234,13 +1303,11 @@ install_bind_kea() {
                 echo "Rule already exists: Allow DHCP (IPv6) on interface $iface"
             fi
         done
-
         # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
             systemctl stop rfwb-portscan
         fi
-
         # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
         # Restart the nftables service to apply changes
@@ -1255,13 +1322,12 @@ install_bind_kea() {
 
     # Execute functions
     find_inside_interfaces
-    setup_nftables
+    setup_nftables_for_dhcp
 
     # Continue with the rest of the script
-    echo -e "${GREEN}BIND and ISC KEA Install Complete...${TEXTRESET}"
+    echo -e "${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
     sleep 4
 }
-
 # Function to install COCKPIT
 install_cockpit() {
     clear
@@ -1335,6 +1401,81 @@ install_cockpit() {
 
     # Continue with the rest of the script
     echo -e "${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    sleep 4
+}
+
+# Function to install WEBMIN
+install_webmin() {
+    clear
+    echo -e "${GREEN}Installing Webmin...${TEXTRESET}"
+    sleep 2
+    curl -o webmin-setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repos.sh
+    yes y | sh webmin-setup-repos.sh
+    dnf -y install webmin
+    echo -e "${GREEN}Enabling Webmin at boot up${TEXTRESET}"
+    systemctl enable webmin
+
+    # Function to locate the inside interfaces
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
+        fi
+
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    }
+
+    # Function to set up nftables rules for Webmin on the inside interfaces
+    setup_nftables_for_webmin() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        # Add rules to allow Webmin on the inside interfaces using port 10000
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 10000 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 10000 accept
+                echo -e "${GREEN}Rule added: Allow Webmin on port 10000 for interface $iface${TEXTRESET}"
+            else
+                echo "Rule already exists: Allow Webmin on port 10000 for interface $iface"
+            fi
+        done
+        # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+        # Save the current nftables configuration
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+        # Show the added rules in the input chain
+        sudo nft list chain inet filter input
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_webmin
+
+    # Continue with the rest of the script
+    echo -e "${GREEN}Webmin Install Complete...${TEXTRESET}"
     sleep 4
 }
 
@@ -2743,17 +2884,19 @@ EOF
 # Use dialog to prompt the user
 cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
 options=(
-    1 "Install BIND and ISC KEA (DHCP)" off
-    2 "Install Cockpit" off
-    3 "Install ntopng" off
-    4 "Install DDNS Client" off
-    5 "Install Suricata (Only Suricata Engine)" off
-    6 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    7 "Install RFWB Portscan detection" off
-    8 "Install SNMP Daemon" off
-    9 "Install Netdata" off
-   10 "Install QOS for VOICE" off
-   11 "Install mDNS Reflector (Avahi)" off
+    1 "Install BIND" off
+    2 "Install ISC KEA" off
+    3 "Install Cockpit" off
+    4 "Install Webmin" off
+    5 "Install ntopng" off
+    6 "Install DDNS Client" off
+    7 "Install Suricata (Only Suricata Engine)" off
+    8 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    9 "Install RFWB Portscan detection" off
+   10 "Install SNMP Daemon" off
+   11 "Install Netdata" off
+   12 "Install/Configure QOS for VOICE" off
+   13 "Install mDNS Reflector (Avahi)" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2762,36 +2905,42 @@ clear
 for choice in $choices; do
     case $choice in
     1)
-        install_bind_kea
+        install_bind
         ;;
     2)
-        install_cockpit
+        install_isc_kea
         ;;
     3)
-        install_ntopng
+        install_cockpit
         ;;
     4)
-        install_ddclient
+        install_webmin
         ;;
     5)
-        install_suricata
+        install_ntopng
         ;;
     6)
-        install_elastic
+        install_ddclient
         ;;
     7)
-        install_portscan
+        install_suricata
         ;;
     8)
-        install_snmpd
+        install_elastic
         ;;
     9)
-        install_netdata
+        install_portscan
         ;;
     10)
-        install_qos
+        install_snmpd
         ;;
     11)
+        install_netdata
+        ;;
+    12)
+        install_qos
+        ;;
+    13)
         install_avahi
         ;;
     esac
