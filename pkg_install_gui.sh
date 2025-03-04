@@ -2563,6 +2563,7 @@ options=(
    10 "Install Netdata" off
    11 "Install/Configure QOS for VOICE" off
    12 "Install mDNS Reflector (Avahi)" off
+   13 "Install EVEBOX for Suricata" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2605,6 +2606,9 @@ for choice in $choices; do
         ;;
     12)
         install_avahi
+        ;;
+    13)
+        install_eve
         ;;
     esac
 done
