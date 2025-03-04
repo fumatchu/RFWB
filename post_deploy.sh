@@ -49,17 +49,17 @@ manage_inside_dns() {
 
     if systemctl is-active --quiet named; then
         dns_servers="127.0.0.1 208.67.222.222 208.67.220.220"
-        echo -e "${GREEN}Using DNS servers:${TEXTRESET} $dns_servers (named is active)"
+        echo -e "${GREEN}Using DNS servers:${TEXTRESET} $dns_servers ${YELLOW}(named is active)${TEXTRESET}"
     else
         dns_servers="208.67.222.222 208.67.220.220"
-        echo -e "${YELLOW}Using DNS servers:${TEXTRESET} $dns_servers (named is not active)"
+        echo -e "${YELLOW}Using DNS servers:${TEXTRESET} $dns_servers ${YELLOW}(named is not active)${TEXTRESET}"
     fi
     sleep 2
 
     for connection_name in $connection_names; do
-        echo -e "${GREEN}Processing connection: $connection_name${TEXTRESET}"
+        echo -e "Processing connection: ${GREEN}$connection_name${TEXTRESET}"
         nmcli connection modify "$connection_name" ipv4.dns ""
-        echo -e "${GREEN}Cleared existing DNS settings for connection:${TEXTRESET} $connection_name"
+        echo -e "Cleared existing DNS settings for connection: $connection_name"
         nmcli connection modify "$connection_name" ipv4.dns "$dns_servers"
         echo -e "${GREEN}Set new DNS servers for connection:${TEXTRESET} $connection_name"
     done
