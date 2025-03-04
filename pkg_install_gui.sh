@@ -271,12 +271,12 @@ EOF
 
     read -p "Enter the percentage of bandwidth you want to reserve for voice applications: " PERCENTAGE
 
-    echo -e "${GREEN}Setting up with $PERCENTAGE% reserved bandwidth.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "Setting up with $PERCENTAGE% reserved bandwidth." | tee -a $LOG_FILE
 
     create_config $PERCENTAGE
 
     # Create the QoS adjustment script
-    echo -e "${GREEN}Creating QoS adjustment script at $SCRIPT_FILE...${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "Creating QoS adjustment script at $SCRIPT_FILE..." | tee -a $LOG_FILE
     cat <<'EOF' > $SCRIPT_FILE
 #!/bin/bash
 
