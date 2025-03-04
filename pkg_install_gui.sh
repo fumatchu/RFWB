@@ -2363,8 +2363,8 @@ EOF
     echo -e "${YELLOW}http://$interface_ip:5601${TEXTRESET}"
     echo -e "Login with the user 'elastic' and the password: ${RED}$password${TEXTRESET}."
     echo -e "Once you are logged in, go to search and type \"type: dashboard suricata\" (without the quotes)."
+    read -p "Press Enter to continue"
 }
-read -p "Press Enter to continue"
 
 # Use dialog to prompt the user
 cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
