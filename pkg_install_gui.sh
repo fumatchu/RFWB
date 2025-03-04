@@ -1433,18 +1433,18 @@ install_ntopng() {
 
     # Verify the change
     if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
-        echo -e "${GREEN}Modification successful: -G=/var/tmp/ntopng.pid --community${TEXTRESET}"
+        echo -e "Modification successful: -G=/var/tmp/ntopng.pid --community"
     else
         echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
         exit 1
     fi
 
     # Enable ntopng service
-    echo -e "$Enabling ntopng service..."
+    echo -e "Enabling ntopng service..."
     systemctl enable ntopng
 
     # Start ntopng service
-    echo -e "${GREEN}Starting ntopng service...${TEXTRESET}"
+    echo -e "Starting ntopng service..."
     systemctl start ntopng
 
     # Validate ntopng service is running
