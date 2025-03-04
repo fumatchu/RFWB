@@ -2887,16 +2887,15 @@ options=(
     1 "Install BIND" off
     2 "Install ISC KEA" off
     3 "Install Cockpit" off
-    4 "Install Webmin" off
-    5 "Install ntopng" off
-    6 "Install DDNS Client" off
-    7 "Install Suricata (Only Suricata Engine)" off
-    8 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    9 "Install RFWB Portscan detection" off
-   10 "Install SNMP Daemon" off
-   11 "Install Netdata" off
-   12 "Install/Configure QOS for VOICE" off
-   13 "Install mDNS Reflector (Avahi)" off
+    4 "Install ntopng" off
+    5 "Install DDNS Client" off
+    6 "Install Suricata (Only Suricata Engine)" off
+    7 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    8 "Install RFWB Portscan detection" off
+    9 "Install SNMP Daemon" off
+   10 "Install Netdata" off
+   11 "Install/Configure QOS for VOICE" off
+   12 "Install mDNS Reflector (Avahi)" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2914,33 +2913,30 @@ for choice in $choices; do
         install_cockpit
         ;;
     4)
-        install_webmin
-        ;;
-    5)
         install_ntopng
         ;;
-    6)
+    5)
         install_ddclient
         ;;
-    7)
+    6)
         install_suricata
         ;;
-    8)
+    7)
         install_elastic
         ;;
-    9)
+    8)
         install_portscan
         ;;
-    10)
+    9)
         install_snmpd
         ;;
-    11)
+    10)
         install_netdata
         ;;
-    12)
+    11)
         install_qos
         ;;
-    13)
+    12)
         install_avahi
         ;;
     esac
