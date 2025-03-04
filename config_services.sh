@@ -341,7 +341,7 @@ EOF
     # Check SELinux status and provide guidance
     SELINUX_STATUS=$(getenforce)
     if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
-        echo "SELinux is currently set to $SELINUX_STATUS. If you experience access issues, consider verifying SELinux policies."
+        echo "SELinux is currently set to $SELINUX_STATUS."
     else
         echo "SELinux is enforcing. If you experience access issues, consider temporarily setting SELinux to permissive mode for testing:"
         echo "setenforce 0  # Temporarily set SELinux to permissive mode for troubleshooting"
