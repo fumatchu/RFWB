@@ -1907,31 +1907,28 @@ install_suricata() {
     echo -e "${GREEN}Suricata Install Complete...${TEXTRESET}"
     sleep 4
 }
-# Function to install ElasticSearch/Kibana/Filebeat
-install_elastic() {
-    # Function to show a spinning cursor
-    spinner() {
-        local pid=$1
-        local delay=0.1
-        local spinstr='|/-\'
-        while [ "$(ps a | awk '{print $1}' | grep "$pid")" ]; do
-            local temp=${spinstr#?}
-            printf " [%c]  " "$spinstr"
-            local spinstr=$temp${spinstr%"$temp"}
-            sleep $delay
-            printf "\b\b\b\b\b\b"
+
+# Function to install Elastic/Kibana/Filebeat
+install_el_ki_fb() {
+    # Spinner function
+    spin() {
+        local -a marks=('-' '\' '|' '/')
+        while kill -0 "$1" 2>/dev/null; do
+            for mark in "${marks[@]}"; do
+                echo -ne "\r$mark"
+                sleep 0.1
+            done
         done
-        printf "    \b\b\b\b"
+        echo -ne "\r"
     }
 
-    # Inform the user that the process is starting
+    # Install and configure Elasticsearch
     clear
     echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
     echo -e "${YELLOW}Downloading packages this may take a few minutes...${TEXTRESET}"
 
-    # Step 1: Import the Elastic GPG key
     echo -e "Importing the Elastic GPG key...${TEXTRESET}"
-    (sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch) & spinner $!
+    (sudo rpm --import https://artifacts.elastic.co/GPG-KEY-elasticsearch) & spin $!
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Elastic GPG key imported successfully.${TEXTRESET}"
     else
@@ -1939,7 +1936,6 @@ install_elastic() {
         exit 1
     fi
 
-    # Step 2: Create the Elasticsearch repository file
     echo -e "Creating the Elasticsearch repository file...${TEXTRESET}"
     repo_file="/etc/yum.repos.d/elasticsearch.repo"
     (sudo bash -c "cat > $repo_file" <<EOF
@@ -1952,7 +1948,7 @@ enabled=0
 autorefresh=1
 type=rpm-md
 EOF
-    ) & spinner $!
+    ) & spin $!
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Elasticsearch repository file created successfully.${TEXTRESET}"
     else
@@ -1960,34 +1956,19 @@ EOF
         exit 1
     fi
 
-    # Define the log file to capture the installation output
     INSTALL_LOG="/tmp/elastic_install.log"
-
-    # Step 3: Install Elasticsearch and Kibana
     echo -e "${GREEN}Installing Elasticsearch and Kibana...${TEXTRESET}"
-
-    # Run the installation, capturing the output with tee to both the screen and log file
-    (sudo dnf install --enablerepo=elasticsearch elasticsearch kibana -y | tee "$INSTALL_LOG") & spinner $!
+    (sudo dnf install --enablerepo=elasticsearch elasticsearch kibana -y | tee "$INSTALL_LOG") & spin $!
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Elasticsearch and Kibana installed successfully.${TEXTRESET}"
 
-        # Define the file to store the security configuration information
         SECURITY_INFO_FILE="/root/elastic_security_info.txt"
-
-        # Extract the security configuration information from the installation log
         awk '/--------------------------- Security autoconfiguration information ------------------------------/,/-------------------------------------------------------------------------------------------------/' "$INSTALL_LOG" > "$SECURITY_INFO_FILE"
 
-        # Check if the file was created and contains the expected information
         if [ -s "$SECURITY_INFO_FILE" ]; then
             echo "Security configuration information captured and stored in $SECURITY_INFO_FILE."
-
-            # Extract the generated password for the elastic built-in superuser
             PASSWORD=$(grep "The generated password for the elastic built-in superuser is :" "$SECURITY_INFO_FILE" | awk -F': ' '{print $2}' | tr -d '[:space:]')
-
-            # Define the file to store the password
             PASSWORD_FILE="/root/elastic_password"
-
-            # Store the password in the file
             if [ -n "$PASSWORD" ]; then
                 echo "$PASSWORD" > "$PASSWORD_FILE"
                 echo "Password for the elastic user stored in $PASSWORD_FILE."
@@ -2004,45 +1985,35 @@ EOF
         exit 1
     fi
 
-    # Clean up the installation log file
     rm -f "$INSTALL_LOG"
 
-    # Define the Elasticsearch configuration paths
     ELASTIC_YML="/etc/elasticsearch/elasticsearch.yml"
     JVM_OPTIONS_DIR="/etc/elasticsearch/jvm.options.d"
     JVM_HEAP_OPTIONS="$JVM_OPTIONS_DIR/jvm-heap.options"
 
-    # Function to locate the server's private IP address using nmcli
-    find_private_ip() {
-        interface=$(nmcli device status | awk '/-inside/ {print $1}')
-        if [ -z "$interface" ]; then
-            echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
-            exit 1
-        fi
-        ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
-        if [ -z "$ip" ]; then
-            echo -e "${RED}Error: No IP address found for the interface $interface.${TEXTRESET}"
-            exit 1
-        fi
-        echo "$ip"
-    }
-
-    # Function to configure Elasticsearch
     configure_elasticsearch() {
-        local private_ip="$1"
         echo -e "Backing up the original Elasticsearch configuration...${TEXTRESET}"
         sudo cp "$ELASTIC_YML" "${ELASTIC_YML}.bak"
         echo -e "Updating the Elasticsearch configuration...${TEXTRESET}"
-        sudo awk -v ip="$private_ip" '
-        BEGIN {inserted=0}
-        {
-            print $0
-            if (!inserted && $0 ~ /^#network.host: 192.168.0.1$/) {
-                print "network.bind_host: [\"127.0.0.1\", \"" ip "\"]"
-                inserted=1
-            }
-        }
-        ' "$ELASTIC_YML" >/tmp/elasticsearch.yml && sudo mv /tmp/elasticsearch.yml "$ELASTIC_YML"
+
+        if grep -q "^xpack.security.enabled:" "$ELASTIC_YML"; then
+            sudo sed -i 's/^xpack.security.enabled:.*/xpack.security.enabled: true/' "$ELASTIC_YML"
+        else
+            echo "xpack.security.enabled: true" | sudo tee -a "$ELASTIC_YML" >/dev/null
+        fi
+
+        if grep -q "^xpack.security.http.ssl:" "$ELASTIC_YML"; then
+            sudo sed -i '/^xpack.security.http.ssl:/,/^ *keystore.path:/{s/^ *enabled:.*/  enabled: false/}' "$ELASTIC_YML"
+        else
+            echo -e "xpack.security.http.ssl:\n  enabled: false" | sudo tee -a "$ELASTIC_YML" >/dev/null
+        fi
+
+        if grep -q "^xpack.security.transport.ssl:" "$ELASTIC_YML"; then
+            sudo sed -i '/^xpack.security.transport.ssl:/,/^ *truststore.path:/{s/^ *enabled:.*/  enabled: false/}' "$ELASTIC_YML"
+        else
+            echo -e "xpack.security.transport.ssl:\n  enabled: false" | sudo tee -a "$ELASTIC_YML" >/dev/null
+        fi
+
         if ! grep -q "^discovery.type: single-node" "$ELASTIC_YML"; then
             echo "discovery.type: single-node" | sudo tee -a "$ELASTIC_YML" >/dev/null
         fi
@@ -2052,27 +2023,17 @@ EOF
         }
     }
 
-    # Function to set JVM heap size
     configure_jvm_heap() {
         sudo mkdir -p "$JVM_OPTIONS_DIR"
         echo "-Xms3g" | sudo tee "$JVM_HEAP_OPTIONS" >/dev/null
         echo "-Xmx3g" | sudo tee -a "$JVM_HEAP_OPTIONS" >/dev/null
     }
 
-    # Main configuration execution
-    echo -e "Locating the server's private IP address...${TEXTRESET}"
-    private_ip=$(find_private_ip)
-    if [ -z "$private_ip" ]; then
-        echo -e "${RED}Error: Unable to determine the private IP address.${TEXTRESET}"
-        exit 1
-    fi
-    echo -e "${GREEN}Private IP identified as: $private_ip${TEXTRESET}"
     echo -e "Configuring Elasticsearch...${TEXTRESET}"
-    configure_elasticsearch "$private_ip"
+    configure_elasticsearch
     echo -e "Configuring JVM heap size...${TEXTRESET}"
     configure_jvm_heap
 
-    # Function to find the network interface
     find_interface() {
         interface=$(nmcli device status | awk '/-inside/ {print $1}')
         if [ -z "$interface" ]; then
@@ -2082,7 +2043,6 @@ EOF
         echo "$interface"
     }
 
-    # Function to configure nftables rules
     configure_nftables() {
         local interface="$1"
         echo -e "Configuring nftables for interface: $interface...${TEXTRESET}"
@@ -2112,12 +2072,10 @@ EOF
         sudo nft list chain inet filter input
     }
 
-    # Configure nftables
     interface=$(find_interface)
     configure_nftables "$interface"
     echo -e "${GREEN}Firewall configuration for port 5601 complete.${TEXTRESET}"
 
-    # Function to reload systemd daemon
     reload_daemon() {
         echo -e "Reloading systemd daemon...${TEXTRESET}"
         if sudo systemctl daemon-reload; then
@@ -2128,7 +2086,6 @@ EOF
         fi
     }
 
-    # Function to enable and start Elasticsearch service
     enable_start_elasticsearch() {
         echo -e "Enabling and starting Elasticsearch service...${TEXTRESET}"
         if sudo systemctl enable elasticsearch --now; then
@@ -2139,7 +2096,6 @@ EOF
         fi
     }
 
-    # Function to check the status of Elasticsearch service
     check_status() {
         echo -e "Checking Elasticsearch service status...${TEXTRESET}"
         while true; do
@@ -2148,21 +2104,18 @@ EOF
                 echo -e "${GREEN}Elasticsearch service is active and running.${TEXTRESET}"
                 break
             else
-                echo -e "Waiting for Elasticsearch service to  start...${TEXTRESET}"
+                echo -e "Waiting for Elasticsearch service to start...${TEXTRESET}"
                 sleep 5
             fi
         done
     }
 
-    # Enable and check Elasticsearch service
     reload_daemon
     enable_start_elasticsearch
     check_status
 
-    # Function to test Elasticsearch response
     test_elasticsearch() {
-        local cert_path="/etc/elasticsearch/certs/http_ca.crt"
-        local url="https://localhost:9200"
+        local url="http://localhost:9200"
         local password_file="/root/elastic_password"
         echo -e "Testing Elasticsearch response...${TEXTRESET}"
         if [[ -f "$password_file" ]]; then
@@ -2171,7 +2124,7 @@ EOF
             echo -e "${RED}Password file not found: $password_file${TEXTRESET}"
             exit 1
         fi
-        response=$(sudo curl --cacert "$cert_path" -u elastic:"$password" "$url" 2>/dev/null)
+        response=$(curl -u elastic:"$password" "$url" 2>/dev/null)
         if echo "$response" | grep -q '"tagline" : "You Know, for Search"'; then
             echo -e "${GREEN}Elasticsearch is responding to queries.${TEXTRESET}"
             echo "$response"
@@ -2181,62 +2134,16 @@ EOF
         fi
     }
 
-    # Test Elasticsearch
     test_elasticsearch
     echo -e "${GREEN}Elasticsearch Install Complete...${TEXTRESET}"
 
-    ## INSTALL KIBANA
-    # Define paths
-    ELASTIC_CERT_PATH="/etc/elasticsearch/certs/http_ca.crt"
+    # Update Kibana Configuration
     KIBANA_DIR="/etc/kibana"
     KIBANA_CONFIG="$KIBANA_DIR/kibana.yml"
-    KIBANA_BIN_DIR="/usr/share/kibana/bin"
 
-    # Function to copy Elasticsearch certificate to Kibana directory
-    copy_certificate() {
-        echo -e "Copying Elasticsearch certificate to Kibana directory...${TEXTRESET}"
-        if sudo cp "$ELASTIC_CERT_PATH" "$KIBANA_DIR/http_ca.crt"; then
-            echo -e "${GREEN}Certificate copied successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Failed to copy the certificate. Please check the paths and permissions.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Function to generate Kibana encryption keys
-    generate_encryption_keys() {
-        echo -e "Generating Kibana encryption keys...${TEXTRESET}"
-
-        # Capture only the lines with encryption keys from the output
-        keys_output=$(sudo "$KIBANA_BIN_DIR/kibana-encryption-keys" generate -q 2>/dev/null | grep -E '^xpack\.')
-
-        if [ -n "$keys_output" ]; then
-            echo -e "${GREEN}Encryption keys generated successfully.${TEXTRESET}"
-            echo "$keys_output"
-        else
-            echo -e "${RED}Failed to generate encryption keys.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Function to update Kibana configuration
     update_kibana_config() {
-        local keys="$1"
         echo -e "Updating Kibana configuration...${TEXTRESET}"
 
-        # Add encryption keys to the configuration file
-        if echo -e "\n$keys" | sudo tee -a "$KIBANA_CONFIG" >/dev/null; then
-            echo -e "${GREEN}Kibana configuration updated with encryption keys.${TEXTRESET}"
-        else
-            echo -e "${RED}Failed to update Kibana configuration with encryption keys.${TEXTRESET}"
-            exit 1
-        fi
-
-        # Ensure no extraneous lines are left in the file
-        sudo sed -i '/Generating Kibana encryption keys.../d' "$KIBANA_CONFIG"
-        sudo sed -i '/Encryption keys generated successfully./d' "$KIBANA_CONFIG"
-
-        # Append telemetry settings to the configuration file
         if echo -e "\ntelemetry.optIn: false" | sudo tee -a "$KIBANA_CONFIG" >/dev/null &&
             echo "telemetry.allowChangingOptInStatus: false" | sudo tee -a "$KIBANA_CONFIG" >/dev/null; then
             echo -e "${GREEN}Telemetry settings added to Kibana configuration.${TEXTRESET}"
@@ -2244,103 +2151,44 @@ EOF
             echo -e "${RED}Failed to add telemetry settings to Kibana configuration.${TEXTRESET}"
             exit 1
         fi
-
-        # Update the elasticsearch.ssl.certificateAuthorities setting
-        if sudo sed -i 's|^#*\(elasticsearch\.ssl\.certificateAuthorities:\).*|\1 [ "/etc/kibana/http_ca.crt" ]|' "$KIBANA_CONFIG"; then
-            echo -e "${GREEN}Updated elasticsearch.ssl.certificateAuthorities in Kibana configuration.${TEXTRESET}"
-        else
-            echo -e "${RED}Failed to update elasticsearch.ssl.certificateAuthorities in Kibana configuration.${TEXTRESET}"
-            exit 1
-        fi
     }
 
-    # Function to validate Kibana configuration changes
     validate_config_changes() {
         echo -e "Validating Kibana configuration changes...${TEXTRESET}"
-
-        # Validate encryption keys
-        for key in xpack.encryptedSavedObjects.encryptionKey xpack.reporting.encryptionKey xpack.security.encryptionKey; do
-            if ! grep -q "$key" "$KIBANA_CONFIG"; then
-                echo -e "${RED}Missing $key in Kibana configuration.${TEXTRESET}"
-                exit 1
-            fi
-        done
-
-        # Validate telemetry settings
-        if ! grep -q  "telemetry.optIn: false" "$KIBANA_CONFIG" || ! grep -q "telemetry.allowChangingOptInStatus: false" "$KIBANA_CONFIG"; then
+        if ! grep -q "telemetry.optIn: false" "$KIBANA_CONFIG" || ! grep -q "telemetry.allowChangingOptInStatus: false" "$KIBANA_CONFIG"; then
             echo -e "${RED}Telemetry settings are not properly configured.${TEXTRESET}"
             exit 1
         fi
-
-        # Validate certificate authorities setting
-        if ! grep -q 'elasticsearch.ssl.certificateAuthorities: \[ "/etc/kibana/http_ca.crt" \]' "$KIBANA_CONFIG"; then
-            echo -e "${RED}elasticsearch.ssl.certificateAuthorities is not properly configured.${TEXTRESET}"
-            exit 1
-        fi
-
         echo -e "${GREEN}All Kibana configuration changes validated successfully.${TEXTRESET}"
     }
 
-    # Main script execution
-    copy_certificate
-    keys=$(generate_encryption_keys)
-    update_kibana_config "$keys"
+    update_kibana_config
     validate_config_changes
 
-    # Function to locate the server's private IP address using nmcli
-    find_private_ip() {
-        # Find the interface ending with -inside
-        interface=$(nmcli device status | awk '/-inside/ {print $1}')
-
-        if [ -z "$interface" ]; then
-            echo -e "Error: No interface ending with '-inside' found."
-            exit 1
-        fi
-
-        # Extract the private IP address for the found interface
-        ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
-
-        if [ -z "$ip" ]; then
-            echo -e "Error: No IP address found for the interface $interface."
-            exit 1
-        fi
-
-        echo "$ip"
-    }
-
-    # Function to configure Kibana
     configure_kibana() {
-        local private_ip="$1"
-        local kibana_yml="/etc/kibana/kibana.yml" # Path to your Kibana config
+        local kibana_yml="/etc/kibana/kibana.yml"
 
         echo "Backing up the original Kibana configuration..."
-        # Backup the original Kibana configuration file
         sudo cp "$kibana_yml" "${kibana_yml}.bak"
 
-        echo "Updating the Kibana configuration..."
-        # Use awk to insert the server.host line below the specified comments
-        sudo awk -v ip="$private_ip" '
+        echo "Updating the Kibana configuration to listen on all interfaces..."
+        sudo awk '
     BEGIN {inserted=0}
     {
         print $0
         if (!inserted && $0 ~ /^#server.host: "localhost"$/) {
-            print "server.host: \"" ip "\""
+            print "server.host: \"0.0.0.0\""
             inserted=1
         }
     }
     ' "$kibana_yml" >/tmp/kibana.yml && sudo mv /tmp/kibana.yml "$kibana_yml"
     }
 
-    # Main execution
-    private_ip=$(find_private_ip)
-    configure_kibana "$private_ip"
+    configure_kibana
+    echo "Kibana has been configured to listen on all interfaces (0.0.0.0)."
 
-    echo "Kibana has been configured to use the private IP address: $private_ip"
-
-    # Define the file path
     FILE_PATH="/etc/kibana/kibana.yml"
 
-    # Function to check and set the group of the file
     check_and_set_group() {
         current_group=$(stat -c "%G" "$FILE_PATH")
 
@@ -2359,11 +2207,8 @@ EOF
         fi
     }
 
-    # Function to check and set the permissions of the file
     check_and_set_permissions() {
         current_permissions=$(stat -c "%a" "$FILE_PATH")
-
-        # Extract the group permissions (second digit in the octal representation)
         group_permissions=$(((current_permissions / 10) % 10))
 
         if ((group_permissions != 6)); then
@@ -2381,30 +2226,10 @@ EOF
         fi
     }
 
-    # Main script execution
     check_and_set_group
     check_and_set_permissions
-
     echo -e "${GREEN}Validation and correction of group and permissions completed successfully.${TEXTRESET}"
-    # Define the file path to store the enrollment token
-    TOKEN_FILE="/root/kibana_enrollment_token"
 
-    # Function to generate the enrollment token
-    generate_enrollment_token() {
-        echo -e "Generating Kibana enrollment token...${TEXTRESET}"
-        token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
-
-        if [ -z "$token" ]; then
-            echo -e "${RED}Error: Failed to generate enrollment token.${TEXTRESET}"
-            exit 1
-        fi
-
-        echo -e "${GREEN}Enrollment token generated successfully.${TEXTRESET}"
-        echo "$token" >"$TOKEN_FILE"
-        echo -e "${GREEN}Enrollment token stored in ${TOKEN_FILE}.${TEXTRESET}"
-    }
-
-    # Function to start and enable the Kibana service
     start_kibana_service() {
         echo -e "Starting and enabling Kibana service...${TEXTRESET}"
         sudo systemctl enable kibana --now
@@ -2417,7 +2242,6 @@ EOF
         echo -e "${GREEN}Kibana service started and enabled.${TEXTRESET}"
     }
 
-    # Function to check the status of the Kibana service
     check_kibana_status() {
         echo -e "Checking Kibana service status...${TEXTRESET}"
         sudo systemctl status kibana --no-pager
@@ -2430,381 +2254,117 @@ EOF
         echo -e "${GREEN}Kibana service is running.${TEXTRESET}"
     }
 
-    # Main script execution
-    generate_enrollment_token
     start_kibana_service
     check_kibana_status
-    clear
     echo -e "${GREEN}Kibana setup and startup process completed successfully.${TEXTRESET}"
 
-    # Function to display initial instructions
-    display_instructions() {
-        echo -e "${GREEN}The Kibana Service is now running${TEXTRESET}"
-        echo -e "The next step is to enable the Elastic dashboard/services.${TEXTRESET}"
-        echo -e "${RED}PLEASE DO NOT LOGIN TO THE DASHBOARD YET${TEXTRESET}"
-        echo -e "We must provide an enrollment token and Verification code"
-        echo ""
-        echo "#1 - Open a browser (Leave this terminal open)"
-        echo ""
-        echo -e "#2 - In the address bar of your browser, navigate to ${GREEN}http://${private_ip}:5601${TEXTRESET}"
-        echo ""
-        echo "#3 - You will be asked for an enrollment token:"
-        echo -e "Token: $(cat /root/kibana_enrollment_token)"
-        echo ""
-        echo "#4 - Once you have input your enrollment token, the webpage will ask you for the verification code:"
-        echo ""
-    }
+    RESET_PASSWORD_CMD="/usr/share/elasticsearch/bin/elasticsearch-reset-password -u kibana_system"
+    PASSWORD_FILE="/root/kibana_system_password"
+    KIBANA_YML="/etc/kibana/kibana.yml"
+    OUTPUT=$(echo "y" | $RESET_PASSWORD_CMD 2>&1)
+    NEW_PASSWORD=$(echo "$OUTPUT" | grep -oP 'New value: \K.*')
 
-    # Function to generate a new enrollment token
-    generate_enrollment_token() {
-        echo -e "Generating a new enrollment token...${TEXTRESET}"
-        token=$(sudo /usr/share/elasticsearch/bin/elasticsearch-create-enrollment-token -s kibana 2>/dev/null)
-        echo "$token" >/root/kibana_enrollment_token
-        echo -e "${GREEN}New token generated and saved to /root/kibana_enrollment_token.${TEXTRESET}"
-    }
+    if [ -n "$NEW_PASSWORD" ]; then
+        echo "$NEW_PASSWORD" > "$PASSWORD_FILE"
+        echo "New password for kibana_system user saved to $PASSWORD_FILE."
+    else
+        echo "Failed to capture the new password."
+        exit 1
+    fi
 
-    # Function to get a verification code
-    get_verification_code() {
-        echo -e "Generating a verification code...${TEXTRESET}"
-        sudo /usr/share/kibana/bin/kibana-verification-code
-    }
+    echo "Updating the Kibana configuration file..."
+    sudo sed -i 's/^#elasticsearch.username: "kibana_system"/elasticsearch.username: "kibana_system"/' "$KIBANA_YML"
+    sudo sed -i "s|^#elasticsearch.password: .*|elasticsearch.password: \"$NEW_PASSWORD\"|" "$KIBANA_YML"
 
-    # Main script execution
-    display_instructions
+    echo "Restarting the Kibana service..."
+    if sudo systemctl restart kibana; then
+        echo "Kibana service restarted successfully."
+    else
+        echo "Failed to restart Kibana service."
+        exit 1
+    fi
 
-    # Loop to manage enrollment token generation
-    while true; do
-        read -p "Was the Enrollment Token successful? (yes/no): " token_success
-        if [[ "$token_success" == "no" ]]; then
-            generate_enrollment_token
-        else
-            break
-        fi
-    done
+    echo "Validating Kibana service status..."
+    if sudo systemctl is-active --quiet kibana; then
+        echo "Kibana service is active and running."
+    else
+        echo "Kibana service is not running."
+        exit 1
+    fi
 
-    # Prompt for verification code
-    while true; do
-        read -p "When ready, press enter to get your Verification Code: "
-        get_verification_code
+    # Install and configure Filebeat
+    echo -e "Installing Filebeat..."
+    sudo dnf install --enablerepo=elasticsearch filebeat -y
 
-        read -p "Do you need a new verification code? (yes/no): " code_needed
-        if [[ "$code_needed" == "no" ]]; then
-            break
-        fi
-    done
-
-    echo -e "${GREEN}Kibana Setup completed...${TEXTRESET}"
-
-    # INSTALL FILEBEAT
-    # Paths and file variables
-    SOURCE_CERT_PATH="/etc/elasticsearch/certs/http_ca.crt"
-    DEST_CERT_DIR="/etc/filebeat"
-    DEST_CERT_PATH="$DEST_CERT_DIR/http_ca.crt"
     FILEBEAT_YML="/etc/filebeat/filebeat.yml"
-    SURICATA_MODULE_YML="/etc/filebeat/modules.d/suricata.yml"
-    ELASTIC_PASSWORD_FILE="/root/elastic_password"
+    PASSWORD_FILE="/root/elastic_password"
 
-    # Function to locate the server's private IP address using nmcli
-    find_private_ip() {
-        interface=$(nmcli device status | awk '/-inside/ {print $1}')
+    echo -e "Configuring Filebeat..."
+    password=$(cat "$PASSWORD_FILE")
 
-        if [ -z "$interface" ]; then
-            echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
-            exit 1
-        fi
+    sudo sed -i -e 's/^\([[:space:]]*\)#\(username: "elastic"\)/\1\2/' \
+                -e "s/^\([[:space:]]*\)#password: \"changeme\"/\1password: \"$password\"/" \
+                "$FILEBEAT_YML"
 
-        ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
+    echo "setup.ilm.overwrite: true" | sudo tee -a "$FILEBEAT_YML" >/dev/null
 
-        if [ -z "$ip" ]; then
-            echo -e "${RED}Error: No IP address found for the interface $interface.${TEXTRESET}"
-            exit 1
-        fi
+    echo -e "Validating Filebeat configuration..."
+    curl_output=$(curl -s -u elastic:"$password" http://localhost:9200)
 
-        echo "$ip"
-    }
+    if echo "$curl_output" | grep -q '"tagline" : "You Know, for Search"'; then
+        echo -e "${GREEN}Filebeat authenticated successfully with Elasticsearch.${TEXTRESET}"
+    else
+        echo -e "${RED}Filebeat could not authenticate to Elasticsearch.${TEXTRESET}"
+        exit 1
+    fi
 
-    # Install Filebeat
-    install_filebeat() {
-        clear
-        echo -e "${GREEN}Installing Filebeat...${TEXTRESET}"
-        sleep 2
-        sudo dnf install --enablerepo=elasticsearch filebeat -y
+    echo -e "Enabling Suricata module..."
+    sudo filebeat modules enable suricata
 
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat installed successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to install Filebeat.${TEXTRESET}"
-            exit 1
-        fi
-    }
+    SURICATA_YML="/etc/filebeat/modules.d/suricata.yml"
+    sudo sed -i 's/^  enabled: false/  enabled: true/' "$SURICATA_YML"
+    sudo sed -i 's|^  #var.paths:.*|  var.paths: ["/var/log/suricata/eve.json"]|' "$SURICATA_YML"
 
-    # Copy the http_ca.crt file locally
-    copy_certificate_locally() {
-        if [ -f "$SOURCE_CERT_PATH" ]; then
-            echo -e "Copying http_ca.crt from $SOURCE_CERT_PATH to  $DEST_CERT_DIR...${TEXTRESET}"
-            sudo cp "$SOURCE_CERT_PATH" "$DEST_CERT_PATH"
-
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}Certificate copied successfully to $DEST_CERT_PATH.${TEXTRESET}"
-            else
-                echo -e "${RED}Error: Failed to copy certificate to $DEST_CERT_PATH.${TEXTRESET}"
-                exit 1
-            fi
-        else
-            echo -e "${RED}Error: Certificate file not found at $SOURCE_CERT_PATH.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Configure Filebeat
-    configure_filebeat() {
-        local private_ip="$1"
-
-        if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
-            echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
-            exit 1
-        fi
-
-        local elastic_password
-        elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
-
-        echo -e "Backing up the original Filebeat configuration...${TEXTRESET}"
-        sudo cp "$FILEBEAT_YML" "${FILEBEAT_YML}.bak"
-
-        echo -e "Updating the Filebeat configuration...${TEXTRESET}"
-        sudo awk -v ip="$private_ip" -v password="$elastic_password" '
-    BEGIN {in_elasticsearch=0; inserted_kibana=0}
+    echo -e "Running Filebeat setup..."
     {
-        if ($0 ~ /^setup.kibana:/) {
-            in_elasticsearch=0
-        }
-        if ($0 ~ /^output.elasticsearch:/) {
-            in_elasticsearch=1
-        }
-        if (!inserted_kibana && $0 ~ /^  #host: "localhost:5601"$/) {
-            print "  host: \"" ip ":5601\""
-            print "  protocol: \"http\""
-            print "  ssl.enabled: true"
-            print "  ssl.certificate_authorities: [\"/etc/filebeat/http_ca.crt\"]"
-            inserted_kibana=1
-        }
-        if (in_elasticsearch) {
-            if ($0 ~ /^  hosts:/) {
-                print "  hosts: [\"" ip ":9200\"]"
-                next
-            }
-            if ($0 ~ /^  # Protocol/) {
-                print "  protocol: \"https\""
-            }
-            if ($0 ~ /^  #api_key:/) {
-                print "  username: \"elastic\""
-                print "  password: \"" password "\""
-                print "  ssl.certificate_authorities: [\"/etc/filebeat/http_ca.crt\"]"
-                print "  ssl.verification_mode: full"
-            }
-        }
-        print $0
-    }
-    END {
-        print "\nsetup.ilm.overwrite: true"
-    }
-    ' "$FILEBEAT_YML" >/tmp/filebeat.yml && sudo mv /tmp/filebeat.yml "$FILEBEAT_YML"
-    }
+        filebeat setup
+    } &
+    setup_pid=$!
 
-    # Modify Suricata module configuration
-    configure_suricata_module() {
-        echo -e "Configuring Suricata module...${TEXTRESET}"
-        sudo awk '
-    BEGIN {in_eve=0}
-    {
-        if ($0 ~ /^- module: suricata$/) {
-            in_eve=0
-        }
-        if ($0 ~ /^  eve:$/) {
-            in_eve=1
-        }
-        if (in_eve && $0 ~ /^    #enabled: false$/) {
-            print "    enabled: true"
-            next
-        }
-        if (in_eve && $0 ~ /^    #var.paths:/) {
-            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
-            next
-        }
-        print $0
-    }
-    ' "$SURICATA_MODULE_YML" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$SURICATA_MODULE_YML"
-    }
+    spin $setup_pid
+    wait $setup_pid
+    setup_exit_code=$?
 
-    # Verify Elasticsearch connection and enable Suricata module
-    verify_and_enable_module() {
-        local private_ip="$1"
+    if [ $setup_exit_code -ne 0 ]; then
+        echo -e "${RED}Filebeat setup encountered an error. Exiting.${TEXTRESET}"
+        exit 1
+    fi
 
-        if [ ! -f "$ELASTIC_PASSWORD_FILE" ]; then
-            echo -e "${RED}Error: Elastic password file not found at $ELASTIC_PASSWORD_FILE.${TEXTRESET}"
-            exit 1
-        fi
+    echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
 
-        local elastic_password
-        elastic_password=$(cat "$ELASTIC_PASSWORD_FILE")
+    echo -e "Starting Filebeat service..."
+    sudo systemctl enable filebeat --now
 
-        echo -e "Verifying Elasticsearch connection...${TEXTRESET}"
-        curl -v --cacert "$DEST_CERT_PATH" "https://$private_ip:9200" -u elastic:"$elastic_password"
+    if systemctl is-active --quiet filebeat; then
+        echo -e "${GREEN}Filebeat service is running successfully.${TEXTRESET}"
+    else
+        echo -e "${RED}Filebeat service failed to start.${TEXTRESET}"
+        exit 1
+    fi
 
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Elasticsearch connection verified successfully.${TEXTRESET}"
-            echo -e "Enabling Suricata module in Filebeat...${TEXTRESET}"
-            sudo filebeat modules enable suricata
+    echo -e "${GREEN}Filebeat installation and configuration completed successfully.${TEXTRESET}"
 
-            if [ $? -eq 0 ]; then
-                echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
-                configure_suricata_module
-            else
-                echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
-            fi
-        else
-            echo -e "${RED}Error: Failed to verify Elasticsearch connection.${TEXTRESET}"
-        fi
-    }
+    # Final instructions
+    interface_ip=$(ip addr show $(find_interface) | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+    password=$(cat /root/elastic_password)
 
-    # Main script execution for Filebeat
-    install_filebeat
-    copy_certificate_locally
-    private_ip=$(find_private_ip)
-    configure_filebeat "$private_ip"
-    verify_and_enable_module "$private_ip"
-
-    # Spinner function for animation
-    spinner() {
-        local pid=$1
-        local delay=0.1
-        local spinstr='|/-\'
-        while [ "$(ps a | awk '{print $1}' | grep "$pid")" ]; do
-            local temp=${spinstr#?}
-            printf " [%c]  " "$spinstr"
-            local spinstr=$temp${spinstr%"$temp"}
-            sleep $delay
-            printf "\b\b\b\b\b\b"
-        done
-        printf "    \b\b\b\b"
-    }
-
-    # Enable the Filebeat Suricata module
-    enable_suricata_module() {
-        echo -e "Enabling Filebeat Suricata module...${TEXTRESET}"
-        sudo filebeat modules enable suricata
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Suricata module enabled successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to enable Suricata module.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Edit the Suricata module configuration
-    edit_suricata_config() {
-        local config_file="/etc/filebeat/modules.d/suricata.yml"
-
-        echo -e "Configuring  Suricata module...${TEXTRESET}"
-        sudo awk '
-    BEGIN {in_eve=0}
-    {
-        if ($0 ~ /^- module: suricata$/) {
-            in_eve=0
-        }
-        if ($0 ~ /^  eve:$/) {
-            in_eve=1
-        }
-        if (in_eve && $0 ~ /^    enabled: false$/) {
-            print "    enabled: true"
-            next
-        }
-        if (in_eve && $0 ~ /^    #var.paths:/) {
-            print "    var.paths: [\"/var/log/suricata/eve.json\"]"
-            next
-        }
-        print $0
-    }
-    ' "$config_file" >/tmp/suricata.yml && sudo mv /tmp/suricata.yml "$config_file"
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Suricata module configuration updated successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to update Suricata module configuration.${TEXTRESET}"
-            exit 1
-        fi
-        sleep 2
-    }
-
-    # Setup Filebeat (load dashboards and pipelines)
-    setup_filebeat() {
-        clear
-        echo -e "${GREEN}Setting up Filebeat...${TEXTRESET}"
-
-        # Start the spinner in the background
-        sudo filebeat setup &
-        spinner $!
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Filebeat setup failed.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Start and enable the Filebeat service
-    start_filebeat_service() {
-        echo -e "Starting and enabling Filebeat service...${TEXTRESET}"
-        sudo systemctl enable filebeat --now
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat service started and enabled successfully.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Failed to start and enable Filebeat service.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Check the status of the Filebeat service
-    check_filebeat_status() {
-        echo -e "Checking Filebeat service status...${TEXTRESET}"
-        sudo systemctl status filebeat --no-pager
-
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Filebeat service is running.${TEXTRESET}"
-        else
-            echo -e "${RED}Error: Filebeat service is not running.${TEXTRESET}"
-            exit 1
-        fi
-    }
-
-    # Main script execution for Suricata and Filebeat
-    enable_suricata_module
-    edit_suricata_config
-    setup_filebeat
-    start_filebeat_service
-    check_filebeat_status
-    clear
-    echo -e "${GREEN}Filebeat Install Complete...${TEXTRESET}"
-    echo " "
-    echo -e ${GREEN}###################################################################
-    echo -e      Elastic/Kibana/Filebeat Installation successful!
-    echo -e ###################################################################${TEXTRESET}"
-    echo " "
-    echo -e "Login Credentials:"
-    echo -e "${GREEN}User:${TEXTRESET}elastic"
-    echo -e "${GREEN}Password:${TEXTRESET} $(cat /root/elastic_password)"
-    echo -e "Your generated password for this installation is located in the file /root/elastic_password"
-    echo " "
-    echo -e "Login to Kibana http://$private_ip:5601 (the dashboard you logged into earlier),"
-    echo -e "Input \"type:dashboard suricata\" (without quotes) in the search box at the top, and select"
-    echo -e "[Filebeat Suricata] Alert Overview to load the Suricata Dashboard"
-    echo " "
-    
-    read -p "Press Enter to exit the Installer for Elastic/Kibana/Filebeat"
+    echo -e "${GREEN}Elasticsearch, Kibana, and Filebeat have been successfully installed.${TEXTRESET}"
+    echo -e "In order to view Suricata output in Kibana, you must login at the following address:"
+    echo -e "${YELLOW}http://$interface_ip:5601${TEXTRESET}"
+    echo -e "Login with the user 'elastic' and the password: ${RED}$password${TEXTRESET}."
+    echo -e "Once you are logged in, go to search and type \"type: dashboard suricata\" (without the quotes)."
 }
+read -p "Press Enter to continue"
 
 # Use dialog to prompt the user
 cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
@@ -2847,7 +2407,7 @@ for choice in $choices; do
         install_suricata
         ;;
     7)
-        install_elastic
+        install_el_ki_fb
         ;;
     8)
         install_portscan
