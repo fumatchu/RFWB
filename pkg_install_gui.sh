@@ -192,6 +192,7 @@ configure_nftables() {
 configure_nftables
 
 echo -e "${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+sleep 4
 }
 #Set Avahi on the inside interfaces
 install_avahi() {
