@@ -269,7 +269,7 @@ EOF
 
     echo -e "${GREEN}Selected outside interface: $OUTSIDE_INTERFACE${TEXTRESET}" | tee -a $LOG_FILE
 
-    read -p "Enter the percentage of bandwidth you want to reserve for voice and video applications: " PERCENTAGE
+    read -p "Enter the percentage of bandwidth you want to reserve for voice applications: " PERCENTAGE
 
     echo -e "${GREEN}Setting up with $PERCENTAGE% reserved bandwidth.${TEXTRESET}" | tee -a $LOG_FILE
 
