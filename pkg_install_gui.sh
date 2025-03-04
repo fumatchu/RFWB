@@ -112,7 +112,7 @@ install_qos() {
     load_config() {
         if [[ ! -f "$CONFIG_FILE" ]]; then
             echo "Configuration file not found. Creating a default configuration."
-            create_config 20  # Create a default config with 20% bandwidth reservation
+            create_config 10  # Create a default config with 20% bandwidth reservation
         fi
 
         percentage_bandwidth=0
@@ -136,7 +136,7 @@ install_qos() {
     # Create configuration file function
     create_config() {
         local percentage_bandwidth=$1
-        echo -e "${GREEN}Creating configuration file at $CONFIG_FILE with ${percentage_bandwidth}% reserved bandwidth...${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "Creating configuration file at ${YELLLOW}$CONFIG_FILE${TEXTRESET} with ${YELLOW}${percentage_bandwidth}%${TEXTRESET} reserved bandwidth..." | tee -a $LOG_FILE
         cat <<EOF > $CONFIG_FILE
 # /etc/rfwb-qos.conf
 
@@ -171,7 +171,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-        echo -e "${GREEN}Systemd timer created with an interval of every ${interval_minutes} minutes.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "Systemd timer created with an interval of every ${YELLOW}${interval_minutes}${TEXTRESET} minutes." | tee -a $LOG_FILE
     }
 
     # Configure QoS function
