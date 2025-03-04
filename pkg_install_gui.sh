@@ -2286,9 +2286,9 @@ EOF
 
     echo "Validating Kibana service status..."
     if sudo systemctl is-active --quiet kibana; then
-        echo "Kibana service is active and running."
+        echo -e "${GREEN}Kibana service is active and running.${TEXTRESET}"
     else
-        echo "Kibana service is not running."
+        echo -e "${RED}Kibana service is not running.${TEXTRESET}"
         exit 1
     fi
 
