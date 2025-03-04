@@ -2321,9 +2321,10 @@ EOF
     echo -e "Enabling Suricata module..."
     sudo filebeat modules enable suricata
 
+    # Modify Suricata module configuration
     SURICATA_YML="/etc/filebeat/modules.d/suricata.yml"
-    sudo sed -i 's/^  enabled: false/  enabled: true/' "$SURICATA_YML"
-    sudo sed -i 's|^  #var.paths:.*|  var.paths: ["/var/log/suricata/eve.json"]|' "$SURICATA_YML"
+    sed -i '/- module: suricata/,+4s/enabled: false/enabled: true/' "$SURICATA_YML"
+    sed -i '/#var.paths:/s|#var.paths:.*|var.paths: ["/var/log/suricata/eve.json"]|' "$SURICATA_YML"
 
     echo -e "Running Filebeat setup..."
     {
