@@ -139,6 +139,7 @@ manage_inside_gw() {
     done
 }
 manage_inside_gw
+sleep 4
 
 # Reorganize nftables
 clear
