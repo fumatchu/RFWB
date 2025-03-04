@@ -12,6 +12,187 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+#Install EVEBOX
+install_eve () {
+clear
+echo -e "${GREEN}Installing EVEBOX for Suricata...${TEXTRESET}"
+sleep 4
+# Add the EveBox repository using rpm
+rpm -Uvh https://evebox.org/files/rpm/stable/evebox-release.noarch.rpm
+
+# Install SQLite
+dnf install -y sqlite
+
+# Install EveBox using dnf
+dnf install -y evebox
+
+# Define configuration file path
+CONFIG_FILE="/etc/evebox/evebox.yaml"
+
+# Backup existing configuration file if it exists
+if [ -f "$CONFIG_FILE" ]; then
+  echo -e "Backing up existing configuration file..."
+  cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+fi
+
+# Write new configuration to evebox.yaml including all remarks
+echo -e "Writing new configuration to ${YELLOW}$CONFIG_FILE...${TEXTRESET}"
+cat <<EOL > $CONFIG_FILE
+# This is a minimal evebox.yaml for Elasticsearch and SQLite.
+
+http:
+  ## By default, EveBox binds to localhost. Uncomment this line to open
+  ## it up.
+  host: "0.0.0.0"
+
+  tls:
+    # By default a TLS is enabled and a self signed certificate will
+    # be created. Uncomment and set this to false to disable TLS.
+    enabled: false
+
+# By default authentication is enabled, uncomment this line to disable
+# authentication.
+authentication: false
+
+data-directory: /var/lib/evebox
+
+database:
+  type: sqlite
+
+  #elasticsearch:
+   # url: http://127.0.0.1:9200
+
+    ## If using the Filebeat Suricata module, you'll probably want to
+    ## change the index to "filebeat".
+    #index: logstash
+
+    # If using the Filebeat Suricata module this needs to be true.
+    #ecs: false
+
+    ## If your Elasticsearch is using a self-signed certificate,
+    ## you'll likely need to set this to true.
+    #disable-certificate-check: false
+
+    ## If your Elasticsearch requires a username and password, provide
+    ## them here.
+    #username:
+    #password:
+
+  retention:
+    # Only keep events for the past 7 days.
+    # - SQLite only
+    # - Default 7 days
+    # - Set to 0 to disable
+    days: 7
+
+    # Maximum database size.
+    # - SQLite only
+    # - No default
+    size: "20 GB"
+
+# The server can process events itself when using SQLite or a classic
+# Logstash style Elasticsearch template.
+input:
+  enabled: true
+
+  # Suricata EVE file patterns to look for and read.
+  paths:
+    - "/var/log/suricata/eve.json"
+    - "/var/log/suricata/eve.*.json"
+EOL
+
+# Change permissions of /var/log/suricata to 774 recursively
+echo -e "Changing permissions of /var/log/suricata to 774 recursively..."
+chmod -R 774 /var/log/suricata
+
+# Create evebox-agent systemd service
+echo -e "${GREEN}Creating evebox-agent systemd service...${TEXTRESET}"
+cat <<EOF > /etc/systemd/system/evebox-agent.service
+[Unit]
+Description=EveBox Agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/evebox agent --server http://127.0.0.1:5636 /var/log/suricata/eve.json
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd to recognize the new service
+systemctl daemon-reload
+
+# Enable and start the EveBox and evebox-agent services
+echo -e "Enabling and starting the EveBox and evebox-agent services..."
+systemctl enable evebox
+systemctl start evebox
+systemctl enable evebox-agent
+systemctl start evebox-agent
+
+# Check if services are running
+if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
+    echo -e "${GREEN}EveBox and EveBox Agent services are running.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to start EveBox or EveBox Agent services. Please check the logs for more details.${TEXTRESET}"
+    exit 1
+fi
+
+# Function to add a rule to nftables for port 5636
+configure_nftables() {
+    echo -e "Configuring nftables..."
+
+    # Find interfaces ending with '-inside'
+    inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    if [ -z "$inside_interfaces" ]; then
+        echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
+    fi
+
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    for iface in $inside_interfaces; do
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 5636 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 5636 accept
+            echo -e "${GREEN}Rule added: Allow TCP on port 5636 for interface $iface${TEXTRESET}"
+        else
+            echo "Rule already exists: Allow TCP on port 5636 for interface $iface"
+        fi
+    done
+
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl stop rfwb-portscan
+    fi
+
+    sudo nft list ruleset >/etc/sysconfig/nftables.conf
+
+    sudo systemctl restart nftables
+
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl start rfwb-portscan
+    fi
+
+    sudo nft list chain inet filter input
+}
+
+# Configure nftables to allow TCP traffic on port 5636
+configure_nftables
+
+echo -e "${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+}
 #Set Avahi on the inside interfaces
 install_avahi() {
 clear
