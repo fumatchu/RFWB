@@ -694,7 +694,7 @@ EOF
 install_portscan() {
 # Script to set up nftables for detecting and blocking port scans on Red Hat systems
 clear
-echo -e "Installing RFWB-Portscan Detection engine..."
+echo -e "${GREEN}Installing RFWB-Portscan Detection engine...${TEXTRESET}"
 sleep 4
 
 # Ensure the script is run as root
