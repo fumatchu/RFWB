@@ -1717,7 +1717,7 @@ install_suricata() {
     # Run suricata-update
     echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
-        echo -e "${GREEN}suricata-update completed successfully.${TEXTRESET}"
+        echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
     else
         echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
         exit 1
@@ -1748,7 +1748,7 @@ install_suricata() {
     # Run suricata-update after the loop
     echo -e "Running suricata-update...${TEXTRESET}"
     if sudo suricata-update; then
-        echo -e "suricata-update completed successfully."
+        echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
     else
         echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
     fi
