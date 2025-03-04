@@ -5,21 +5,6 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 TEXTRESET="\033[0m"
 
-# Function to show a spinning cursor
-spinner() {
-    local pid=$1
-    local delay=0.1
-    local spinstr='|/-\'
-    while [ -d /proc/$pid ]; do
-        for char in $spinstr; do
-            printf " [%c]  " "$char"
-            sleep $delay
-            printf "\b\b\b\b\b\b"
-        done
-    done
-    printf "    \b\b\b\b"
-}
-
 # Install Filebeat
 echo -e "Installing Filebeat..."
 sudo dnf install --enablerepo=elasticsearch filebeat -y
@@ -60,20 +45,36 @@ SURICATA_YML="/etc/filebeat/modules.d/suricata.yml"
 sudo sed -i 's/^  enabled: false/  enabled: true/' "$SURICATA_YML"
 sudo sed -i 's|^  #var.paths:.*|  var.paths: ["/var/log/suricata/eve.json"]|' "$SURICATA_YML"
 
-# Run Filebeat setup with spinner
+# Run Filebeat setup with a spinner
 echo -e "Running Filebeat setup..."
-filebeat setup &  # Run setup in the background
+{
+    filebeat setup
+} &
 setup_pid=$!
-spinner $setup_pid  # Show spinner while the setup is running
-wait $setup_pid  # Wait for the setup to complete
+
+# Spinner function
+spin() {
+    local -a marks=('-' '\' '|' '/')
+    while kill -0 $setup_pid 2>/dev/null; do
+        for mark in "${marks[@]}"; do
+            echo -ne "\r$mark"
+            sleep 0.1
+        done
+    done
+}
+
+# Start the spinner
+spin
+wait $setup_pid
 setup_exit_code=$?
 
+# Check the exit code of the filebeat setup
 if [ $setup_exit_code -ne 0 ]; then
-    echo -e "${RED}Filebeat setup encountered an error. Exiting.${TEXTRESET}"
+    echo -e "\r${RED}Filebeat setup encountered an error. Exiting.${TEXTRESET}"
     exit 1
 fi
 
-echo -e "${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
+echo -e "\r${GREEN}Filebeat setup completed successfully.${TEXTRESET}"
 
 # Enable and start Filebeat service
 echo -e "Starting Filebeat service..."
