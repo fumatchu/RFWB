@@ -2538,17 +2538,17 @@ EOF
 cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
 options=(
     1 "Install BIND and ISC KEA DHCP" off
-    3 "Install Cockpit" off
-    4 "Install ntopng" off
-    5 "Install DDNS Client" off
-    6 "Install Suricata (Only Suricata Engine)" off
-    7 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
-    8 "Install RFWB Portscan detection" off
-    9 "Install SNMP Daemon" off
-   10 "Install Netdata" off
-   11 "Install/Configure QOS for VOICE" off
-   12 "Install mDNS Reflector (Avahi)" off
-   13 "Install EVEBOX for Suricata" off
+    2 "Install Cockpit" off
+    3 "Install ntopng" off
+    4 "Install DDNS Client" off
+    5 "Install Suricata (Only Suricata Engine)" off
+    6 "Install Elastic/Kibana/Filebeat (Dashboard for Suricata Events/Alerts)" off
+    7 "Install RFWB Portscan detection" off
+    8 "Install SNMP Daemon" off
+    9 "Install Netdata" off
+   10 "Install/Configure QOS for VOICE" off
+   11 "Install mDNS Reflector (Avahi)" off
+   12 "Install EVEBOX for Suricata" off
 )
 choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
 
@@ -2559,37 +2559,37 @@ for choice in $choices; do
     1)
         install_net_services
         ;;
-    3)
+    2)
         install_cockpit
         ;;
-    4)
+    3)
         install_ntopng
         ;;
-    5)
+    4)
         install_ddclient
         ;;
-    6)
+    5)
         install_suricata
         ;;
-    7)
+    6)
         install_el_ki_fb
         ;;
-    8)
+    7)
         install_portscan
         ;;
-    9)
+    8)
         install_snmpd
         ;;
-    10)
+    9)
         install_netdata
         ;;
-    11)
+    10)
         install_qos
         ;;
-    12)
+    11)
         install_avahi
         ;;
-    13)
+    12)
         install_eve
         ;;
     esac
