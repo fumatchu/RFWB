@@ -13,31 +13,34 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 #Install EVEBOX
-install_eve () {
-clear
-echo -e "${GREEN}Installing EVEBOX for Suricata...${TEXTRESET}"
-sleep 4
-# Add the EveBox repository using rpm
-rpm -Uvh https://evebox.org/files/rpm/stable/evebox-release.noarch.rpm
+#!/bin/bash
 
-# Install SQLite
-dnf install -y sqlite
+install_eve() {
+    clear
+    echo -e "${GREEN}Installing EVEBOX for Suricata...${TEXTRESET}"
+    sleep 4
 
-# Install EveBox using dnf
-dnf install -y evebox
+    # Add the EveBox repository using rpm
+    rpm -Uvh https://evebox.org/files/rpm/stable/evebox-release.noarch.rpm
 
-# Define configuration file path
-CONFIG_FILE="/etc/evebox/evebox.yaml"
+    # Install SQLite
+    dnf install -y sqlite
 
-# Backup existing configuration file if it exists
-if [ -f "$CONFIG_FILE" ]; then
-  echo -e "Backing up existing configuration file..."
-  cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
-fi
+    # Install EveBox using dnf
+    dnf install -y evebox
 
-# Write new configuration to evebox.yaml including all remarks
-echo -e "Writing new configuration to ${YELLOW}$CONFIG_FILE...${TEXTRESET}"
-cat <<EOL > $CONFIG_FILE
+    # Define configuration file path
+    CONFIG_FILE="/etc/evebox/evebox.yaml"
+
+    # Backup existing configuration file if it exists
+    if [ -f "$CONFIG_FILE" ]; then
+        echo -e "Backing up existing configuration file..."
+        cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+    fi
+
+    # Write new configuration to evebox.yaml including all remarks
+    echo -e "Writing new configuration to ${YELLOW}$CONFIG_FILE...${TEXTRESET}"
+    cat <<EOL > $CONFIG_FILE
 # This is a minimal evebox.yaml for Elasticsearch and SQLite.
 
 http:
@@ -46,7 +49,7 @@ http:
   host: "0.0.0.0"
 
   tls:
-    # By default a TLS is enabled and a self signed certificate will
+    # By default TLS is enabled and a self-signed certificate will
     # be created. Uncomment and set this to false to disable TLS.
     enabled: false
 
@@ -101,13 +104,13 @@ input:
     - "/var/log/suricata/eve.*.json"
 EOL
 
-# Change permissions of /var/log/suricata to 774 recursively
-echo -e "Changing permissions of /var/log/suricata to 774 recursively..."
-chmod -R 774 /var/log/suricata
+    # Change permissions of /var/log/suricata to 774 recursively
+    echo -e "Changing permissions of /var/log/suricata to 774 recursively..."
+    chmod -R 774 /var/log/suricata
 
-# Create evebox-agent systemd service
-echo -e "${GREEN}Creating evebox-agent systemd service...${TEXTRESET}"
-cat <<EOF > /etc/systemd/system/evebox-agent.service
+    # Create evebox-agent systemd service
+    echo -e "${GREEN}Creating evebox-agent systemd service...${TEXTRESET}"
+    cat <<EOF > /etc/systemd/system/evebox-agent.service
 [Unit]
 Description=EveBox Agent
 After=network.target
@@ -120,80 +123,95 @@ Restart=always
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd to recognize the new service
-systemctl daemon-reload
+    # Reload systemd to recognize the new service
+    systemctl daemon-reload
 
-# Enable and start the EveBox and evebox-agent services
-echo -e "Enabling and starting the EveBox and evebox-agent services..."
-systemctl enable evebox
-systemctl start evebox
-systemctl enable evebox-agent
-systemctl start evebox-agent
+    # Enable and start the EveBox and evebox-agent services
+    echo -e "Enabling and starting the EveBox and evebox-agent services..."
+    systemctl enable evebox
+    systemctl start evebox
+    systemctl enable evebox-agent
+    systemctl start evebox-agent
 
-# Check if services are running
-if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
-    echo -e "${GREEN}EveBox and EveBox Agent services are running.${TEXTRESET}"
-else
-    echo -e "${RED}Failed to start EveBox or EveBox Agent services. Please check the logs for more details.${TEXTRESET}"
-    exit 1
-fi
-
-# Function to add a rule to nftables for port 5636
-configure_nftables() {
-    echo -e "Configuring nftables..."
-
-    # Find interfaces ending with '-inside'
-    inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
-
-    if [ -z "$inside_interfaces" ]; then
-        echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+    # Check if services are running
+    if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
+        echo -e "${GREEN}EveBox and EveBox Agent services are running.${TEXTRESET}"
+    else
+        echo -e "${RED}Failed to start EveBox or EveBox Agent services. Please check the logs for more details.${TEXTRESET}"
         exit 1
     fi
 
-    echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    # Function to add a rule to nftables for port 5636
+    configure_nftables() {
+        echo -e "Configuring nftables..."
 
-    sudo systemctl enable nftables
-    sudo systemctl start nftables
+        # Find interfaces ending with '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    if ! sudo nft list tables | grep -q 'inet filter'; then
-        sudo nft add table inet filter
-    fi
-
-    if ! sudo nft list chain inet filter input &>/dev/null; then
-        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
-    fi
-
-    for iface in $inside_interfaces; do
-        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 5636 accept"; then
-            sudo nft add rule inet filter input iifname "$iface" tcp dport 5636 accept
-            echo -e "${GREEN}Rule added: Allow TCP on port 5636 for interface $iface${TEXTRESET}"
-        else
-            echo "Rule already exists: Allow TCP on port 5636 for interface $iface"
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            exit 1
         fi
-    done
 
-    rfwb_status=$(systemctl is-active rfwb-portscan)
-    if [ "$rfwb_status" == "active" ]; then
-        systemctl stop rfwb-portscan
+        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 5636 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 5636 accept
+                echo -e "${GREEN}Rule added: Allow TCP on port 5636 for interface $iface${TEXTRESET}"
+            else
+                echo "Rule already exists: Allow TCP on port 5636 for interface $iface"
+            fi
+        done
+
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+
+        sudo systemctl restart nftables
+
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+
+        sudo nft list chain inet filter input
+    }
+
+    # Configure nftables to allow TCP traffic on port 5636
+    configure_nftables
+
+    # Capture administrator credentials from /var/log/messages
+    echo -e "Capturing administrator credentials from /var/log/messages..."
+    credentials=$(grep "Created administrator username and password" /var/log/messages | tail -n 1)
+
+    if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
+        admin_user="${BASH_REMATCH[1]}"
+        admin_pass="${BASH_REMATCH[2]}"
+        echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
+        echo -e "${GREEN}Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
+        echo -e "Your username is: $admin_user and your password is: $admin_pass"
+    else
+        echo -e "${RED}Failed to capture administrator credentials from logs.${TEXTRESET}"
     fi
 
-    sudo nft list ruleset >/etc/sysconfig/nftables.conf
-
-    sudo systemctl restart nftables
-
-    if [ "$rfwb_status" == "active" ]; then
-        systemctl start rfwb-portscan
-    fi
-
-    sudo nft list chain inet filter input
+    echo -e "${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+    read -p "Press Enter when ready"
 }
 
-# Configure nftables to allow TCP traffic on port 5636
-configure_nftables
-
-echo -e "${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
-sleep 4
-}
 #Set Avahi on the inside interfaces
 install_avahi() {
 clear
