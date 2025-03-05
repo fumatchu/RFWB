@@ -2054,7 +2054,7 @@ install_suricata() {
     if [ "$response" == "$expected_response" ]; then
         echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
         echo -e "${GREEN}$response${TEXTRESET}"
-        sleep 5
+        sleep 2
         # Capture the last line of the fast.log containing the specified ID
         last_log_line=$(grep 2100498 /var/log/suricata/fast.log | tail -n 1)
         echo -e "Last log line with ID 2100498: ${last_log_line}${TEXTRESET}" # Debug: Print the last line for verification
@@ -2064,10 +2064,12 @@ install_suricata() {
             echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TEXTRESET}"
         else
             echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
+            sleep 5
             exit 1
         fi
     else
         echo -e "${RED}Curl command failed. The expected response was not received.${TEXTRESET}"
+        sleep 5
         exit 1
     fi
 
