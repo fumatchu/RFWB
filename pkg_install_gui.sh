@@ -1923,10 +1923,11 @@ while true; do
 
         echo -e "Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
         
-        # Allow Ctrl+C during the read command
-        trap - SIGINT
+        # Ignore Ctrl+C during the read command
+        trap '' SIGINT
         read -r rule_sources
-        trap '' SIGINT  # Re-ignore Ctrl+C
+        # Reapply default behavior for Ctrl+C after read
+        trap - SIGINT
 
         for source in $rule_sources; do
             echo -e "Adding source $source...${TEXTRESET}"
