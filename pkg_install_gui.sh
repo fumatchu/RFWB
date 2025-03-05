@@ -266,12 +266,12 @@ enable-reflector=yes
 EOL"
 
 # Start and enable Avahi service
-echo -e "${YELLOW}Starting and enabling Avahi service...${TEXTRESET}"
+echo -e "Starting and enabling Avahi service..."
 sudo systemctl start avahi-daemon
 sudo systemctl enable avahi-daemon
 
 # Configure nftables to allow mDNS traffic on internal interfaces only
-echo -e "${YELLOW}Configuring nftables to allow mDNS traffic...${TEXTRESET}"
+echo -e "${GREEN}Configuring nftables to allow mDNS traffic...${TEXTRESET}"
 # Ensure nftables table and chain exist
 sudo nft add table inet filter 2>/dev/null
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
@@ -283,15 +283,15 @@ for sub_interface in $SUB_INTERFACES; do
 done
 
 # Save the current ruleset
-echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+echo -e "${GREEN}Saving the current nftables ruleset...${TEXTRESET}"
 sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
-echo -e "${YELLOW}Enabling nftables service...${TEXTRESET}"
+echo -e "${GREEN}Enabling nftables service...${TEXTRESET}"
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "${GREEN}Setup complete. Avahi is configured for mDNS reflection on internal interfaces, and nftables are configured to allow mDNS traffic only on those interfaces.${TEXTRESET}"
+echo -e "${GREEN}Avahi is configured for mDNS reflection only on internal interfaces.${TEXTRESET}"
 sleep 4
 }
 
