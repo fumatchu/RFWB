@@ -1336,6 +1336,8 @@ install_ddclient() {
     sleep 4
 }
 
+#Function to install BIND and KEA 
+
 # Function to install BIND
 install_bind() {
     clear
@@ -1346,7 +1348,6 @@ install_bind() {
 
     # Function to locate the inside interface and its sub-interfaces
     find_inside_interfaces() {
-        # Find the main interface with a connection name ending in '-inside'
         main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if [ -z "$main_interface" ]; then
@@ -1354,10 +1355,7 @@ install_bind() {
             exit 1
         fi
 
-        # Find all sub-interfaces (e.g., VLANs) associated with the main interface
         sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
-
-        # Combine main interface and sub-interfaces into a single list
         inside_interfaces="$main_interface $sub_interfaces"
 
         echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
@@ -1365,21 +1363,17 @@ install_bind() {
 
     # Function to set up nftables rules for DNS on the inside interfaces
     setup_nftables_for_dns() {
-        # Ensure the nftables service is enabled and started
         sudo systemctl enable nftables
         sudo systemctl start nftables
 
-        # Create a filter table if it doesn't exist
         if ! sudo nft list tables | grep -q 'inet filter'; then
             sudo nft add table inet filter
         fi
 
-        # Create an input chain if it doesn't exist
         if ! sudo nft list chain inet filter input &>/dev/null; then
             sudo nft add chain inet filter input { type filter hook input priority 0 \; }
         fi
 
-        # Add rules to allow DNS on the inside interfaces
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
@@ -1395,21 +1389,17 @@ install_bind() {
             fi
         done
 
-        # Check and handle rfwb-portscan service
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
             systemctl stop rfwb-portscan
         fi
 
-        # Save the current nftables configuration
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
-        # Restart the nftables service to apply changes
         sudo systemctl restart nftables
-        # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-        # Show the added rules in the input chain
+
         sudo nft list chain inet filter input
     }
 
@@ -1417,7 +1407,6 @@ install_bind() {
     find_inside_interfaces
     setup_nftables_for_dns
 
-    # Continue with the rest of the script
     echo -e "${GREEN}BIND Install Complete...${TEXTRESET}"
     sleep 4
 }
@@ -1435,7 +1424,6 @@ install_isc_kea() {
 
     # Function to locate the inside interfaces
     find_inside_interfaces() {
-        # Find the main interface with a connection name ending in '-inside'
         main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if [ -z "$main_interface" ]; then
@@ -1443,10 +1431,7 @@ install_isc_kea() {
             exit 1
         fi
 
-        # Find all sub-interfaces (e.g., VLANs) associated with the main interface
         sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
-
-        # Combine main interface and sub-interfaces into a single list
         inside_interfaces="$main_interface $sub_interfaces"
 
         echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
@@ -1454,30 +1439,24 @@ install_isc_kea() {
 
     # Function to set up nftables rules for DHCP on the inside interfaces
     setup_nftables_for_dhcp() {
-        # Ensure the nftables service is enabled and started
         sudo systemctl enable nftables
         sudo systemctl start nftables
 
-        # Create a filter table if it doesn't exist
         if ! sudo nft list tables | grep -q 'inet filter'; then
             sudo nft add table inet filter
         fi
 
-        # Create an input chain if it doesn't exist
         if ! sudo nft list chain inet filter input &>/dev/null; then
             sudo nft add chain inet filter input { type filter hook input priority 0 \; }
         fi
 
-        # Add rules to allow DHCP on the inside interfaces
         for iface in $inside_interfaces; do
-            # Allow DHCP for IPv4 (UDP port 67)
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
                 echo -e "${GREEN}Rule added: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
             else
                 echo "Rule already exists: Allow DHCP (IPv4) on interface $iface"
             fi
-            # Allow DHCP for IPv6 (UDP port 547)
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
                 echo -e "${GREEN}Rule added: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
@@ -1485,20 +1464,18 @@ install_isc_kea() {
                 echo "Rule already exists: Allow DHCP (IPv6) on interface $iface"
             fi
         done
-        # Check and handle rfwb-portscan service
+
         rfwb_status=$(systemctl is-active rfwb-portscan)
         if [ "$rfwb_status" == "active" ]; then
             systemctl stop rfwb-portscan
         fi
-        # Save the current nftables configuration
+
         sudo nft list ruleset >/etc/sysconfig/nftables.conf
-        # Restart the nftables service to apply changes
         sudo systemctl restart nftables
-        # Restart rfwb-portscan service if it was active
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-        # Show the added rules in the input chain
+
         sudo nft list chain inet filter input
     }
 
@@ -1506,10 +1483,18 @@ install_isc_kea() {
     find_inside_interfaces
     setup_nftables_for_dhcp
 
-    # Continue with the rest of the script
     echo -e "${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
     sleep 4
 }
+
+# Master function to run both installations
+install_net_services() {
+    install_bind
+    install_isc_kea
+}
+
+# Call the master function to execute both install scripts
+
 # Function to install COCKPIT
 install_cockpit() {
     clear
@@ -2552,8 +2537,7 @@ EOF
 # Use dialog to prompt the user
 cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
 options=(
-    1 "Install BIND" off
-    2 "Install ISC KEA" off
+    1 "Install BIND and ISC KEA DHCP" off
     3 "Install Cockpit" off
     4 "Install ntopng" off
     5 "Install DDNS Client" off
@@ -2573,10 +2557,7 @@ clear
 for choice in $choices; do
     case $choice in
     1)
-        install_bind
-        ;;
-    2)
-        install_isc_kea
+        install_net_services
         ;;
     3)
         install_cockpit
