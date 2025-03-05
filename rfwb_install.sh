@@ -578,13 +578,13 @@ while true; do
   read -p "Would you like to configure a VLAN? (y/n): " use_vlan
 
   if [[ "$use_vlan" == "y" ]]; then
-    # List physical network interfaces with connection profile names
+    # List physical network interfaces with connection profile names, excluding loopback and VLANs
     echo -e "${YELLOW}Available physical network interfaces:${TEXTRESET}"
     interfaces=()
     index=1
     while IFS=: read -r profile device; do
-      # Exclude interfaces that are VLANs (contain a dot)
-      if [[ -n "$device" && "$device" != *.* ]]; then
+      # Exclude interfaces that are VLANs (contain a dot) and loopback (lo)
+      if [[ -n "$device" && "$device" != *.* && "$device" != "lo" ]]; then
         interfaces+=("$device")
         echo "$index) $device ($profile)"
         ((index++))
