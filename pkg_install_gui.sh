@@ -2014,7 +2014,7 @@ install_suricata() {
     echo -e "Testing Suricata rule...${TEXTRESET}"
     echo -e "Waiting for the engine to start...${TEXTRESET}"
     # Total duration for the progress bar
-    duration=15
+    duration=60
 
     # Total number of steps in the progress bar
     steps=30
