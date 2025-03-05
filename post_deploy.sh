@@ -72,8 +72,8 @@ clear
 echo -e "${GREEN}Installing Startup scripts to rc.local...${TEXTRESET}"
 sleep 4
 
-SRC_SCRIPT1="/root/RFWB/check_ip_EKF.sh"
-DEST_SCRIPT1="/opt/check_ip_EKF.sh"
+SRC_SCRIPT1="/root/RFWB/kea_delay_start.sh"
+DEST_SCRIPT1="/opt/kea_delay_start.sh"
 SRC_SCRIPT2="/root/RFWB/fw_delay_start.sh"
 DEST_SCRIPT2="/opt/fw_delay_start.sh"
 RC_LOCAL="/etc/rc.d/rc.local"
