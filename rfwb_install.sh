@@ -728,10 +728,11 @@ echo "Restarting nftables service..."
 sudo systemctl restart nftables
 
 echo "nftables configuration completed successfully."
-sleep 4
+
 # Main script execution
 find_private_ip
 setup_nftables
+sleep 4
 /root/RFWB/set_external.sh
 echo " "
 read -p "Press Enter to install applications and services"
