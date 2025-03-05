@@ -39,7 +39,7 @@ install_eve() {
     fi
 
     # Write new configuration to evebox.yaml including all remarks
-    echo -e "Writing new configuration to ${YELLOW}$CONFIG_FILE...${TEXTRESET}"
+    echo -e "Writing new configuration to ${GREEN}$CONFIG_FILE...${TEXTRESET}"
     cat <<EOL > $CONFIG_FILE
 # This is a minimal evebox.yaml for Elasticsearch and SQLite.
 
