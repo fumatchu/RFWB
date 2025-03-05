@@ -2054,7 +2054,8 @@ install_suricata() {
     if [ "$response" == "$expected_response" ]; then
         echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
         echo -e "${GREEN}$response${TEXTRESET}"
-        sleep 2
+        echo -e "Please Wait..."
+        sleep 10 
         # Capture the last line of the fast.log containing the specified ID
         last_log_line=$(grep 2100498 /var/log/suricata/fast.log | tail -n 1)
         echo -e "Last log line with ID 2100498: ${last_log_line}${TEXTRESET}" # Debug: Print the last line for verification
