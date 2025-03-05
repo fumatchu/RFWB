@@ -1,5 +1,5 @@
 #!/bin/bash
-
+sleep 10
 # Define the pattern to search for in the systemctl output
 pattern="DHCPSRV_OPEN_SOCKET_FAIL failed to open socket: the interface"
 
