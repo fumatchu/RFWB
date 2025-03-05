@@ -12,7 +12,7 @@ if echo "$status_output" | grep -q "$pattern"; then
     interface=$(echo "$status_output" | grep "$pattern" | sed -n 's/.*interface \(.*\) is not running.*/\1/p')
 
     # Log the restart action to /var/log/messages
-    logger "RFWB Sees kea-dhcp4 down to network interface delay...Restarting kea-dhcp4 Service"
+    logger "rfwb: kea-dhcp4 down to network interface delay from boot...Restarting kea-dhcp4 Service"
 
     # Restart the kea-dhcp4 service
     systemctl restart kea-dhcp4
