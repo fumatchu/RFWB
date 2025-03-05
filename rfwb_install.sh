@@ -741,4 +741,3 @@ read -p "Press Enter to install applications and services"
 
 /root/RFWB/post_deploy.sh
 
-echo -e "Continue script"
