@@ -52,7 +52,7 @@ http:
 
 # By default authentication is enabled, uncomment this line to disable
 # authentication.
-authentication: false
+#authentication: false
 
 data-directory: /var/lib/evebox
 
