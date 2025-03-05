@@ -1324,6 +1324,8 @@ systemctl start rfwb-ps-mon.service
 echo "Verifying the service status..."
 systemctl status rfwb-ps-mon.service
 
+sleep 4
+
 }
 
 # Function to install ddns
