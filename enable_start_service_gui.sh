@@ -48,40 +48,30 @@ dialog --title "Checking activated services" --infobox "Enabling and Starting se
 sleep 3
 
 # Main script execution
-for service in netdata webmin ntopng suricata filebeat kibana elasticsearch; do
+for service in netdata evebox ntopng suricata avahi net-snmp; do
     if check_package_installed "$service"; then
         enable_and_start_service "$service"
-    else
-        show_infobox "$service is not installed. Skipping..."
     fi
 done
 
 # Special handling for bind
 if check_package_installed "bind"; then
     enable_and_start_service "named"
-else
-    show_infobox "bind is not installed. Skipping..."
 fi
 
 # Special handling for Cockpit
 if check_package_installed "cockpit"; then
     enable_and_start_service "cockpit.socket"
-else
-    show_infobox "cockpit is not installed. Skipping..."
 fi
 
 # Special handling for Kea
 if check_package_installed "isc-kea-dhcp4"; then
     enable_and_start_service "kea-dhcp4"
-else
-    show_infobox "isc-kea-dhcp4 is not installed. Skipping..."
 fi
 
 # Special handling for Kea DDNS
 if check_package_installed "isc-kea-dhcp-ddns"; then
     enable_and_start_service "kea-dhcp-ddns"
-else
-    show_infobox "isc-kea-dhcp-ddns is not installed. Skipping..."
 fi
 
 if check_package_installed "ddclient"; then
