@@ -1901,36 +1901,42 @@ install_suricata() {
         echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
         exit 1
     fi
-    # Run suricata-update
-    echo -e "Running suricata-update...${TEXTRESET}"
-    if sudo suricata-update; then
-        echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
+   # Run suricata-update
+echo -e "Running suricata-update...${TEXTRESET}"
+# Set trap to ignore SIGINT
+trap '' SIGINT
+if sudo suricata-update; then
+    echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
+else
+    echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
+    exit 1
+fi
+
+# Loop to allow adding additional rule sources
+while true; do
+    echo -e "Do you want to add additional rule sources? (y/n)${TEXTRESET}"
+    read -p "Your choice: " add_rules
+
+    if [[ "$add_rules" == "y" || "$add_rules" == "Y" ]]; then
+        echo -e "Listing available rule sources...${TEXTRESET}"
+        sudo suricata-update list-sources
+
+        echo -e "Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
+        
+        # Allow Ctrl+C during the read command
+        trap - SIGINT
+        read -r rule_sources
+        trap '' SIGINT  # Re-ignore Ctrl+C
+
+        for source in $rule_sources; do
+            echo -e "Adding source $source...${TEXTRESET}"
+            sudo suricata-update enable-source "$source"
+        done
+
     else
-        echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
-        exit 1
+        break
     fi
-
-    # Loop to allow adding additional rule sources
-    while true; do
-        echo -e "Do you want to add additional rule sources? (y/n)${TEXTRESET}"
-        read -p "Your choice: " add_rules
-
-        if [[ "$add_rules" == "y" || "$add_rules" == "Y" ]]; then
-            echo -e "Listing available rule sources...${TEXTRESET}"
-            sudo suricata-update list-sources
-
-            echo -e "Please enter the source names you want to add, separated by spaces:${TEXTRESET}"
-            read -r rule_sources
-
-            for source in $rule_sources; do
-                echo -e "Adding source $source...${TEXTRESET}"
-                sudo suricata-update enable-source "$source"
-            done
-
-        else
-            break
-        fi
-    done
+done
 
     # Run suricata-update after the loop
     echo -e "Running suricata-update...${TEXTRESET}"
