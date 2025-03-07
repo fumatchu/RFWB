@@ -202,9 +202,9 @@ for sub_interface in $SUB_INTERFACES; do
 done
 
 # Create and configure the inet nat table
-sudo nft add table ip nat 2>/dev/null
-sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null
-sudo nft add rule ip nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
+sudo nft add table inet nat 2>/dev/null
+sudo nft add chain inet nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null
+sudo nft add rule inet nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
 
 # Log and drop unsolicited incoming traffic on the outside interface
 echo -e "Logging and blocking unsolicited incoming traffic on the outside interface..." | tee >(logger)
