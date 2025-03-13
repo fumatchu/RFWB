@@ -277,9 +277,9 @@ sudo nft add table inet filter 2>/dev/null
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
 
 # Allow mDNS traffic on internal interfaces
-sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" udp dport 5353 accept
+sudo nft add rule inet filter input iifname "$INSIDE_INTERFACE" udp dport 5353 accept
 for sub_interface in $SUB_INTERFACES; do
-    sudo nft add rule inet filter input iif "$sub_interface" udp dport 5353 accept
+    sudo nft add rule inet filter input iifname "$sub_interface" udp dport 5353 accept
 done
 
 # Save the current ruleset
