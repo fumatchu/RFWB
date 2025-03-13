@@ -166,20 +166,20 @@ sudo nft add table inet filter 2>/dev/null
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
 
 # Allow all traffic on the loopback interface
-sudo nft add rule inet filter input iif lo accept
+sudo nft add rule inet filter input iifname lo accept
 
 # Allow established and related connections on the input chain
 sudo nft add rule inet filter input ct state established,related accept
 
 # Allow inbound traffic on the inside interface(s)
-sudo nft add rule inet filter input iif "$INSIDE_INTERFACE" accept
+sudo nft add rule inet filter input iifname "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
     echo -e "Allowing inbound traffic for sub-interface: $sub_interface" | tee >(logger)
-    sudo nft add rule inet filter input iif "$sub_interface" accept
+    sudo nft add rule inet filter input iifname "$sub_interface" accept
 done
 
 # Allow SSH on the outside interface
-sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" tcp dport 22 accept
+sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" tcp dport 22 accept
 
 # Create and configure the forward chain with drop policy
 sudo nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; } 2>/dev/null
@@ -190,25 +190,25 @@ sudo nft add rule inet filter forward ct state established,related accept
 # Allow forwarding between inside interface and its sub-interfaces
 sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$sub_interface" accept
-    sudo nft add rule inet filter forward iif "$sub_interface" oif "$INSIDE_INTERFACE" accept
-    sudo nft add rule inet filter forward iif "$sub_interface" oif "$sub_interface" accept
+    sudo nft add rule inet filter forward iifname "$INSIDE_INTERFACE" oifname "$sub_interface" accept
+    sudo nft add rule inet filter forward iifname "$sub_interface" oifname "$INSIDE_INTERFACE" accept
+    sudo nft add rule inet filter forward iifname "$sub_interface" oifname "$sub_interface" accept
 done
 
 # Allow forwarding from inside to outside
-sudo nft add rule inet filter forward iif "$INSIDE_INTERFACE" oif "$OUTSIDE_INTERFACE" accept
+sudo nft add rule inet filter forward iifname "$INSIDE_INTERFACE" oifname "$OUTSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    sudo nft add rule inet filter forward iif "$sub_interface" oif "$OUTSIDE_INTERFACE" accept
+    sudo nft add rule inet filter forward iifname "$sub_interface" oifname "$OUTSIDE_INTERFACE" accept
 done
 
 # Create and configure the inet nat table
 sudo nft add table inet nat 2>/dev/null
 sudo nft add chain inet nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null
-sudo nft add rule inet nat postrouting oif "$OUTSIDE_INTERFACE" masquerade
+sudo nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
 
 # Log and drop unsolicited incoming traffic on the outside interface
 echo -e "Logging and blocking unsolicited incoming traffic on the outside interface..." | tee >(logger)
-sudo nft add rule inet filter input iif "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
+sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
 
 # Create a named set for threat blocking
 sudo nft add set inet filter $BLOCK_SET { type ipv4_addr\; flags timeout\; } 2>/dev/null
