@@ -202,7 +202,6 @@ nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
 echo "OpenVPN firewall rules applied successfully!"
 
 #Reorg the chains 
-#!/bin/bash
 
 # File paths
 NFTABLES_FILE="/etc/sysconfig/nftables.conf"
