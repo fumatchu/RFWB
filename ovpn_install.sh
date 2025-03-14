@@ -97,3 +97,107 @@ if sudo systemctl is-active --quiet openvpn-server@server; then
 else
     echo "OpenVPN server failed to start. Check logs with: sudo journalctl -u openvpn-server@server --no-pager -n 50"
 fi
+
+clear 
+echo "Select your interface(s) to pass VPN traffic on the firewall"
+
+# OpenVPN Firewall Configuration Script for nftables
+
+set -e  # Exit immediately if any command fails
+
+# Function to find the network interface based on connection name ending
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+# Function to find sub-interfaces based on main interface
+find_sub_interfaces() {
+    local main_interface="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
+}
+
+# Find inside and outside interfaces
+INSIDE_INTERFACE=$(find_interface "-inside")
+OUTSIDE_INTERFACE=$(find_interface "-outside")
+
+# Validate detected interfaces
+if [[ -z "$INSIDE_INTERFACE" ]]; then
+    echo "Error: No inside interface found."
+    exit 1
+fi
+
+if [[ -z "$OUTSIDE_INTERFACE" ]]; then
+    echo "Error: No outside interface found."
+    exit 1
+fi
+
+echo "Inside interface detected: $INSIDE_INTERFACE"
+echo "Outside interface detected: $OUTSIDE_INTERFACE"
+
+# Find sub-interfaces for the inside interface
+SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+
+# Combine inside and sub-interfaces into an array
+ALL_INTERFACES=("$INSIDE_INTERFACE" $SUB_INTERFACES)
+TOTAL_INTERFACES=${#ALL_INTERFACES[@]}
+
+# User-selected interfaces
+SELECTED_INTERFACES=()
+echo "Select the interfaces that should participate in VPN traffic:"
+echo "0. Exit without applying rules"
+
+for i in "${!ALL_INTERFACES[@]}"; do
+    echo "$((i+1)). ${ALL_INTERFACES[i]}"
+done
+
+while true; do
+    if [[ ${#SELECTED_INTERFACES[@]} -eq $TOTAL_INTERFACES ]]; then
+        echo "All available interfaces have been selected. Proceeding..."
+        break
+    fi
+
+    read -p "Enter the number of the interface to include (0 to finish): " CHOICE
+
+    if [[ "$CHOICE" == "0" ]]; then
+        if [[ ${#SELECTED_INTERFACES[@]} -eq 0 ]]; then
+            echo "No interfaces selected. Exiting..."
+            exit 0
+        else
+            break
+        fi
+    elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && ((CHOICE >= 1 && CHOICE <= TOTAL_INTERFACES)); then
+        INTERFACE_SELECTED="${ALL_INTERFACES[CHOICE-1]}"
+        if [[ ! " ${SELECTED_INTERFACES[@]} " =~ " ${INTERFACE_SELECTED} " ]]; then
+            SELECTED_INTERFACES+=("$INTERFACE_SELECTED")
+            echo "Added $INTERFACE_SELECTED to VPN traffic."
+        else
+            echo "$INTERFACE_SELECTED is already selected."
+        fi
+    else
+        echo "Invalid choice. Please enter a valid number from the list."
+    fi
+done
+
+# Apply nftables rules for OpenVPN
+
+# Allow OpenVPN server to receive client connections (UDP 1194)
+nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" udp dport 1194 accept
+
+# Allow all traffic on the VPN interface (tun0)
+nft add rule inet filter input iifname "tun0" accept
+
+# Ensure VPN clients can access the internet via the outside interface
+nft add rule inet filter forward iifname "tun0" oifname "$OUTSIDE_INTERFACE" ct state new accept
+
+# Apply rules only to selected interfaces
+for IFACE in "${SELECTED_INTERFACES[@]}"; do
+    nft add rule inet filter forward iifname "tun0" oifname "$IFACE" accept
+    nft add rule inet filter forward iifname "$IFACE" oifname "tun0" ct state new accept
+done
+
+# Ensure NAT is applied for VPN clients so they can access the internet
+nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
+
+echo "OpenVPN firewall rules applied successfully!"
+
