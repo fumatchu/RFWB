@@ -1,104 +1,99 @@
 #!/bin/bash
 
-# Function to find the network interface based on connection name ending
-find_interface() {
-    local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-}
+# OpenVPN Installation Script for Rocky Linux 9
+# This script installs and configures OpenVPN following the user's specifications
 
-# Function to find sub-interfaces based on main interface
-find_sub_interfaces() {
-    local main_interface="$1"
-    nmcli -t -f DEVICE device status | grep -E "^${main_interface}\.[0-9]+" | awk '{print $1}'
-}
+set -e  # Exit immediately if any command fails
 
-# Find inside and outside interfaces
-INSIDE_INTERFACE=$(find_interface "-inside")
-OUTSIDE_INTERFACE=$(find_interface "-outside")
+# Install EPEL repository
+echo "Installing EPEL repository..."
+sudo dnf install epel-release -y
 
-echo -e "${GREEN}Inside interface:${TEXTRESET} $INSIDE_INTERFACE"
-echo -e "${GREEN}Outside interface:${TEXTRESET} $OUTSIDE_INTERFACE"
+# Install OpenVPN
+echo "Installing OpenVPN..."
+sudo dnf install openvpn -y
 
-# Find sub-interfaces for the inside interface
-SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+# Install Easy-RSA
+echo "Installing Easy-RSA..."
+sudo dnf install easy-rsa -y
 
-# List available interfaces for selection
-AVAILABLE_INTERFACES=("$INSIDE_INTERFACE" $SUB_INTERFACES)
-echo "Available inside interfaces:"
-for i in "${!AVAILABLE_INTERFACES[@]}"; do
-    echo "$i: ${AVAILABLE_INTERFACES[$i]}"
-done
+# Create Easy-RSA directory
+echo "Creating Easy-RSA directory..."
+sudo mkdir /etc/openvpn/easy-rsa
 
-# Initialize an array to store selected interfaces
-SELECTED_INTERFACES=()
+# Create a symbolic link for Easy-RSA
+echo "Creating symbolic link for Easy-RSA..."
+sudo ln -s /usr/share/easy-rsa /etc/openvpn/easy-rsa
 
-# Loop to allow multiple selections
-while true; do
-    echo "Select an interface number for OpenVPN access:"
-    read -r index
+# Change directory to Easy-RSA
+echo "Changing directory to Easy-RSA..."
+cd /etc/openvpn/easy-rsa
 
-    # Validate index
-    if [[ $index =~ ^[0-9]+$ ]] && (( index >= 0 && index < ${#AVAILABLE_INTERFACES[@]} )); then
-        SELECTED_INTERFACES+=("${AVAILABLE_INTERFACES[index]}")
-        echo "Selected ${AVAILABLE_INTERFACES[index]}"
-        # Remove the selected interface from the available list
-        AVAILABLE_INTERFACES[index]=""
-    else
-        echo "Invalid selection. Please enter a valid number."
-        continue
-    fi
+# Initialize the Public Key Infrastructure (PKI)
+echo "Initializing PKI..."
+sudo ./easy-rsa/3/easyrsa init-pki
 
-    # Check if all interfaces have been selected
-    if [[ ${#SELECTED_INTERFACES[@]} -eq ${#AVAILABLE_INTERFACES[@]} ]]; then
-        echo "All available interfaces have been selected."
-        break
-    fi
+# Get the transient hostname
+TRANSIENT_HOSTNAME=$(hostnamectl | grep "Transient hostname" | awk '{print $3}')
+echo "Using transient hostname as Common Name (CN): $TRANSIENT_HOSTNAME"
 
-    # Ask if the user wants to add another interface
-    echo "Do you want to add another interface? (yes/no)"
-    read -r response
+# Build the Certificate Authority (CA) with automated Common Name
+echo "Building the Certificate Authority (CA) with hostname as CN..."
+sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$TRANSIENT_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
 
-    if [[ $response != "yes" ]]; then
-        break
-    fi
-done
+# Generate a certificate request for the server without a password, using the transient hostname as CN
+echo "Generating server certificate request with hostname as CN..."
+sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$TRANSIENT_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
 
-# Save current ruleset for comparison
-nft list ruleset > /tmp/nftables_before.conf
+# Sign the server certificate request automatically (without user confirmation)
+echo "Signing the server certificate request..."
+echo "yes" | sudo ./easy-rsa/3/easyrsa sign-req server server
 
-# Apply NFTables rules using the selected interfaces
-nft add table inet openvpn
+# Generate Diffie-Hellman (DH) parameters
+echo "Generating Diffie-Hellman parameters..."
+sudo ./easy-rsa/3/easyrsa gen-dh
 
-nft add chain inet openvpn input { type filter hook input priority 0\; }
-nft add chain inet openvpn forward { type filter hook forward priority 0\; }
+# Copy the sample OpenVPN server configuration to the correct directory
+echo "Copying OpenVPN sample configuration..."
+sudo cp /usr/share/doc/openvpn/sample/sample-config-files/server.conf /etc/openvpn/server/
 
-nft add rule inet openvpn input iifname "$OUTSIDE_INTERFACE" udp dport 1194 accept
-for iface in "${SELECTED_INTERFACES[@]}"; do
-    nft add rule inet openvpn input iifname "$iface" accept
-    nft add rule inet openvpn forward iifname "$iface" accept
-    nft add rule inet openvpn forward iifname "$OUTSIDE_INTERFACE" oifname "$iface" accept
-    nft add rule inet openvpn forward iifname "$iface" oifname "${INSIDE_INTERFACE}*" ct state established,related accept
-done
+# Update certificate and key paths
+echo "Updating OpenVPN certificate and key paths..."
+sudo sed -i '75,81s|^ca .*|ca /etc/openvpn/easy-rsa/pki/ca.crt|' /etc/openvpn/server/server.conf
+sudo sed -i '75,81s|^cert .*|cert /etc/openvpn/easy-rsa/pki/issued/server.crt|' /etc/openvpn/server/server.conf
+sudo sed -i '75,81s|^key .*|key /etc/openvpn/easy-rsa/pki/private/server.key|' /etc/openvpn/server/server.conf
 
-# Save the new ruleset
-nft list ruleset > /tmp/nftables_after.conf
+# Update DH file path
+sudo sed -i '80,85s|^dh .*|dh /etc/openvpn/easy-rsa/pki/dh.pem|' /etc/openvpn/server/server.conf
 
-# Show changes made
-echo "Changes to NFTables ruleset:"
-diff -u /tmp/nftables_before.conf /tmp/nftables_after.conf
+# Disable tls-auth
+sudo sed -i '240,244s|^tls-auth ta.key 0 # This file is secret|#tls-auth ta.key 0 # This file is secret|' /etc/openvpn/server/server.conf
 
-# Ask the user if they want to save the changes
-echo "Do you want to save these changes to the NFTables configuration? (yes/no)"
-read -r save_response
+# Insert route
+sudo sed -i '143i push "route 0.0.0.0 0.0.0.0"\n' /etc/openvpn/server/server.conf
 
-if [[ $save_response == "yes" ]]; then
-    # Save the current NFTables configuration permanently for Red Hat systems
-    echo "Saving the current NFTables configuration..."
-    nft list ruleset > /etc/sysconfig/nftables.conf
-    echo "Configuration saved."
-else
-    echo "Changes were not saved."
+# Uncomment user nobody and group nobody
+sudo sed -i 's/^;user nobody/user nobody/' /etc/openvpn/server/server.conf
+sudo sed -i 's/^;group nobody/group nobody/' /etc/openvpn/server/server.conf
+
+# Check if named service is running for custom DNS
+if sudo systemctl is-active --quiet named; then
+    read -p "Enter the primary DNS IP for OpenVPN clients: " DNS_IP
+    sudo sed -i '/push "dhcp-option DNS 208.67.222.222"/i push "dhcp-option DNS '"$DNS_IP"'"' /etc/openvpn/server/server.conf
+    echo "$DNS_IP" | sudo tee /etc/openvpn/primary_dns > /dev/null
 fi
 
-# Clean up temporary files
-rm /tmp/nftables_before.conf /tmp/nftables_after.conf
+# Set SELinux permissions
+sudo setsebool -P openvpn_enable_homedirs on
+sudo restorecon -Rv /etc/openvpn
+
+# Enable and start OpenVPN
+sudo systemctl enable openvpn-server@server
+sudo systemctl start openvpn-server@server
+
+# Check OpenVPN service status
+if sudo systemctl is-active --quiet openvpn-server@server; then
+    echo "OpenVPN server is running successfully!"
+else
+    echo "OpenVPN server failed to start. Check logs with: sudo journalctl -u openvpn-server@server --no-pager -n 50"
+fi
