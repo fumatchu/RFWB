@@ -197,9 +197,12 @@ for IFACE in "${SELECTED_INTERFACES[@]}"; do
 done
 
 # Ensure NAT is applied for VPN clients so they can access the internet
-nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
+#nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
+
+nft list ruleset > /etc/sysconfig/nftables.conf
 
 echo "OpenVPN firewall rules applied successfully!"
+
 
 #Reorg the chains 
 
