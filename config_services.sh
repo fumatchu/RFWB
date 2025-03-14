@@ -343,8 +343,7 @@ EOF
     if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
         echo "SELinux is currently set to $SELINUX_STATUS."
     else
-        echo "SELinux is enforcing. If you experience access issues, consider temporarily setting SELinux to permissive mode for testing:"
-        echo "setenforce 0  # Temporarily set SELinux to permissive mode for troubleshooting"
+        echo " "
     fi
 
     echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
