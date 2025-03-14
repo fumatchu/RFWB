@@ -29,21 +29,21 @@ sudo ln -s /usr/share/easy-rsa /etc/openvpn/easy-rsa
 echo "Changing directory to Easy-RSA..."
 cd /etc/openvpn/easy-rsa
 
+# Get the static hostname
+STATIC_HOSTNAME=$(hostnamectl | grep "Static hostname" | awk '{print $3}' | cut -d '.' -f1)
+echo "Using static hostname as Common Name (CN): $STATIC_HOSTNAME"
+
 # Initialize the Public Key Infrastructure (PKI)
 echo "Initializing PKI..."
 sudo ./easy-rsa/3/easyrsa init-pki
 
-# Get the transient hostname
-TRANSIENT_HOSTNAME=$(hostnamectl | grep "Transient hostname" | awk '{print $3}')
-echo "Using transient hostname as Common Name (CN): $TRANSIENT_HOSTNAME"
-
 # Build the Certificate Authority (CA) with automated Common Name
 echo "Building the Certificate Authority (CA) with hostname as CN..."
-sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$TRANSIENT_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
+sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
 
-# Generate a certificate request for the server without a password, using the transient hostname as CN
+# Generate a certificate request for the server without a password, using the static hostname as CN
 echo "Generating server certificate request with hostname as CN..."
-sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$TRANSIENT_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
+sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
 
 # Sign the server certificate request automatically (without user confirmation)
 echo "Signing the server certificate request..."
