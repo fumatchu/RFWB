@@ -399,7 +399,7 @@ sleep 2
 dnf -y install epel-release
 dnf -y config-manager --set-enabled crb
 dnf -y update
-dnf -y install ntsysv iptraf fail2ban tuned net-tools dmidecode ipcalc bind-utils expect fail2ban jq bc iproute-tc iw hostapd iotop
+dnf -y install ntsysv iptraf fail2ban tuned net-tools dmidecode ipcalc bind-utils expect fail2ban jq bc iproute-tc iw hostapd iotop zip
 dnf -y clean all
 #Bracketed pasting...yuck!
 sed -i '8i set enable-bracketed-paste off' /etc/inputrc
