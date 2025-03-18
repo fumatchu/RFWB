@@ -228,9 +228,8 @@ sudo systemctl enable nftables
 sudo systemctl start nftables
 
 echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}" | tee >(logger)
-echo -e "${YELLOW}Downloading and compiling threat lists for nftables...Please Wait${TEXTRESET}"
 
-#!/bin/bash
+#Install NFT-Threat-Lists
 
 LOG_TAG="nft-threat-list"
 
