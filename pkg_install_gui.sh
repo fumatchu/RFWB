@@ -125,7 +125,15 @@ EOF
 
     # Reload systemd to recognize the new service
     systemctl daemon-reload
-
+    # Add group permissions to eve and suricata
+    sudo usermod -aG suricata evebox
+    sudo usermod -aG evebox suricata
+    #Make sure logrotate is happy
+    sudo chown -R suricata:suricata /var/log/suricata
+    sudo chmod 750 /var/log/suricata
+    sudo find /var/log/suricata -type f -exec chmod 640 {} \;
+    #restart suricata
+    systemctl restart suricata
     # Enable and start the EveBox and evebox-agent services
     echo -e "Enabling and starting the EveBox and evebox-agent services..."
     systemctl enable evebox
