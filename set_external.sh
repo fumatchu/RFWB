@@ -235,16 +235,35 @@ echo -e "${YELLOW}Downloading and compiling threat lists for nftables...Please W
 LOG_TAG="nft-threat-list"
 
 echo "Installing NFTables Threat List Updater..."
-
 # Ensure required directories exist
 mkdir -p /etc/nft-threat-list
 
 # Define paths
 THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
+MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
+COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
 TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
-NFT_RULES_FILE="/etc/sysconfig/nftables"
 UPDATE_SCRIPT="/usr/local/bin/update_nft_threatlist.sh"
 CRON_JOB="/etc/cron.d/nft-threat-list"
+LOG_FILE="/var/log/nft-threat-list.log"
+
+# Overwrite the manual block list file with a proper format
+echo " "
+echo "# Manual Block List for NFTables" > "$MANUAL_BLOCK_LIST"
+echo "# Add IP addresses below the marker to be blocked" >> "$MANUAL_BLOCK_LIST"
+echo "#" >> "$MANUAL_BLOCK_LIST"
+echo "# Example:" >> "$MANUAL_BLOCK_LIST"
+echo "# 203.0.113.45  # Suspicious traffic" >> "$MANUAL_BLOCK_LIST"
+echo "# 192.168.100.50  # Internal policy block" >> "$MANUAL_BLOCK_LIST"
+echo "#" >> "$MANUAL_BLOCK_LIST"
+echo "######### Place IP Addresses under this line to be compiled #########" >> "$MANUAL_BLOCK_LIST"
+
+# Verify file creation
+if [ -s "$MANUAL_BLOCK_LIST" ]; then
+    echo " "
+else
+    echo "ERROR: Manual block list was not created!" >&2
+fi
 
 # Create the threat list update script
 cat <<'EOF' >$UPDATE_SCRIPT
@@ -258,12 +277,19 @@ THREAT_LISTS=(
 )
 
 THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
+MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
+COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
 TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
 MAX_RETRIES=3
+LOG_FILE="/var/log/nft-threat-list.log"
 
-logger -t $LOG_TAG "Starting NFTables threat list update..."
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE" | logger -t $LOG_TAG
+}
 
-# Clear old threat list
+log "Starting NFTables threat list update..."
+
+# Clear temporary file
 > "$TMP_FILE"
 
 # Download and compile IPs with retries
@@ -271,50 +297,82 @@ for LIST_URL in "${THREAT_LISTS[@]}"; do
     ATTEMPT=1
     SUCCESS=0
     while [ $ATTEMPT -le $MAX_RETRIES ]; do
-        logger -t $LOG_TAG "Downloading $LIST_URL (Attempt $ATTEMPT)..."
+        log "Downloading $LIST_URL (Attempt $ATTEMPT)..."
         curl -s --retry 3 --retry-delay 5 $LIST_URL >> "$TMP_FILE" && SUCCESS=1 && break
         ATTEMPT=$((ATTEMPT+1))
     done
     if [ $SUCCESS -eq 0 ]; then
-        logger -t $LOG_TAG "Failed to download $LIST_URL after $MAX_RETRIES attempts!"
+        log "Failed to download $LIST_URL after $MAX_RETRIES attempts!"
     fi
 done
 
-# Extract only valid IPv4 addresses
+# Extract only valid IPv4 addresses from downloaded lists
 grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$TMP_FILE" | sort -u > "$THREAT_LIST_FILE"
 
-# Ensure nftables set exists and references the file
-if ! sudo nft list set inet filter threat_block &>/dev/null; then
-    sudo nft add set inet filter threat_block { type ipv4_addr\; flags timeout\; elements file \"$THREAT_LIST_FILE\" }
-    logger -t $LOG_TAG "Created threat_block set in nftables."
+# Extract valid IPs from the manual block list (only below the marker)
+if grep -q "######### Place IP Addresses under this line to be compiled #########" "$MANUAL_BLOCK_LIST"; then
+    awk '/######### Place IP Addresses under this line to be compiled #########/{found=1; next} found && /^[0-9]+\./' "$MANUAL_BLOCK_LIST" > "$TMP_FILE"
 else
-    logger -t $LOG_TAG "threat_block set already exists. Updating file reference..."
-    sudo nft flush set inet filter threat_block
-    sudo nft add element inet filter threat_block { elements file \"$THREAT_LIST_FILE\" }
+    log "Marker not found in manual block list. Manual IPs will not be added."
+    > "$TMP_FILE"
 fi
+
+# Merge manual block list with downloaded threat list
+cat "$THREAT_LIST_FILE" "$TMP_FILE" | sort -u > "$COMBINED_BLOCK_LIST"
+
+log "Threat list and manual block list merged successfully."
+
+# Ensure nftables set exists
+if ! sudo nft list set inet filter threat_block &>/dev/null; then
+    sudo nft add table inet filter
+    sudo nft add set inet filter threat_block { type ipv4_addr\; flags timeout\; }
+    log "Created threat_block set in nftables."
+else
+    log "threat_block set already exists. Updating..."
+    sudo nft flush set inet filter threat_block
+fi
+
+# Load combined IP list into nftables set
+while IFS= read -r ip; do
+    sudo nft add element inet filter threat_block { $ip }
+done < "$COMBINED_BLOCK_LIST"
 
 # Ensure the input chain exists
 if ! sudo nft list chain inet filter input &>/dev/null; then
     sudo nft add chain inet filter input { type filter hook input priority 0 \; }
-    logger -t $LOG_TAG "Created input chain in nftables."
+    log "Created input chain in nftables."
 fi
 
-# Add a rule to drop packets from the threat list
+# Add a rule to drop packets from the threat list (INPUT)
 if ! sudo nft list chain inet filter input | grep -q "ip saddr @threat_block drop"; then
     sudo nft add rule inet filter input ip saddr @threat_block drop
-    logger -t $LOG_TAG "Added threat block rule to nftables."
+    log "Added threat block rule to INPUT chain."
 else
-    logger -t $LOG_TAG "Threat block rule already exists in nftables."
+    log "Threat block rule already exists in INPUT chain."
+fi
+
+# Ensure the OUTPUT chain exists
+if ! sudo nft list chain inet filter output &>/dev/null; then
+    sudo nft add chain inet filter output { type filter hook output priority 0 \; }
+    log "Created OUTPUT chain in nftables."
+fi
+
+# Add a rule to drop and log outbound packets to threat-listed IPs (OUTPUT)
+if ! sudo nft list chain inet filter output | grep -q "ip daddr @threat_block drop"; then
+    sudo nft add rule inet filter output ip daddr @threat_block log prefix \"Outbound Blocked: \" drop
+    log "Added threat block rule to OUTPUT chain."
+else
+    log "Threat block rule already exists in OUTPUT chain."
 fi
 
 # Verify threat list application
-if sudo nft list set inet filter threat_block | grep -q 'elements from file'; then
-    logger -t $LOG_TAG "NFTables threat list successfully applied."
+if sudo nft list set inet filter threat_block | grep -q 'elements'; then
+    log "NFTables threat list successfully applied."
 else
-    logger -t $LOG_TAG "WARNING: NFTables threat list was not applied correctly!"
+    log "WARNING: NFTables threat list was not applied correctly!"
 fi
 
-logger -t $LOG_TAG "Threat list update completed."
+log "Threat list update completed."
 EOF
 
 # Make the update script executable
@@ -331,9 +389,13 @@ EOF
 # Ensure cron job has correct permissions
 chmod 644 $CRON_JOB
 
+# Ensure cron is running
+systemctl enable --now crond
+
 # Run the update script now to initialize the threat list
+echo "Downloading Threat Updates and compiling lists...."
+echo "This may take a minute..."
 bash $UPDATE_SCRIPT
 
 echo "Installation complete. Threat list updater will run at 4 AM daily and on boot."
 logger -t $LOG_TAG "NFTables Threat List Updater Installed Successfully."
-
