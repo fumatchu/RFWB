@@ -398,13 +398,122 @@ clear
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling epel-release..."
-dnf -y install epel-release
+dnf -y install epel-release >/dev/null 2>&1 &
 echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Code-Ready..."
-dnf -y config-manager --set-enabled crb
+dnf -y config-manager --set-enabled crb >/dev/null 2>&1 &
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Updates..."
+sleep 2
+#Install Core Updates
+# Define a temporary file for package names
+TEMP_FILE=$(mktemp)
 
-dnf -y update
-dnf -y install ntsysv iptraf fail2ban tuned net-tools dmidecode ipcalc bind-utils expect fail2ban jq bc iproute-tc iw hostapd iotop zip
-dnf -y clean all
+# Step 1: Get the list of packages that need updates and extract package names
+dnf check-update | awk '{print $1}' | grep -vE '^$|Obsoleting|Last' | awk -F'.' '{print $1}' | sort -u > "$TEMP_FILE"
+
+# Read the total number of packages
+PACKAGE_LIST=($(cat "$TEMP_FILE"))  # Store packages in an array
+TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
+
+# Check if there are updates available
+if [[ "$TOTAL_PACKAGES" -eq 0 ]]; then
+    dialog --msgbox "No updates available!" 10 40
+    rm -f "$TEMP_FILE"
+    exit 0
+fi
+
+# Create a named pipe (FIFO) for real-time updates
+PIPE=$(mktemp -u)
+mkfifo "$PIPE"
+
+# Start the progress bar in the background
+dialog --title "System Update" --gauge "Preparing to install updates..." 10 70 0 < "$PIPE" &
+exec 3>"$PIPE"
+
+# Function to update the progress bar
+update_progress() {
+    local current=$1
+    local package_name=$2
+    local percent=$(( (current * 100) / TOTAL_PACKAGES ))
+
+    # Format output correctly so both progress and package name appear
+    echo "$percent"
+    echo "XXX"
+    echo "Updating: $package_name"
+    echo "XXX"
+}
+
+# Step 2: Install each package with progress display
+COUNT=0
+for PACKAGE in "${PACKAGE_LIST[@]}"; do
+    ((COUNT++))
+
+    # Update progress bar with package name and percentage
+    update_progress "$COUNT" "$PACKAGE" >&3
+
+    # Install package (live updates)
+    dnf -y install "$PACKAGE" >/dev/null 2>&1
+done
+
+# Close the pipe
+exec 3>&-
+rm -f "$PIPE" "$TEMP_FILE"
+
+# Show completion message
+dialog --infobox "System update completed successfully!" 10 50
+sleep 3
+clear
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing additional packages..."
+sleep 2
+clear
+#Install the packages we need 
+# Define list of packages to install
+PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "fail2ban" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip")  # Add or modify packages as needed
+TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
+
+# Create a named pipe (FIFO) for real-time updates
+PIPE=$(mktemp -u)
+mkfifo "$PIPE"
+
+# Start the progress bar in the background
+dialog --title "System Update" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
+exec 3>"$PIPE"
+
+# Function to update the progress bar with package name
+update_progress() {
+    local current=$1
+    local package_name=$2
+    local percent=$(( (current * 100) / TOTAL_PACKAGES ))
+
+    # Format output correctly so both progress and package name appear
+    echo "$percent"
+    echo "XXX"
+    echo "Installing: $package_name"
+    echo "XXX"
+}
+
+# Begin package installation
+COUNT=0
+for PACKAGE in "${PACKAGE_LIST[@]}"; do
+    ((COUNT++))
+
+    # Update progress bar with package name and percentage
+    update_progress "$COUNT" "$PACKAGE" >&3
+
+    # Install package (live updates)
+    dnf -y install "$PACKAGE" >/dev/null 2>&1
+done
+
+# Close the pipe
+exec 3>&-
+rm -f "$PIPE"
+
+# Show completion message
+dialog --infobox "All packages installed successfully!" 10 50
+sleep 2
+clear
+
+
+
 #Bracketed pasting...yuck!
 sed -i '8i set enable-bracketed-paste off' /etc/inputrc
 clear
