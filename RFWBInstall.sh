@@ -6,7 +6,7 @@ YELLOW=$(tput setaf 3)
 GREEN=$(tput setaf 2)
 USER=$(whoami)
 MAJOROS=$(cat /etc/redhat-release | grep -Eo "[0-9]" | sed '$d')
-
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rocky FirewallBuilder Bootstrap"
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Running as root user."
@@ -65,7 +65,6 @@ git clone https://github.com/fumatchu/RFWB.git /root/RFWB
 
 chmod 700 /root/RFWB/*
 
-clear
 echo -e "[${YELLOW}INFO${TEXTRESET}] Removing Git"
 dnf -y remove git >/dev/null 2>&1
 
