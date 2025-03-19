@@ -6,6 +6,7 @@ YELLOW=$(tput setaf 3)
 GREEN=$(tput setaf 2)
 USER=$(whoami)
 MAJOROS=$(cat /etc/redhat-release | grep -Eo "[0-9]" | sed '$d')
+clear
 echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rocky FirewallBuilder Bootstrap"
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
