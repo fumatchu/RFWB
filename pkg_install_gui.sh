@@ -100,7 +100,7 @@ input:
 EOL
 
     # Create evebox-agent systemd service
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating evebox-agent systemd service..."
+    echo "Creating evebox-agent systemd service..."
     cat <<EOF > /etc/systemd/system/evebox-agent.service
 [Unit]
 Description=EveBox Agent
@@ -127,11 +127,17 @@ EOF
     sudo find /var/log/suricata -type f -exec chmod 640 {} \;
     #restart suricata
     systemctl restart suricata
+    sleep 2
     # Enable and start the EveBox and evebox-agent services
     echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting the EveBox and evebox-agent services..."
     systemctl enable evebox
     systemctl start evebox
     systemctl enable evebox-agent
+    systemctl start evebox-agent
+    systemctl stop evebox-agent
+    systemctl stop evebox 
+    sleep 3
+    systemctl start evebox
     systemctl start evebox-agent
 
     # Check if services are running
@@ -193,19 +199,21 @@ EOF
     # Configure nftables to allow TCP traffic on port 5636
     configure_nftables
 
-    # Capture administrator credentials from /var/log/messages
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
-    credentials=$(grep "Created administrator username and password" /var/log/messages | tail -n 1)
+   # Capture administrator credentials from /var/log/messages
+echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
 
-    if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
-        admin_user="${BASH_REMATCH[1]}"
-        admin_pass="${BASH_REMATCH[2]}"
-        echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
-        echo -e "Your username is: $admin_user and your password is: $admin_pass"
-    else
-        echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
-    fi
+credentials=$(tail -n 500 /var/log/messages | grep "Created administrator username and password" | tail -n 1)
+
+if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
+    admin_user="${BASH_REMATCH[1]}"
+    admin_pass="${BASH_REMATCH[2]}"
+    echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
+    echo -e "Your username is: $admin_user and your password is: $admin_pass"
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
+fi
+
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
     read -p "Press Enter when ready"
