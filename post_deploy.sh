@@ -119,13 +119,7 @@ clear
 echo -e "${GREEN}Installing Startup scripts to rc.local...${TEXTRESET}"
 sleep 4
 
-#!/bin/bash
-
-# Define colors for output
-GREEN="\e[32m"
-RED="\e[31m"
-YELLOW="\e[33m"
-TEXTRESET="\e[0m"
+#Add the Kea delay start and FW delay start (if needed) on boot
 
 SRC_SCRIPT1="/root/RFWB/kea_delay_start.sh"
 DEST_SCRIPT1="/opt/kea_delay_start.sh"
@@ -209,17 +203,21 @@ manage_inside_gw
 sleep 4
 
 
+
 # Reorganize nftables
 clear
-echo -e "${GREEN}Organizing nftables for efficient processing${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Organizing nftables for efficient processing..."
 sleep 4
 
 NFTABLES_FILE="/etc/sysconfig/nftables.conf"
 BACKUP_FILE="/etc/sysconfig/nftables.conf.bak"
 TMP_FILE="/tmp/nftables_chain_input_filtered.tmp"
 
+# Backup original file
 cp "$NFTABLES_FILE" "$BACKUP_FILE"
-echo "Backup created at $BACKUP_FILE."
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Backup created at $BACKUP_FILE."
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] Reordering nftables rules..."
 
 awk '
   BEGIN {
@@ -263,6 +261,8 @@ awk '
   in_block {block=block "\n" $0}
 ' "$NFTABLES_FILE" > "$TMP_FILE"
 
+echo -e "[${YELLOW}INFO${TEXTRESET}] Inserting updated rules back into nftables..."
+
 awk -v RS= -v ORS='\n\n' -v new_block="$(cat $TMP_FILE)" '
   /chain input.*{/,/}/ {
     if ($0 ~ /log prefix "Blocked: " drop/) {
@@ -272,45 +272,124 @@ awk -v RS= -v ORS='\n\n' -v new_block="$(cat $TMP_FILE)" '
   { print }
 ' "$BACKUP_FILE" > "$NFTABLES_FILE"
 
-echo "Reformatted content has been placed back into $NFTABLES_FILE."
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Reformatted content has been placed back into $NFTABLES_FILE."
+
 sleep 4
 clear
 
 
-#Make sure rtp-linux is not in the EPEL
-#!/bin/bash
+# This script reorganizes the nftables input chain by placing block rules at the bottom 
+# and the IP source threat rules at the top. Run this when needed to reorder your chains.
 
+# File paths
+NFTABLES_FILE="/etc/sysconfig/nftables.conf"
+BACKUP_FILE="/etc/sysconfig/nftables.conf.bak"
+TMP_FILE="/tmp/nftables_input_reordered.tmp"
+
+# Backup original file
+cp "$NFTABLES_FILE" "$BACKUP_FILE"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Backup created at $BACKUP_FILE."
+
+# Get current ownership and permissions
+CURRENT_OWNER=$(stat -c "%u:%g" "$NFTABLES_FILE")
+CURRENT_PERMISSIONS=$(stat -c "%a" "$NFTABLES_FILE")
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] Reorganizing nftables input chain..."
+
+# Reorganize the input chain
+awk '
+  BEGIN {
+    in_block = 0;
+    log_rule = "";
+    threat_rule = "";
+  }
+  /chain input/ { in_block = 1; block=""; print; next }
+  in_block && /}/ {
+    in_block = 0;
+    if (threat_rule != "") {
+      print threat_rule;  # Ensure threat_block drop is at the top
+    }
+    print block;  # Print all other rules
+    if (log_rule != "") {
+      print log_rule;  # Append the log rule at the bottom
+    }
+    print;
+    next;
+  }
+  in_block {
+    if ($0 ~ /ip saddr @threat_block drop/) {
+      threat_rule = $0;  # Save threat_block drop rule for later insertion
+    } else if ($0 ~ /log prefix "Blocked: " drop/) {
+      log_rule = $0;  # Save log rule for later insertion
+    } else {
+      block = block "\n" $0;  # Store all other rules normally
+    }
+    next;
+  }
+  { print }
+' "$NFTABLES_FILE" > "$TMP_FILE"
+
+# Replace original file with updated rules
+mv "$TMP_FILE" "$NFTABLES_FILE"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Reorganized rules have been saved to $NFTABLES_FILE."
+
+# Restore original ownership and permissions
+sudo chown "$CURRENT_OWNER" "$NFTABLES_FILE"
+sudo chmod "$CURRENT_PERMISSIONS" "$NFTABLES_FILE"
+
+# Fix SELinux context
+sudo restorecon -v "$NFTABLES_FILE"
+
+# Restart nftables to apply changes
+echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting nftables service..."
+sudo systemctl restart nftables
+
+# Verify nftables status
+if systemctl is-active --quiet nftables; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables service restarted successfully!"
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] nftables failed to restart! Check logs with: sudo journalctl -xeu nftables.service"
+    exit 1
+fi
+
+
+
+#Make sure rtp-linux is not in the dnf makecache
 EPEL_REPO="/etc/yum.repos.d/epel.repo"
 
-echo "[INFO] Checking for 'rtp-linux.cisco.com' in the EPEL repository configuration..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Checking for 'rtp-linux.cisco.com' in the EPEL repository configuration..."
 
 # Check if rtp-linux.cisco.com is still referenced
 if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
-    echo "[WARNING] Custom Cisco EPEL mirror detected! Updating repository settings..."
+    echo -e "[${RED}WARNING${TEXTRESET}] Custom Cisco EPEL mirror detected! Updating repository settings..."
 
     # Force override to the official Fedora EPEL mirror
     sudo dnf config-manager --setopt=epel.baseurl=https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/ --save
-    echo "[INFO] Updated EPEL repository to use Fedora mirrors."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Updated EPEL repository to use Fedora mirrors."
 
     # Clean and rebuild DNF cache
-    echo "[INFO] Cleaning DNF cache..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Cleaning DNF cache..."
     sudo dnf clean all
-    echo "[INFO] Rebuilding DNF cache..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Rebuilding DNF cache..."
     sudo dnf makecache
 
     # Validate the change
-    echo "[INFO] Validating EPEL repository update..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Validating EPEL repository update..."
     if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
-        echo "[ERROR] EPEL repository update failed. Please check $EPEL_REPO manually."
+        echo -e "[${RED}ERROR${TEXTRESET}] EPEL repository update failed. Please check $EPEL_REPO manually."
         exit 1
     else
-        echo "[SUCCESS] EPEL repository updated successfully! Cisco mirror removed."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] EPEL repository updated successfully! Cisco mirror removed."
     fi
 else
-    echo "[INFO] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
 fi
-#Stop slices from appearing in the logs 
+
+# Stop slices from appearing in the logs
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling user lingering to prevent excessive session logs..."
 loginctl enable-linger testuser
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] User lingering enabled for 'testuser'."
+
 
 # Notify and handle firewall restart
 echo "Firewall setup complete."
