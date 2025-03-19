@@ -24,6 +24,7 @@ install_eve() {
     # Install SQLite
     dnf install -y sqlite evebox
 
+    mkdir -p /etc/evebox/
     # Define configuration file path
     CONFIG_FILE="/etc/evebox/evebox.yaml"
 
