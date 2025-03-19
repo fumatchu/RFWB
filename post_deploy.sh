@@ -208,6 +208,42 @@ echo "Reformatted content has been placed back into $NFTABLES_FILE."
 sleep 4
 clear
 
+
+#Make sure rtp-linux is not in the EPEL
+#!/bin/bash
+
+EPEL_REPO="/etc/yum.repos.d/epel.repo"
+
+echo "[INFO] Checking for 'rtp-linux.cisco.com' in the EPEL repository configuration..."
+
+# Check if rtp-linux.cisco.com is still referenced
+if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
+    echo "[WARNING] Custom Cisco EPEL mirror detected! Updating repository settings..."
+
+    # Force override to the official Fedora EPEL mirror
+    sudo dnf config-manager --setopt=epel.baseurl=https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/ --save
+    echo "[INFO] Updated EPEL repository to use Fedora mirrors."
+
+    # Clean and rebuild DNF cache
+    echo "[INFO] Cleaning DNF cache..."
+    sudo dnf clean all
+    echo "[INFO] Rebuilding DNF cache..."
+    sudo dnf makecache
+
+    # Validate the change
+    echo "[INFO] Validating EPEL repository update..."
+    if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
+        echo "[ERROR] EPEL repository update failed. Please check $EPEL_REPO manually."
+        exit 1
+    else
+        echo "[SUCCESS] EPEL repository updated successfully! Cisco mirror removed."
+    fi
+else
+    echo "[INFO] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
+fi
+#Stop slices from appearing in the logs 
+loginctl enable-linger testuser
+
 # Notify and handle firewall restart
 echo "Firewall setup complete."
 read -p "Do you want to restart the firewall now? (yes/no): " user_choice
