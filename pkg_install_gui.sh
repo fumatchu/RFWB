@@ -1712,7 +1712,7 @@ install_ntopng() {
 # Function to install Suricata
 install_suricata() {
     clear
-    echo -e "Installing Suricata Engine${RESET}"
+    echo -e "${GREEN}Installing Suricata Engine${RESET}"
     sleep 2
     # Function to check if the system has at least 8 GB of RAM
     check_ram() {
@@ -1723,13 +1723,13 @@ install_suricata() {
 
         # Check if the memory is at least 8 GB
         if ((total_mem_gb >= 8)); then
-            echo -e "${GREEN}RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${RESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] RAM Check: Passed (Total RAM: ${total_mem_gb} GB)${RESET}"
             sleep 1
             return 0
         else
             needed_ram=$((8 - total_mem_gb))
-            echo -e "${RED}RAM Check: Failed (Total RAM: ${total_mem_gb} GB)${RESET}"
-            echo -e "Additional RAM needed: ${needed_ram} GB${RESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] RAM Check: Failed (Total RAM: ${total_mem_gb} GB)"
+            echo -e "[${RED}ERROR${TEXTRESET}] Additional RAM needed: ${needed_ram} GB"
             return 1
         fi
     }
@@ -1741,13 +1741,13 @@ install_suricata() {
 
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
-            echo -e "${GREEN}CPU Check: Passed (Total CPUs: ${cpu_count})${RESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] CPU Check: Passed (Total CPUs: ${GREEN}${cpu_count})${RESET}"
             sleep 1
             return 0
         else
             needed_cpus=$((2 - cpu_count))
-            echo -e "${RED}CPU Check: Failed (Total CPUs: ${cpu_count})${RESET}"
-            echo -e "Additional CPUs needed: ${needed_cpus}${RESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] CPU Check: Failed (Total CPUs: ${cpu_count})${RESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Additional CPUs needed: ${needed_cpus}${RESET}"
             return 1
         fi
     sleep 4
@@ -1763,10 +1763,10 @@ install_suricata() {
     # Evaluate results
     echo -e "${CYAN}\nSummary:${RESET}"
     if [ "$ram_status" -eq 0 ] && [ "$cpu_status" -eq 0 ]; then
-        echo -e "${GREEN}System meets the minimum requirements.${RESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] System meets the minimum requirements."
         sleep 3
     else
-        echo -e "${RED}System does not meet the minimum requirements (8GB of RAM 2 CPU).${RESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] System does not meet the minimum requirements (8GB of RAM 2 CPU)."
         [ "$ram_status" -ne 0 ] && echo -e "Please add more RAM.${RESET}"
         [ "$cpu_status" -ne 0 ] && echo -e "Please add more CPUs.${RESET}"
         sleep 3
@@ -1775,7 +1775,7 @@ install_suricata() {
 
     # Install Suricata
     clear
-    echo -e "Installing Suricata...${TEXTRESET}"
+    echo -e "${GREEN} Installing Suricata...${TEXTRESET}"
     sleep 2
     # Enable copr command for dnf
     echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling dnf copr command...${TEXTRESET}"
