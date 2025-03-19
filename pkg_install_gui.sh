@@ -141,25 +141,25 @@ EOF
 
     # Check if services are running
     if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
-        echo -e "${GREEN}EveBox and EveBox Agent services are running.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] EveBox and EveBox Agent services are running."
     else
-        echo -e "${RED}Failed to start EveBox or EveBox Agent services. Please check the logs for more details.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start EveBox or EveBox Agent services. Please check the logs for more details."
         exit 1
     fi
 
     # Function to add a rule to nftables for port 5636
     configure_nftables() {
-        echo -e "Configuring nftables..."
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring nftables..."
 
         # Find interfaces ending with '-inside'
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
         if [ -z "$inside_interfaces" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with '-inside' profile found. Exiting..."
             exit 1
         fi
 
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
 
         sudo systemctl enable nftables
         sudo systemctl start nftables
@@ -175,9 +175,9 @@ EOF
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 5636 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 5636 accept
-                echo -e "${GREEN}Rule added: Allow TCP on port 5636 for interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow TCP on port 5636 for interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow TCP on port 5636 for interface $iface"
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow TCP on port 5636 for interface ${GREEN}$iface${TEXTRESET}"
             fi
         done
 
