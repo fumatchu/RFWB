@@ -133,13 +133,6 @@ EOF
     echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting the EveBox and evebox-agent services..."
     systemctl enable evebox
     systemctl start evebox
-    systemctl enable evebox-agent
-    systemctl start evebox-agent
-    systemctl stop evebox-agent
-    systemctl stop evebox 
-    sleep 3
-    systemctl start evebox
-    systemctl start evebox-agent
 
     # Check if services are running
     if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
@@ -201,12 +194,11 @@ EOF
     configure_nftables
 
    # Capture administrator credentials from /var/log/messages
-   sleep 5
+   
 echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
-
+sleep 5
 # Remove ANSI color codes and extract the latest matching log entry
 credentials=$(tail -n 500 /var/log/messages | sed 's/\x1B\[[0-9;]*m//g' | grep "Created administrator username and password" | tail -n 1)
-
 if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
     admin_user="${BASH_REMATCH[1]}"
     admin_pass="${BASH_REMATCH[2]}"
