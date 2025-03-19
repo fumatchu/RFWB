@@ -621,44 +621,28 @@ install_netdata() {
         exit 1
     fi
 
-    if ! sudo dnf -y install epel-release; then
-        echo -e "${RED}EPEL repository installation failed. Exiting.${TEXTRESET}"
-        exit 1
-    fi
-
-    if ! sudo dnf config-manager --set-enabled crb; then
-        echo -e "${RED}Failed to enable CodeReady Builder repository. Exiting.${TEXTRESET}"
-        exit 1
-    fi
-
-    if ! sudo dnf -y install wget; then
-        echo -e "${RED}Required packages installation failed. Exiting.${TEXTRESET}"
-        exit 1
-    fi
-
     if wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; then
         if ! sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive; then
-            echo -e "${RED}Netdata installation failed. Exiting.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Netdata installation failed. Exiting."
             exit 1
         fi
     else
-        echo -e "${RED}Failed to download Netdata installation script. Exiting.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to download Netdata installation script. Exiting."
         exit 1
     fi
 
-    echo -e "${GREEN}Cleaning up temporary files...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}]Cleaning up temporary files...${TEXTRESET}"
     rm -f /tmp/netdata-kickstart.sh
 
-    echo -e "${GREEN}Netdata installation completed successfully.${TEXTRESET}"
 
     inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
     if [ -z "$inside_interfaces" ]; then
-        echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
         exit 1
     fi
 
-    echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
 
     sudo systemctl enable nftables
     sudo systemctl start nftables
@@ -674,9 +658,9 @@ install_netdata() {
     for iface in $inside_interfaces; do
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 19999 accept"; then
             sudo nft add rule inet filter input iifname "$iface" tcp dport 19999 accept
-            echo -e "${GREEN}Rule added: Allow Netdata on port 19999 for interface $iface${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Netdata on port 19999 for interface ${GREEN}$iface${TEXTRESET}"
         else
-            echo "Rule already exists: Allow Netdata on port 19999 for interface $iface"
+            echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Netdata on port 19999 for interface ${GREEN}$iface${TEXTRESET}"
         fi
     done
 
@@ -693,8 +677,7 @@ install_netdata() {
         systemctl start rfwb-portscan
     fi
 
-    sudo nft list chain inet filter input
-    echo -e "${GREEN}Netdata Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Netdata Install Complete...${TEXTRESET}"
     sleep 4
 }
 
@@ -710,17 +693,17 @@ install_snmpd() {
             IFS='/' read -r ip prefix <<<"$ip_network"
             for octet in $(echo $ip | tr '.' ' '); do
                 if ((octet < 0 || octet > 255)); then
-                    echo -e "${RED}Invalid IP address or network: $ip_network${TEXTRESET}"
+                    echo -e "[${RED}ERROR${TEXTRESET}] Invalid IP address or network: ${YELLOW}$ip_network${TEXTRESET}"
                     return 1
                 fi
             done
             if [ -n "$prefix" ] && ((prefix < 0 || prefix > 32)); then
-                echo -e "${RED}Invalid prefix length: $prefix${TEXTRESET}"
+                echo -e "[${RED}ERROR${TEXTRESET}] Invalid prefix length: ${YELLOW}$prefix${TEXTRESET}"
                 return 1
             fi
             return 0
         else
-            echo -e "${RED}Invalid IP address or network format: $ip_network${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Invalid IP address or network format: ${YELLOW}$ip_network${TEXTRESET}"
             return 1
         fi
     }
@@ -731,7 +714,7 @@ install_snmpd() {
         interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if  [ -z "$interface" ]; then
-            echo -e "${RED}Error: No interface ending with '-inside' found.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface ending with ${YELLOW}'-inside'${TEXTRESET} found."
             exit 1
         fi
 
@@ -739,11 +722,11 @@ install_snmpd() {
         ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
 
         if [ -z "$ip" ]; then
-            echo -e "${RED}Error: No IP address found for the interface $interface.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No IP address found for the interface ${GREEN}$interface.${TEXTRESET}"
             exit 1
         fi
-
-        echo "$interface"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Getting IP.."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] $interface"
     }
 
     # Install SNMP daemon
@@ -793,9 +776,9 @@ install_snmpd() {
         # Check and add rule for SNMP (UDP) on port 161
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 161 accept"; then
             sudo nft add rule inet filter input iifname "$iface" udp dport 161 accept
-            echo -e "${GREEN}Rule added: Allow SNMP (UDP) on interface $iface${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow SNMP (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         else
-            echo "Rule already exists: Allow SNMP (UDP) on interface $iface"
+            echo-e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow SNMP (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         fi
     done
 
@@ -812,9 +795,6 @@ install_snmpd() {
     if [ "$rfwb_status" == "active" ]; then
         systemctl start rfwb-portscan
     fi
-
-    # Show the added rules in the input chain
-    sudo nft list chain inet filter input
 
     # Backup existing configuration
     cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup
@@ -885,12 +865,12 @@ EOF
 
     # Validate that the service is running
     if systemctl status snmpd | grep "active (running)" >/dev/null; then
-        echo -e "${GREEN}SNMP service is running successfully.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] SNMP service is running successfully.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
     fi
     # Continue with the rest of the script
-    echo -e "${GREEN}SNMP Daemon Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}SNMP Daemon Install Complete...${TEXTRESET}"
     sleep 4
 }
 
@@ -905,12 +885,6 @@ sleep 4
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run as root"
     exit 1
-fi
-
-# Install nftables if not already installed
-if ! command -v nft &>/dev/null; then
-    echo "Installing nftables..."
-    yum install -y nftables
 fi
 
 # Create or update the configuration file for user settings
@@ -949,7 +923,7 @@ fi
 # Ensure the ignore networks configuration file exists and populate with RFC 1918 networks
 IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
 if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
-    echo "Creating ignore networks configuration file with RFC 1918 networks."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating ignore networks configuration file with RFC 1918 networks."
     cat <<EOF >"$IGNORE_NETWORKS_FILE"
 # Ignore file for rfwb-nft-portscan
 # The port scan detection will ignore any IP addresses or networks placed into this file
@@ -966,11 +940,11 @@ EOF
     if [ -f "$IGNORE_NETWORKS_FILE" ]; then
         echo "Ignore networks configuration file created successfully."
     else
-        echo "Failed to create ignore networks configuration file."
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to create ignore networks configuration file."
         exit 1
     fi
 else
-    echo "Ignore networks configuration file already exists."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Ignore networks configuration file already exists."
 fi
 
 # Verify file content
@@ -1247,8 +1221,7 @@ echo "Blocked IPs are logged to $BLOCKED_FILE."
 echo "Port scan events will be logged with the prefix 'Port Scan Detected:' in the system logs."
 echo "To view these logs, you can use a command such as: journalctl -xe | grep 'Port Scan Detected'"
 
-echo -e "${GREEN}Rocky Firewall Builder Port Scan Detection Complete...${TEXTRESET}"
-sleep 4
+sleep 3
 
  #Install the monitoring service for RFWB
  #!/bin/bash
@@ -1306,7 +1279,6 @@ EOF
 chmod +x $SCRIPT_PATH
 
 # Test the script manually
-echo "Testing the script manually..."
 $SCRIPT_PATH &
 pid=$!
 sleep 5
@@ -1345,7 +1317,7 @@ systemctl start rfwb-ps-mon.service
 # Confirm the service status
 echo "Verifying the service status..."
 systemctl status rfwb-ps-mon.service
-
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN} Rocky Firewall Portscan and Monitoring Complete...${TEXTRESET}"
 sleep 4
 
 }
@@ -1356,7 +1328,7 @@ install_ddclient() {
     echo -e "${GREEN}Installing ddns client (ddclient)...${TEXTRESET}"
     sleep 2
     dnf -y install ddclient
-    echo -e "${GREEN}ddns client (ddclient) installation complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN} ddns client (ddclient) installation complete.${TEXTRESET}"
     sleep 4
 }
 
@@ -1368,21 +1340,20 @@ install_bind() {
     echo -e "${GREEN}Installing BIND...${TEXTRESET}"
     sleep 2
     dnf -y install bind
-    echo -e "${GREEN}BIND installation complete.${TEXTRESET}"
 
     # Function to locate the inside interface and its sub-interfaces
     find_inside_interfaces() {
         main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if [ -z "$main_interface" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
             exit 1
         fi
 
         sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
         inside_interfaces="$main_interface $sub_interfaces"
 
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
     }
 
     # Function to set up nftables rules for DNS on the inside interfaces
@@ -1401,15 +1372,15 @@ install_bind() {
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
-                echo -e "${GREEN}Rule added: Allow DNS (UDP) on interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DNS (UDP) on interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow DNS (UDP) on interface $iface"
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DNS (UDP) on interface ${GREEN}$iface${TEXTRESET}"
             fi
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
-                echo -e "${GREEN}Rule added: Allow DNS (TCP) on interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DNS (TCP) on interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow DNS (TCP) on interface $iface"
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DNS (TCP) on interface ${GREEN}$iface${TEXTRESET}"
             fi
         done
 
@@ -1423,15 +1394,13 @@ install_bind() {
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-
-        sudo nft list chain inet filter input
     }
 
     # Execute functions
     find_inside_interfaces
     setup_nftables_for_dns
 
-    echo -e "${GREEN}BIND Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] BIND Install Complete..."
     sleep 4
 }
 
@@ -1440,25 +1409,24 @@ install_isc_kea() {
     clear
     echo -e "${GREEN}Installing ISC KEA...${TEXTRESET}"
     sleep 2
-    dnf -y install epel-release
     curl -1sLf 'https://dl.cloudsmith.io/public/isc/kea-2-6/cfg/setup/bash.rpm.sh' | sudo bash
     sudo dnf -y update
     dnf -y install isc-kea
-    echo -e "${GREEN}ISC KEA installation complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ISC KEA installation complete."
 
     # Function to locate the inside interfaces
     find_inside_interfaces() {
         main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
         if [ -z "$main_interface" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTREST} profile found. Exiting..."
             exit 1
         fi
 
         sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
         inside_interfaces="$main_interface $sub_interfaces"
 
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}]  Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
     }
 
     # Function to set up nftables rules for DHCP on the inside interfaces
@@ -1477,15 +1445,15 @@ install_isc_kea() {
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
-                echo -e "${GREEN}Rule added: Allow DHCP (IPv4) on interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow DHCP (IPv4) on interface $iface"
+                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
             fi
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
-                echo -e "${GREEN}Rule added: Allow DHCP (IPv6) on interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow DHCP (IPv6) on interface $iface"
+                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
             fi
         done
 
@@ -1499,15 +1467,13 @@ install_isc_kea() {
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-
-        sudo nft list chain inet filter input
     }
 
     # Execute functions
     find_inside_interfaces
     setup_nftables_for_dhcp
 
-    echo -e "${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
     sleep 4
 }
 
@@ -1517,7 +1483,7 @@ install_net_services() {
     install_isc_kea
 }
 
-# Call the master function to execute both install scripts
+
 
 # Function to install COCKPIT
 install_cockpit() {
@@ -1587,7 +1553,7 @@ install_cockpit() {
     systemctl start cockpit.socket
 
     # Continue with the rest of the script
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Cockpit Install Complete..."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Cockpit Install Complete...${TEXTRESET}"
     sleep 4
 }
 
@@ -1697,7 +1663,7 @@ install_ntopng() {
     setup_nftables_for_ntopng
 
     # Continue with the rest of the script
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ntopng Install Complete..."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ntopng Install Complete...${TEXTRESET}"
     sleep 4
 }
 # Function to install Suricata
@@ -2066,7 +2032,7 @@ done
         exit 1
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata Install Complete..."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Suricata Install Complete...${TEXTRESET}"
     sleep 4
 }
 
