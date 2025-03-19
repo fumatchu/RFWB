@@ -397,8 +397,11 @@ sleep 3
 clear
 echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling epel-release..."
 dnf -y install epel-release
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Code-Ready..."
 dnf -y config-manager --set-enabled crb
+
 dnf -y update
 dnf -y install ntsysv iptraf fail2ban tuned net-tools dmidecode ipcalc bind-utils expect fail2ban jq bc iproute-tc iw hostapd iotop zip
 dnf -y clean all
