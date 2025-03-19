@@ -1701,7 +1701,7 @@ install_suricata() {
 
         # Check if the CPU count is at least 2
         if [ "$cpu_count" -ge 2 ]; then
-            echo -e "[${GREEN}SUCCESS${TEXTRESET}] CPU Check: Passed (Total CPUs: ${GREEN}${cpu_count})${RESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] CPU Check: Passed (Total CPUs: ${cpu_count})"
             sleep 1
             return 0
         else
