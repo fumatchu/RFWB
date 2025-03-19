@@ -456,8 +456,6 @@ EOF
         nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
     }
 
-    # Main script execution starts here
-    dnf -y install jq bc iproute-tc
 
     # Check and create the configuration file if necessary
     load_config
