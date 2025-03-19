@@ -8,18 +8,18 @@ TEXTRESET="\033[0m"
 clear
 # Ensure nmcli is installed
 if ! command -v nmcli &>/dev/null; then
-    echo -e "${RED}nmcli is not installed. Please install it and try again.${TEXTRESET}"
+    echo -e "$[${RED}ERROR${TEXTRESET}] nmcli is not installed. Please install it and try again."
     exit 1
 fi
 
 # Ensure nftables is installed and running
 if ! command -v nft &>/dev/null; then
-    echo -e "${RED}nftables is not installed. Please install it and try again.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] nftables is not installed. Please install it and try again."
     exit 1
 fi
 
 if ! systemctl is-active --quiet nftables; then
-    echo -e "${RED}nftables is not running. Please start it and try again.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] nftables is not running. Please start it and try again."
     exit 1
 fi
 
@@ -32,12 +32,12 @@ echo -e "Checking the following network interfaces for autoconnect settings:"
 while IFS=: read -r name device type; do
     # Only show valid ethernet or wifi connections
     if [ "$type" == "802-3-ethernet" ] || [ "$type" == "wifi" ]; then
-        echo -e "- $device ($name): Type $type"
+        echo -e "- ${GREEN}$device ($name)${TEXTRESET}: Type $type"
     fi
 done <<<"$connections"
 
 # Check and modify autoconnect settings
-echo -e "\n${YELLOW}Modifying interfaces that are not set to autoconnect...${TEXTRESET}"
+echo -e "\n[${YELLOW}INFO${TEXTRESET}] Modifying interfaces that are not set to autoconnect..."
 
 while IFS=: read -r name device type; do
     # Process valid ethernet or wifi connections
@@ -46,21 +46,21 @@ while IFS=: read -r name device type; do
         autoconnect=$(nmcli -g connection.autoconnect connection show "$name")
 
         if [ "$autoconnect" != "yes" ]; then
-            echo -e "${RED}Connection $name (Device: $device) is not set to autoconnect. Enabling autoconnect...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Connection ${GREEN}$name (Device: $device)${TEXTRESET} is not set to autoconnect. Enabling autoconnect..."
             nmcli connection modify "$name" connection.autoconnect yes
 
             if [ $? -eq 0 ]; then
-                echo -e "${GREEN}Autoconnect enabled for $name (Device: $device).${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Autoconnect enabled for ${GREEN}$name (Device: $device).${TEXTRESET}"
             else
-                echo -e "${RED}Failed to enable autoconnect for $name (Device: $device).${TEXTRESET}"
+                echo -e "[${RED}ERROR${TEXTRESET}] Failed to enable autoconnect for ${GREEN}$name (Device: $device).${TEXTRESET}"
             fi
         else
-            echo -e "${GREEN}Connection $name (Device: $device) is already set to autoconnect.${TEXTRESET}"
+            echo -e "Connection ${GREEN}$name (Device: $device)${TEXTRESET} is already set to autoconnect."
         fi
     fi
 done <<<"$connections"
 
-echo -e "${GREEN}Completed checking and updating autoconnect settings.${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}]Completed checking and updating autoconnect settings."
 
 # Get currently connected interfaces
 existing_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
@@ -79,7 +79,7 @@ while true; do
     new_connection=$(comm -13 <(echo "$existing_connections" | sort) <(echo "$current_connections" | sort) | grep -v "^lo$")
 
     if [ -n "$new_connection" ]; then
-        echo -e "${GREEN}Detected a new connection: $new_connection${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Detected a new connection: ${GREEN}$new_connection${TEXTRESET}"
 
         # Get the current profile name associated with the new connection
         current_profile=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${new_connection}$" | cut -d: -f1)
@@ -87,11 +87,11 @@ while true; do
         if [ -n "$current_profile" ]; then
             # Update the connection profile name to include '-outside'
             new_profile_name="${new_connection}-outside"
-            echo -e "Updating connection profile name to: $new_profile_name"
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Updating connection profile name to: ${GREEN}$new_profile_name${TEXTRESET}"
             nmcli connection modify "$current_profile" connection.id "$new_profile_name"
             nmcli connection reload
         else
-            echo -e "${RED}Error: Could not find an active profile for $new_connection.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Error: Could not find an active profile for ${GREEN}$new_connection.${TEXTRESET}"
         fi
         break
     fi
@@ -105,7 +105,7 @@ find_outside_interface() {
     outside_interface=$(nmcli device status | awk '/-outside/ {print $1}')
 
     if [ -z "$outside_interface" ]; then
-        echo -e "${RED}Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Error: No interface with a connection ending in '-outside' found.${TEXTRESET}"
         exit 1
     fi
 
@@ -136,15 +136,15 @@ find_sub_interfaces() {
 }
 
 # Setup the FW: Determine inside and outside interfaces
-echo -e "${YELLOW}Determining network interfaces...${TEXTRESET}" | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Determining network interfaces..." | tee >(logger)
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-echo -e "${GREEN}Inside interface: $INSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
-echo -e "${GREEN}Outside interface: $OUTSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
+echo -e "Inside interface: ${GREEN}$INSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
+echo -e "Outside interface: ${GREEN}$OUTSIDE_INTERFACE${TEXTRESET}" | tee >(logger)
 
 if [[ -z "$INSIDE_INTERFACE" || -z "$OUTSIDE_INTERFACE" ]]; then
-    echo -e "${RED}Error: Could not determine one or both interfaces. Please check your connection names.${TEXTRESET}" | tee >(logger)
+    echo -e "[${RED}ERROR${TEXTRESET}] Error: Could not determine one or both interfaces. Please check your connection names." | tee >(logger)
     exit 1
 fi
 
@@ -152,12 +152,12 @@ fi
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Enable IP forwarding
-echo -e "Enabling IP forwarding..." | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling IP forwarding..." | tee >(logger)
 echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
 sudo sysctl -p
 
 # Apply nftables ruleset
-echo -e "Applying nftables ruleset..." | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Applying nftables ruleset..." | tee >(logger)
 
 # Create and configure the inet filter table if not exists
 sudo nft add table inet filter 2>/dev/null
@@ -174,7 +174,7 @@ sudo nft add rule inet filter input ct state established,related accept
 # Allow inbound traffic on the inside interface(s)
 sudo nft add rule inet filter input iifname "$INSIDE_INTERFACE" accept
 for sub_interface in $SUB_INTERFACES; do
-    echo -e "Allowing inbound traffic for sub-interface: $sub_interface" | tee >(logger)
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Allowing inbound traffic for sub-interface: ${GREEN}$sub_interface${TEXTRESET}" | tee >(logger)
     sudo nft add rule inet filter input iifname "$sub_interface" accept
 done
 
@@ -207,7 +207,7 @@ sudo nft add chain inet nat postrouting { type nat hook postrouting priority 100
 sudo nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
 
 # Log and drop unsolicited incoming traffic on the outside interface
-echo -e "Logging and blocking unsolicited incoming traffic on the outside interface..." | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Logging and blocking unsolicited incoming traffic on the outside interface..." | tee >(logger)
 sudo nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix "\"Blocked: \"" drop
 
 # Create a named set for threat blocking
@@ -216,24 +216,24 @@ sudo nft add set inet filter $BLOCK_SET { type ipv4_addr\; flags timeout\; } 2>/
 # Add a rule to drop traffic from IPs in the threat list
 sudo nft add rule inet filter input ip saddr @$BLOCK_SET drop
 
-echo -e "${GREEN}nftables ruleset applied successfully.${TEXTRESET}" | tee >(logger)
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables ruleset applied successfully." | tee >(logger)
 
 # Save the current ruleset
-echo -e "Saving the current nftables ruleset..." | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Saving the current nftables ruleset..." | tee >(logger)
 sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
-echo -e "Enabling nftables service..." | tee >(logger)
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling nftables service..." | tee >(logger)
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "${GREEN}nftables ruleset applied and saved successfully.${TEXTRESET}" | tee >(logger)
+echo -e "$[${GREEN}SUCCESS${TEXTRESET}] nftables ruleset applied and saved successfully." | tee >(logger)
 
 #Install NFT-Threat-Lists
 
 LOG_TAG="nft-threat-list"
 
-echo "Installing NFTables Threat List Updater..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing NFTables Threat List Updater..."
 # Ensure required directories exist
 mkdir -p /etc/nft-threat-list
 
@@ -392,9 +392,8 @@ chmod 644 $CRON_JOB
 systemctl enable --now crond
 
 # Run the update script now to initialize the threat list
-echo "Downloading Threat Updates and compiling lists...."
-echo "This may take a minute..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Downloading Threat Updates and compiling lists. This may take a minute..."
 bash $UPDATE_SCRIPT
 
-echo "Installation complete. Threat list updater will run at 4 AM daily and on boot."
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Installation complete. Threat list updater will run at 4 AM daily and on boot."
 logger -t $LOG_TAG "NFTables Threat List Updater Installed Successfully."
