@@ -259,7 +259,7 @@ echo "######### Place IP Addresses under this line to be compiled #########" >> 
 
 # Verify file creation
 if [ -s "$MANUAL_BLOCK_LIST" ]; then
-    echo " "
+    echo ""
 else
     echo "ERROR: Manual block list was not created!" >&2
 fi
