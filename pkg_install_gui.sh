@@ -1827,57 +1827,57 @@ install_suricata() {
     fi
 
     # Install Suricata
-    echo -e "Installing Suricata package...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Suricata package...${TEXTRESET}"
     if sudo dnf install -y suricata; then
-        echo -e "${GREEN}Suricata installed successfully.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata installed successfully.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to install Suricata.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}]Failed to install Suricata.${TEXTRESET}"
         exit 1
     fi
 
     # Enable Suricata service
-    echo -e "Enabling Suricata service...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Suricata service...${TEXTRESET}"
     if sudo systemctl enable suricata; then
-        echo -e "${GREEN}Suricata service enabled.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata service enabled."
     else
-        echo -e "${RED}Failed to enable Suricata service.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to enable Suricata service."
         exit 1
     fi
 
     # Configure Suricata
-    echo -e "Configuring Suricata...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Suricata..."
 
     # Backup the original Suricata configuration file
     sudo cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
 
     # Enable Community ID in suricata.yaml
-    echo -e "Enabling Community ID feature in Suricata...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Community ID feature in Suricata..."
     sudo sed -i 's/# \(community-id:\) false/\1 true/' /etc/suricata/suricata.yaml
 
     # Detect the inside network interface using nmcli and awk
     INSIDE_INTERFACE=$(nmcli connection show --active | awk '/-inside/ {print $4}')
 
     if [ -z "$INSIDE_INTERFACE" ]; then
-        echo -e "${RED}No inside interface found. Please ensure your interface names follow the expected pattern.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] No inside interface found. Please ensure your interface names follow the expected pattern."
         exit 1
     fi
 
-    echo -e "${GREEN}Detected inside interface: $INSIDE_INTERFACE${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Detected inside interface: ${GREEN}$INSIDE_INTERFACE${TEXTRESET}"
 
     # Update the pcap interface in suricata.yaml
-    echo -e "Updating pcap interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Updating pcap interface to use ${GREEN}$INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Cross platform libpcap capture support/,/interface:/ s/interface: eth0/interface: $INSIDE_INTERFACE/" /etc/suricata/suricata.yaml
 
     # Update the af-packet interface in suricata.yaml
-    echo -e "Updating af-packet interface to use $INSIDE_INTERFACE...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Updating af-packet interface to use ${GREEN}$INSIDE_INTERFACE...${TEXTRESET}"
     sudo sed -i "/# Linux high speed capture support/,/af-packet:/ {n; s/interface: eth0/interface: $INSIDE_INTERFACE/}" /etc/suricata/suricata.yaml
 
     # Update the inside interface in /etc/sysconfig/suricata
-    echo -e "Updating inside interface in /etc/sysconfig/suricata...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Updating inside interface in /etc/sysconfig/suricata..."
     sudo sed -i "s/eth0/$INSIDE_INTERFACE/g" /etc/sysconfig/suricata
 
     # Configure directory permissions for Suricata
-    echo -e "Configuring directory permissions for Suricata...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring directory permissions for Suricata..."
     sudo chgrp -R suricata /etc/suricata
     sudo chgrp -R suricata /var/lib/suricata
     sudo chgrp -R suricata /var/log/suricata
@@ -1886,33 +1886,33 @@ install_suricata() {
     sudo chmod -R g+rw /var/log/suricata
 
     # Add current user to the suricata group
-    echo -e "Adding current user to the suricata group...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Adding current user to the suricata group..."
     sudo usermod -a -G suricata $USER
 
     # Validate that the user was added to the suricata group
-    echo -e "Validating user group membership...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Validating user group membership...${TEXTRESET}"
     if id -nG "$USER" | grep -qw "suricata"; then
-        echo -e "${GREEN}User $USER is successfully added to the suricata group.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] User $USER is successfully added to the suricata group."
     else
-        echo -e "${RED}Failed to add user $USER to the suricata group.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to add user $USER to the suricata group.${TEXTRESET}"
         exit 1
     fi
     # Run suricata-update update-sources
     echo -e "Running suricata-update update-sources...${TEXTRESET}"
     if sudo suricata-update update-sources; then
-        echo -e "${GREEN}suricata-update update-sources completed successfully.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}]suricata-update update-sources completed successfully."
     else
-        echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to run suricata-update."
         exit 1
     fi
    # Run suricata-update
-echo -e "Running suricata-update...${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Running suricata-update..."
 # Set trap to ignore SIGINT
 trap '' SIGINT
 if sudo suricata-update; then
-    echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] suricata-update completed successfully"
 else
-    echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to run suricata-update."
     exit 1
 fi
 
@@ -1934,7 +1934,7 @@ while true; do
         trap - SIGINT
 
         for source in $rule_sources; do
-            echo -e "Adding source $source...${TEXTRESET}"
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Adding source ${GREEN}$source...${TEXTRESET}"
             sudo suricata-update enable-source "$source"
         done
 
