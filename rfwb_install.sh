@@ -468,7 +468,7 @@ sleep 2
 clear
 #Install the packages we need 
 # Define list of packages to install
-PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "fail2ban" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils")  # Add or modify packages as needed
+PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "fail2ban" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "bc" "nano" "curl" "wget" "policycoreutils-python-utils")  # Add or modify packages as needed
 TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
 
 # Create a named pipe (FIFO) for real-time updates
