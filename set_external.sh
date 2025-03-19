@@ -247,7 +247,6 @@ CRON_JOB="/etc/cron.d/nft-threat-list"
 LOG_FILE="/var/log/nft-threat-list.log"
 
 # Overwrite the manual block list file with a proper format
-echo " "
 echo "# Manual Block List for NFTables" > "$MANUAL_BLOCK_LIST"
 echo "# Add IP addresses below the marker to be blocked" >> "$MANUAL_BLOCK_LIST"
 echo "#" >> "$MANUAL_BLOCK_LIST"
