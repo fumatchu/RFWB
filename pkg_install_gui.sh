@@ -201,6 +201,7 @@ EOF
     configure_nftables
 
    # Capture administrator credentials from /var/log/messages
+   sleep 5
 echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
 
 # Remove ANSI color codes and extract the latest matching log entry
