@@ -1944,16 +1944,16 @@ while true; do
 done
 
     # Run suricata-update after the loop
-    echo -e "Running suricata-update...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Running suricata-update..."
     if sudo suricata-update; then
-        echo -e "suricata-update completed ${GREEN}successfully.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] suricata-update completed successfully."
     else
-        echo -e "${RED}Failed to run suricata-update.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to run suricata-update.${TEXTRESET}"
     fi
 
-    echo -e "Suricata has been configured with the inside interface ${YELLOW}$INSIDE_INTERFACE${TEXTRESET} and proper permissions."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata has been configured with the inside interface ${GREEN}$INSIDE_INTERFACE${TEXTRESET} and proper permissions."
     # Inform the user that the configuration validation is starting
-    echo -e "Validating Suricata configuration...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Validating Suricata configuration..."
 
     # Define the command to run Suricata with the test configuration
     COMMAND="suricata -T -c /etc/suricata/suricata.yaml -v"
@@ -1966,20 +1966,20 @@ done
 
     # Check if the output contains the success message
     if echo "$OUTPUT" | grep -q "$SUCCESS_MESSAGE"; then
-        echo -e "${GREEN}Success: Suricata configuration was loaded successfully.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata configuration was loaded successfully.${TEXTRESET}"
 
     else
-        echo -e "${RED}Error: Suricata configuration test failed.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Suricata configuration test failed.${TEXTRESET}"
         echo "Output:"
         echo "$OUTPUT"
         exit 1
     fi
     # Start the Suricata service
-    echo -e "Starting Suricata service...${TEXTRESET}"
+    echo -e "Starting Suricata service..."
     sudo systemctl start suricata
 
     # Show the status of the Suricata service
-    echo -e "Checking Suricata service status...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Checking Suricata service status..."
     status_output=$(sudo systemctl status suricata --no-pager)
 
     # Display the status output
@@ -1996,7 +1996,7 @@ done
         # Check for permission denied errors in the status output
         if echo "$status_output" | grep -qE "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"; then
             # Display the specific lines indicating permission errors
-            echo -e "${RED}Detected permission issues in the following log entries:${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Detected permission issues in the following log entries:"
             echo "$status_output" | grep -E "E: logopenfile: Error opening file: \"/var/log/suricata/fast.log\": Permission denied|W: runmodes: output module \"fast\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/eve.json\": Permission denied|W: runmodes: output module \"eve-log\": setup failed|E: logopenfile: Error opening file: \"/var/log/suricata/stats.log\": Permission denied|W: runmodes: output module \"stats\": setup failed"
             return 1
         else
@@ -2013,37 +2013,37 @@ done
     while [ $attempts -lt $max_attempts ]; do
         check_and_fix_permissions
         if [ $? -eq 0 ]; then
-            echo -e "\n${GREEN}Suricata service is running without permission issues.${TEXTRESET}"
+            echo -e "\n[${GREEN}SUCCESS${TEXTRESET}] Suricata service is running without permission issues."
             # Proceed without exiting to continue the script
             break
         else
-            echo -e "\n${RED}Warning: There are permission issues with Suricata log files.${TEXTRESET}"
-            echo -e "Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)...${TEXTRESET}"
+            echo -e "\n[${RED}ERROR${TEXTRESET}] There are permission issues with Suricata log files."
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Attempting to fix permissions (Attempt $((attempts + 1)) of $max_attempts)..."
             sudo chown -R suricata:suricata /var/log/suricata
-            echo -e "Permissions have been reset. Restarting Suricata service...${TEXTRESET}"
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Permissions have been reset. Restarting Suricata service..."
             sudo systemctl restart suricata
             sleep 10
             # Check again after attempting to fix permissions
-            echo -e "Re-checking Suricata service status...${TEXTRESET}"
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Re-checking Suricata service status..."
             check_and_fix_permissions
             if [ $? -eq 0 ]; then
-                echo -e "\n${GREEN}Permissions successfully fixed. Suricata service is running without issues.${TEXTRESET}"
+                echo -e "\n[${GREEN}SUCCESS${TEXTRESET}] Permissions successfully fixed."
                 break
             else
-                echo -e "\n${RED}Permission issues still exist after attempting to fix them.${TEXTRESET}"
+                echo -e "\n[${RED}ERROR${TEXTRESET}] Permission issues still exist after attempting to fix them."
             fi
         fi
         attempts=$((attempts + 1))
     done
 
     if [ $attempts -eq $max_attempts ]; then
-        echo -e "\n${RED}Failed to resolve permission issues after $max_attempts attempts. Please check the system configuration manually.${TEXTRESET}"
+        echo -e "\n[${RED}ERROR${TEXTRESET}] Failed to resolve permission issues after $max_attempts attempts."
         exit 1
     fi
 
     # Inform the user about the test
-    echo -e "Testing Suricata rule...${TEXTRESET}"
-    echo -e "Waiting for the engine to start...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Testing Suricata rule..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Waiting for the engine to start..."
     # Total duration for the progress bar
     duration=60
 
@@ -2074,7 +2074,7 @@ done
     done
 
     # Move to the next line after completion
-    echo -e "\nDone!"
+    echo -e "\n[${GREEN}SUCCESS${TEXTRESET}]"
     # Run the curl command and capture the response
     response=$(curl -s http://testmynids.org/uid/index.html)
 
@@ -2083,7 +2083,7 @@ done
     # Validate the response
     expected_response="uid=0(root) gid=0(root) groups=0(root)"
     if [ "$response" == "$expected_response" ]; then
-        echo -e "${GREEN}Curl command was successful. Expected response received:${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Expected response received:${TEXTRESET}"
         echo -e "${GREEN}$response${TEXTRESET}"
         echo -e "Please Wait..."
         sleep 10 
@@ -2093,19 +2093,19 @@ done
 
         # Check the log line for the classification
         if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
-            echo -e "${GREEN}Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ID 2100498.${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata rule was successful. The classification '[Classification: Potentially Bad Traffic]' was found in the log entry with ${YELLOW}ID 2100498.${TEXTRESET}"
         else
-            echo -e "${RED}Suricata rule failed. The expected classification was not found in the log entry with ID 2100498.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Suricata rule failed. The expected classification was not found in the log entry with ID 2100498."
             sleep 5
             exit 1
         fi
     else
-        echo -e "${RED}Curl command failed. The expected response was not received.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Curl command failed. The expected response was not received."
         sleep 5
         exit 1
     fi
 
-    echo -e "${GREEN}Suricata Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata Install Complete..."
     sleep 4
 }
 
