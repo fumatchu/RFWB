@@ -1525,19 +1525,17 @@ install_cockpit() {
     echo -e "${GREEN}Installing Cockpit...${TEXTRESET}"
     sleep 2
     dnf -y install cockpit cockpit-storaged cockpit-files tuned
-    echo -e "${GREEN}Cockpit installation complete.${TEXTRESET}"
-
     # Function to locate the inside interfaces
     find_inside_interfaces() {
         # Find all active interfaces with a name ending in '-inside'
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
         if [ -z "$inside_interfaces" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
             exit 1
         fi
 
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
     }
 
     # Function to set up nftables rules for Cockpit on the inside interfaces
@@ -1560,9 +1558,9 @@ install_cockpit() {
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
-                echo -e "${GREEN}Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow Cockpit on port 9090 for interface $iface"
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Cockpit on port 9090 for interface $iface"
             fi
         done
         # Check and handle rfwb-portscan service
@@ -1578,8 +1576,6 @@ install_cockpit() {
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-        # Show the added rules in the input chain
-        sudo nft list chain inet filter input
     }
 
     # Execute functions
@@ -1591,7 +1587,7 @@ install_cockpit() {
     systemctl start cockpit.socket
 
     # Continue with the rest of the script
-    echo -e "${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Cockpit Install Complete..."
     sleep 4
 }
 
@@ -1601,12 +1597,9 @@ install_ntopng() {
     echo -e "${GREEN}Installing ntopng...${TEXTRESET}"
     sleep 2
     curl https://packages.ntop.org/centos-stable/ntop.repo >/etc/yum.repos.d/ntop.repo
-    dnf -y config-manager --set-enabled crb
-    dnf -y install epel-release
     dnf -y clean all
-    dnf -y update
     dnf -y install pfring-dkms n2disk nprobe ntopng cento ntap
-    echo -e "${GREEN}Enabling ntopng at boot up${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling ntopng at boot up${TEXTRESET}"
     systemctl enable ntopng
 
     # Path to the configuration file
@@ -1614,35 +1607,35 @@ install_ntopng() {
 
     # Check if the configuration file exists
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "${RED}Configuration file $CONFIG_FILE does not exist. Exiting...${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Configuration file ${YELLOW}$CONFIG_FILE${TEXTRESET} does not exist. Exiting...${TEXTRESET}"
         exit 1
     fi
 
     # Modify the line in the configuration file
-    echo -e "$Modifying ${GREEN}$CONFIG_FILE...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Modifying ${GREEN}$CONFIG_FILE...${TEXTRESET}"
     sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
 
     # Verify the change
     if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
         echo -e "Modification successful: -G=/var/tmp/ntopng.pid --community"
     else
-        echo -e "${RED}Modification failed. Please check the file manually.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Modification failed. Please check the file manually.${TEXTRESET}"
         exit 1
     fi
 
     # Enable ntopng service
-    echo -e "Enabling ntopng service..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling ntopng service..."
     systemctl enable ntopng
 
     # Start ntopng service
-    echo -e "Starting ntopng service..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Starting ntopng service..."
     systemctl start ntopng
 
     # Validate ntopng service is running
     if systemctl is-active --quiet ntopng; then
-        echo -e "${GREEN}ntopng service is running.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] ntopng service is running."
     else
-        echo -e "${RED}Failed to start ntopng service. Please check the service status manually.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start ntopng service. Please check the service status manually."
         exit 1
     fi
 
@@ -1652,11 +1645,11 @@ install_ntopng() {
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
         if [ -z "$inside_interfaces" ]; then
-            echo -e "${RED}No interface with '-inside' profile found. Exiting...${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting...${TEXTRESET}"
             exit 1
         fi
 
-        echo -e "${GREEN}Inside interfaces found: $inside_interfaces${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
     }
 
     # Function to set up nftables rules for ntopng on the inside interfaces
@@ -1679,9 +1672,9 @@ install_ntopng() {
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 3000 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 3000 accept
-                echo -e "${GREEN}Rule added: Allow ntopng on port 3000 for interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow ntopng on port 3000 for interface ${GREEN}$iface${TEXTRESET}"
             else
-                echo "Rule already exists: Allow ntopng on port 3000 for interface $iface"
+                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow ntopng on port 3000 for interface ${GREEN}$iface${TEXTRESET}"
             fi
         done
         # Check and handle rfwb-portscan service
@@ -1697,8 +1690,6 @@ install_ntopng() {
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-        # Show the added rules in the input chain
-        sudo nft list chain inet filter input
     }
 
     # Execute functions
@@ -1706,7 +1697,7 @@ install_ntopng() {
     setup_nftables_for_ntopng
 
     # Continue with the rest of the script
-    echo -e "${GREEN}ntopng Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ntopng Install Complete..."
     sleep 4
 }
 # Function to install Suricata
