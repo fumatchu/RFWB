@@ -1773,65 +1773,35 @@ install_suricata() {
         exit 1
     fi
 
-    # Update the server
-    clear
-    echo -e "Updating the server...${TEXTRESET}"
-    if sudo dnf update -y; then
-        echo -e "${GREEN}Server updated successfully.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to update the server.${TEXTRESET}"
-        exit 1
-    fi
-
-    # Install essential packages
-    clear
-    echo -e "Installing essential suricata packages...${TEXTRESET}"
-    sleep 2
-    if sudo dnf install -y yum-utils bc nano curl wget policycoreutils-python-utils; then
-        echo -e "${GREEN}Essential packages installed successfully.${TEXTRESET}"
-        sleep 2
-    else
-        echo -e "${RED}Failed to install essential packages.${TEXTRESET}"
-        exit 1
-    fi
-
     # Install Suricata
     clear
     echo -e "Installing Suricata...${TEXTRESET}"
     sleep 2
     # Enable copr command for dnf
-    echo -e "Enabling dnf copr command...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling dnf copr command...${TEXTRESET}"
     if sudo dnf install -y 'dnf-command(copr)'; then
-        echo -e "${GREEN}dnf copr command enabled.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] dnf copr command enabled.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to enable dnf copr command.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to enable dnf copr command.${TEXTRESET}"
         exit 1
     fi
 
     # Enable the OISF repository for Suricata
-    echo -e "Enabling OISF Suricata repository...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling OISF Suricata repository...${TEXTRESET}"
     if echo 'y' | sudo dnf copr enable @oisf/suricata-7.0; then
-        echo -e "${GREEN}OISF Suricata repository enabled.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] OISF Suricata repository enabled.${TEXTRESET}"
     else
-        echo -e "${RED}Failed to enable OISF Suricata repository.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to enable OISF Suricata repository.${TEXTRESET}"
         exit 1
     fi
 
-    # Add the EPEL repository
-    echo -e "Adding EPEL repository...${TEXTRESET}"
-    if sudo dnf install -y epel-release dnf-plugins-core; then
-        echo -e "${GREEN}EPEL repository added successfully.${TEXTRESET}"
-    else
-        echo -e "${RED}Failed to add EPEL repository.${TEXTRESET}"
-        exit 1
-    fi
 
     # Install Suricata
     echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Suricata package...${TEXTRESET}"
     if sudo dnf install -y suricata; then
         echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata installed successfully.${TEXTRESET}"
     else
-        echo -e "[${RED}ERROR${TEXTRESET}]Failed to install Suricata.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to install Suricata.${TEXTRESET}"
         exit 1
     fi
 
