@@ -512,6 +512,10 @@ dialog --infobox "All packages installed successfully!" 10 50
 sleep 2
 clear
 
+# Stop slices from appearing in the logs
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling user lingering to prevent excessive session logs..."
+loginctl enable-linger root
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] User lingering enabled for 'root'."
 
 
 #Bracketed pasting...yuck!
