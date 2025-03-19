@@ -22,22 +22,19 @@ install_eve() {
     rpm -Uvh https://evebox.org/files/rpm/stable/evebox-release.noarch.rpm
 
     # Install SQLite
-    dnf install -y sqlite
-
-    # Install EveBox using dnf
-    dnf install -y evebox
+    dnf install -y sqlite evebox
 
     # Define configuration file path
     CONFIG_FILE="/etc/evebox/evebox.yaml"
 
     # Backup existing configuration file if it exists
     if [ -f "$CONFIG_FILE" ]; then
-        echo -e "Backing up existing configuration file..."
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Backing up existing configuration file..."
         cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
     fi
 
     # Write new configuration to evebox.yaml including all remarks
-    echo -e "Writing new configuration to ${GREEN}$CONFIG_FILE...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Writing new configuration to ${GREEN}$CONFIG_FILE...${TEXTRESET}"
     cat <<EOL > $CONFIG_FILE
 # This is a minimal evebox.yaml for Elasticsearch and SQLite.
 
@@ -102,12 +99,8 @@ input:
     - "/var/log/suricata/eve.*.json"
 EOL
 
-    # Change permissions of /var/log/suricata to 774 recursively
-    echo -e "Changing permissions of /var/log/suricata to 774 recursively..."
-    chmod -R 774 /var/log/suricata
-
     # Create evebox-agent systemd service
-    echo -e "${GREEN}Creating evebox-agent systemd service...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating evebox-agent systemd service..."
     cat <<EOF > /etc/systemd/system/evebox-agent.service
 [Unit]
 Description=EveBox Agent
@@ -124,16 +117,18 @@ EOF
     # Reload systemd to recognize the new service
     systemctl daemon-reload
     # Add group permissions to eve and suricata
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting Group permissions with Suricata"
     sudo usermod -aG suricata evebox
     sudo usermod -aG evebox suricata
     #Make sure logrotate is happy
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting Log permissions for Logs files"
     sudo chown -R suricata:suricata /var/log/suricata
     sudo chmod 750 /var/log/suricata
     sudo find /var/log/suricata -type f -exec chmod 640 {} \;
     #restart suricata
     systemctl restart suricata
     # Enable and start the EveBox and evebox-agent services
-    echo -e "Enabling and starting the EveBox and evebox-agent services..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting the EveBox and evebox-agent services..."
     systemctl enable evebox
     systemctl start evebox
     systemctl enable evebox-agent
@@ -193,28 +188,26 @@ EOF
         if [ "$rfwb_status" == "active" ]; then
             systemctl start rfwb-portscan
         fi
-
-        sudo nft list chain inet filter input
     }
 
     # Configure nftables to allow TCP traffic on port 5636
     configure_nftables
 
     # Capture administrator credentials from /var/log/messages
-    echo -e "Capturing administrator credentials from /var/log/messages..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
     credentials=$(grep "Created administrator username and password" /var/log/messages | tail -n 1)
 
     if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
         admin_user="${BASH_REMATCH[1]}"
         admin_pass="${BASH_REMATCH[2]}"
         echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
-        echo -e "${GREEN}Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
         echo -e "Your username is: $admin_user and your password is: $admin_pass"
     else
-        echo -e "${RED}Failed to capture administrator credentials from logs.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
     fi
 
-    echo -e "${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
     read -p "Press Enter when ready"
 }
 
@@ -239,14 +232,14 @@ find_sub_interfaces() {
 INSIDE_INTERFACE=$(find_interface "-inside")
 OUTSIDE_INTERFACE=$(find_interface "-outside")
 
-echo -e "${GREEN}Inside interface:${TEXTRESET} $INSIDE_INTERFACE"
-echo -e "${GREEN}Outside interface:${TEXTRESET} $OUTSIDE_INTERFACE"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Inside interface: ${GREEN}$INSIDE_INTERFACE${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Outside interface:${GREEN}$OUTSIDE_INTERFACE${TEXTRESET}"
 
 # Find sub-interfaces for the inside interface
 SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
 
 # Install Avahi and Avahi Tools
-echo -e "Installing Avahi and Avahi Tools..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Avahi and Avahi Tools..."
 sudo yum install -y avahi avahi-tools
 
 # Configure Avahi to enable mDNS reflection on internal interfaces
@@ -272,12 +265,12 @@ enable-reflector=yes
 EOL"
 
 # Start and enable Avahi service
-echo -e "Starting and enabling Avahi service..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Starting and enabling Avahi service..."
 sudo systemctl start avahi-daemon
 sudo systemctl enable avahi-daemon
 
 # Configure nftables to allow mDNS traffic on internal interfaces only
-echo -e "${GREEN}Configuring nftables to allow mDNS traffic...${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuring nftables to allow mDNS traffic..."
 # Ensure nftables table and chain exist
 sudo nft add table inet filter 2>/dev/null
 sudo nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
@@ -289,15 +282,15 @@ for sub_interface in $SUB_INTERFACES; do
 done
 
 # Save the current ruleset
-echo -e "${GREEN}Saving the current nftables ruleset...${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Saving the current nftables ruleset...${TEXTRESET}"
 sudo nft list ruleset >/etc/sysconfig/nftables.conf
 
 # Enable and start nftables service to ensure configuration is loaded on boot
-echo -e "${GREEN}Enabling nftables service...${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling nftables service..."
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo -e "${GREEN}Avahi is configured for mDNS reflection only on internal interfaces.${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Avahi is configured for mDNS reflection.${TEXTRESET}"
 sleep 4
 }
 
@@ -342,7 +335,7 @@ install_qos() {
     # Create configuration file function
     create_config() {
         local percentage_bandwidth=$1
-        echo -e "Creating configuration file at ${YELLLOW}$CONFIG_FILE${TEXTRESET} with ${YELLOW}${percentage_bandwidth}%${TEXTRESET} reserved bandwidth..." | tee -a $LOG_FILE
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Creating configuration file at ${YELLLOW}$CONFIG_FILE${TEXTRESET} with ${YELLOW}${percentage_bandwidth}%${TEXTRESET} reserved bandwidth..." | tee -a $LOG_FILE
         cat <<EOF > $CONFIG_FILE
 # /etc/rfwb-qos.conf
 
@@ -377,7 +370,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-        echo -e "Systemd timer created with an interval of every ${YELLOW}${interval_minutes}${TEXTRESET} minutes." | tee -a $LOG_FILE
+        echo "Systemd timer created with an interval of every ${interval_minutes} minutes." | tee -a $LOG_FILE
     }
 
     # Configure QoS function
@@ -404,8 +397,8 @@ EOF
         DOWNLOAD_SPEED_KBIT=$(($DOWNLOAD_SPEED * 8 / 1000))
         UPLOAD_SPEED_KBIT=$(($UPLOAD_SPEED * 8 / 1000))
 
-        echo -e "${GREEN}Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
-        echo -e "${GREEN}Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "Current download speed is ${DOWNLOAD_SPEED_KBIT} kbit/s." | tee -a $LOG_FILE
+        echo -e "Current upload speed is ${UPLOAD_SPEED_KBIT} kbit/s." | tee -a $LOG_FILE
 
         # Adjust r2q value based on download speed
         if [ "$DOWNLOAD_SPEED_KBIT" -lt 10000 ]; then
@@ -480,7 +473,7 @@ EOF
     create_config $PERCENTAGE
 
     # Create the QoS adjustment script
-    echo -e "Creating QoS adjustment script at $SCRIPT_FILE..." | tee -a $LOG_FILE
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating QoS adjustment script at ${GREEN}$SCRIPT_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<'EOF' > $SCRIPT_FILE
 #!/bin/bash
 
@@ -577,10 +570,10 @@ configure_qos() {
 configure_qos
 EOF
     chmod +x $SCRIPT_FILE
-    echo -e "${GREEN}QoS adjustment script created.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}]QoS adjustment script created." | tee -a $LOG_FILE
 
     # Create the systemd service
-    echo -e "${GREEN}Creating systemd service at $SERVICE_FILE...${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Creating systemd service at ${GREEN}$SERVICE_FILE...${TEXTRESET}" | tee -a $LOG_FILE
     cat <<EOF > $SERVICE_FILE
 [Unit]
 Description=RFWB QoS Service
@@ -596,7 +589,7 @@ User=root
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo -e "${GREEN}Systemd service created.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Systemd service created." | tee -a $LOG_FILE
 
     # Enable and start the service and timer
     echo "Enabling and starting the RFWB QoS service and timer..." | tee -a $LOG_FILE
@@ -605,9 +598,9 @@ EOF
     systemctl start rfwb-qos.service
     systemctl enable rfwb-qos.timer
     systemctl start rfwb-qos.timer
-    echo -e "${GREEN}Service and timer enabled and started.${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Service and timer enabled and started." | tee -a $LOG_FILE
 
-    echo -e "${GREEN}Installation of QOS for Voice Complete. ${TEXTRESET}" | tee -a $LOG_FILE
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Installation of QOS for Voice Complete." | tee -a $LOG_FILE
     sleep 4
 }
 
@@ -617,10 +610,9 @@ install_netdata() {
     echo -e "${GREEN}Installing Netdata...${TEXTRESET}"
     sleep 4
     if ! sudo dnf -y update; then
-        echo -e "${RED}System update failed. Exiting.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] System update failed. Exiting.${TEXTRESET}"
         exit 1
     fi
-
     if wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; then
         if ! sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive; then
             echo -e "[${RED}ERROR${TEXTRESET}] Netdata installation failed. Exiting."
