@@ -39,21 +39,22 @@ fi
 
 cat <<EOF
 
-${GREEN}**************************
+${GREEN}**************************${TEXTRESET}
 Please wait while we gather some files
-**************************${TEXTRESET}
+${GREEN}**************************${TEXTRESET}
 
-
-${YELLOW}Installing wget and git${TEXTRESET}
 EOF
+
+[${YELLOW}INFO${TEXTRESET}] Installing wget and git
+
 sleep 1
 
 dnf -y install wget git dialog >/dev/null 2>&1
 
 cat <<EOF
-${YELLOW}*****************************
+${YELLOW}*****************************${TEXTRESET}
 Retrieving Files from GitHub
-*****************************${TEXTRESET}
+${YELLOW}*****************************${TEXTRESET}
 EOF
 
 sleep 1
