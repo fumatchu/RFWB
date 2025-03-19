@@ -399,6 +399,7 @@ echo -e ${GREEN}"Updating system${TEXTRESET}"
 sleep 2
 echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling epel-release..."
 dnf -y install epel-release >/dev/null 2>&1 &
+dnf install -y epel-release dnf-plugins-core 2>&1 &
 echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Code-Ready..."
 dnf -y config-manager --set-enabled crb >/dev/null 2>&1 &
 echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Updates..."
