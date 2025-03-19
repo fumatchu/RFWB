@@ -13,8 +13,6 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 #Install EVEBOX
-#!/bin/bash
-
 install_eve() {
     clear
     echo -e "${GREEN}Installing EVEBOX for Suricata...${TEXTRESET}"
