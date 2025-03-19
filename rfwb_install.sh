@@ -18,10 +18,10 @@ FQDN=$(hostname)
 clear
 # Checking for user permissions
 if [ "$USER" = "root" ]; then
-  echo -e "${GREEN}Running as root user.${RESET}"
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Running as root user."
   sleep 2
 else
-  echo -e "${RED}This program must be run as root.${RESET}"
+  echo -e "[${RED}ERROR${TEXTRESET}] This program must be run as root."
   echo "Exiting..."
   exit 1
 fi
@@ -30,21 +30,22 @@ fi
 if [ -f /etc/redhat-release ]; then
   MAJOROS=$(grep -oP '\d+' /etc/redhat-release | head -1)
 else
-  echo -e "${RED}/etc/redhat-release file not found. Cannot determine OS version.${RESET}"
+  echo -e "[${RED}ERROR${TEXTRESET}] /etc/redhat-release file not found. Cannot determine OS version."
   echo "Exiting the installer..."
   exit 1
 fi
 
 # Checking for version information
 if [ "$MAJOROS" -ge 9 ]; then
-  echo -e "${GREEN}Detected compatible OS version: Rocky 9.x or greater${RESET}"
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Detected compatible OS version: Rocky 9.x or greater"
   sleep 2
 else
-  echo -e "${RED}Sorry, but this installer only works on Rocky 9.X or greater${RESET}"
-  echo -e "Please upgrade to ${GREEN}Rocky 9.x${RESET} or later"
+  echo -e "[${RED}ERROR${TEXTRESET}] Sorry, but this installer only works on Rocky 9.X or greater"
+  echo -e "Please upgrade to ${GREEN}Rocky 9.x${TEXTRESET} or later"
   echo "Exiting the installer..."
   exit 1
 fi
+
 #Detect Static or DHCP (IF not Static, change it)
 clear
 cat <<EOF
@@ -78,19 +79,19 @@ validate_fqdn() {
 }
 if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
   while true; do
-    echo -e "${RED}Interface $INTERFACE is using DHCP${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] Interface $INTERFACE is using DHCP"
 
     # Validate IPADDR
     read -p "Please provide a static IP address for the ${YELLOW}INSIDE INTERFACE${TEXTRESET} in CIDR format (i.e 192.168.24.2/24): " IPADDR
     while ! validate_cidr "$IPADDR"; do
-      echo -e "${RED}The entry is not in valid CIDR notation. Please Try again${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] The entry is not in valid CIDR notation. Please Try again"
       read -p "Please provide a static IP address in CIDR format (i.e 192.168.24.2/24): " IPADDR
     done
 
     # Validate GW
     read -p "Please provide a Default Gateway Address: " GW
     while ! validate_ip "$GW"; do
-      echo -e "${RED}The entry is not a valid IP address. Please Try again${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] The entry is not a valid IP address. Please Try again"
       read -p "Please provide a Default Gateway Address: " GW
     done
 
@@ -122,21 +123,21 @@ if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
     read -p "Please provide the FQDN for this machine: " HOSTNAME
 
     while ! validate_fqdn "$HOSTNAME" || ! check_hostname_in_domain "$HOSTNAME"; do
-      echo -e "${RED}The entry is not a valid FQDN, or the hostname is repeated in the domain name (This is not Supported). Please Try again${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] The entry is not a valid FQDN, or the hostname is repeated in the domain name (This is not Supported). Please Try again${TEXTRESET}"
       read -p "Please provide the FQDN for this machine: " HOSTNAME
     done
 
     # Validate DNSSERVER
     read -p "Please provide an upstream DNS IP for resolution: " DNSSERVER
     while ! validate_ip "$DNSSERVER"; do
-      echo -e "${RED}The entry is not a valid IP address. Please Try again${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] The entry is not a valid IP address. Please Try again"
       read -p "Please provide an upstream DNS IP for resolution: " DNSSERVER
     done
 
     # Validate DNSSEARCH
     read -p "Please provide the domain search name: " DNSSEARCH
     while [ -z "$DNSSEARCH" ]; do
-      echo -e "${RED}The response cannot be blank. Please Try again${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] The Response cannot be blank. Please Try again"
       read -p "Please provide the domain search name: " DNSSEARCH
     done
 
@@ -163,8 +164,8 @@ if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
       echo -e "${RED}Please log back in as root.${TEXTRESET}"
       echo -e "The installer will continue when you log back in."
       echo -e "If using SSH, please use the IP Address: $IPADDR"
-      echo -e "${RED}Rebooting${TEXTRESET}"
-      sleep 2
+      echo -e "${RED}Rebooting...${TEXTRESET}"
+      sleep 4
       reboot
       break
     else
@@ -174,13 +175,13 @@ if [ "$DETECTIP" = "ipv4.method:                            auto" ]; then
     fi
   done
 else
-  echo -e "${GREEN}INSIDE Interface $INTERFACE is using a static IP address${TEXTRESET}"
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] INSIDE Interface ${GREEN}$INTERFACE${TEXTRESET} is using a static IP address"
   sleep 2
 fi
 clear
 if [ "$FQDN" = "localhost.localdomain" ]; then
 
-  echo -e "${RED}This system is still using the default hostname (localhost.localdomain)${TEXTRESET}"
+  echo -e "[${RED}ERROR${TEXTRESET}]This system is still using the default hostname (localhost.localdomain)"
 
   # Validate HOSTNAME
   validate_fqdn() {
@@ -210,7 +211,7 @@ if [ "$FQDN" = "localhost.localdomain" ]; then
   read -p "Please provide the FQDN for this machine: " HOSTNAME
 
   while ! validate_fqdn "$HOSTNAME" || ! check_hostname_in_domain "$HOSTNAME"; do
-    echo -e "${RED}The entry is not a valid FQDN, or the hostname is repeated in the domain name (This is not Supported). Please Try again${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] The entry is not a valid FQDN, or the hostname is repeated in the domain name (This is not Supported). Please Try again"
     read -p "Please provide the FQDN for this machine: " HOSTNAME
   done
 
@@ -325,18 +326,18 @@ test_failed=false
 # Check DNS resolution for google.com
 echo "Checking DNS resolution for google.com via ping..."
 if check_dns_resolution "google.com"; then
-  echo "DNS resolution for google.com is successful."
+  echo "[${GREEN}SUCCESS${TEXTRESET}] DNS resolution for google.com is successful."
 else
-  echo "DNS resolution for google.com failed."
+  echo "[${RED}ERROR${TEXTRESET}] DNS resolution for google.com failed."
   test_failed=true
 fi
 
 # Ping 8.8.8.8
 echo "Trying to ping 8.8.8.8..."
 if ping_address "8.8.8.8"; then
-  echo "Successfully reached 8.8.8.8."
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] reached 8.8.8.8."
 else
-  echo "Cannot reach 8.8.8.8."
+  echo -e "[${RED}ERROR${TEXTRESET}] Cannot reach 8.8.8.8."
   test_failed=true
 fi
 
@@ -360,7 +361,7 @@ if $test_failed; then
     exit 1
   fi
 else
-  echo "All tests passed successfully."
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] All tests passed successfully."
   sleep 3
 fi
 clear
@@ -370,9 +371,9 @@ check_and_enable_selinux() {
   current_status=$(getenforce)
 
   if [ "$current_status" == "Enforcing" ]; then
-    echo -e "${GREEN}SELinux is already enabled and enforcing.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] SELinux is already enabled and enforcing."
   else
-    echo -e "${YELLOW}SELinux is not enabled. Enabling SELinux...${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] SELinux is not enabled. Enabling SELinux..."
 
     # Modify SELinux configuration to enable it
     sudo sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
@@ -382,9 +383,9 @@ check_and_enable_selinux() {
 
     # Verify and provide feedback
     if [ "$(getenforce)" == "Enforcing" ]; then
-      echo -e "${GREEN}SELinux has been successfully enabled and is now enforcing.${TEXTRESET}"
+      echo -e "[${GREEN}SUCCESS${TEXTRESET}] SELinux has been successfully enabled and is now enforcing."
     else
-      echo -e "${RED}Failed to enable SELinux. Please check the configuration.${TEXTRESET}"
+      echo -e "[${RED}ERROR${TEXTRESET}] Failed to enable SELinux. Please check the configuration."
       exit 1
     fi
   fi
@@ -410,7 +411,7 @@ sleep 4
 
 # Check if expect is installed
 if ! command -v expect &>/dev/null; then
-  echo -e ${YELLOW}"Expect is not installed. Installing now...${TEXTRESET}"
+  echo -e "[${RED}ERROR${TEXTRESET}] Expect is not installed. Installing now..."
   dnf -y install expect
 fi
 
@@ -456,24 +457,24 @@ clear
 # Function to check and disable firewalld
 disable_firewalld() {
   if systemctl is-active --quiet firewalld; then
-    echo -e "${YELLOW}firewalld is running, disabling it...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] firewalld is running, disabling it..."
     sudo systemctl stop firewalld
     sudo systemctl disable firewalld
-    echo -e "${GREEN}firewalld has been stopped and disabled.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] firewalld has been stopped and disabled."
   else
-    echo -e "${GREEN}firewalld is not running.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] firewalld is not running.${TEXTRESET}"
   fi
 }
 
 # Function to check and enable nftables
 enable_nftables() {
   if ! systemctl is-active --quiet nftables; then
-    echo -e "${YELLOW}nftables is not running, enabling it...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] nftables is not running, enabling it..."
     sudo systemctl start nftables
     sudo systemctl enable nftables
-    echo -e "${GREEN}nftables has been started and enabled.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables has been started and enabled."
   else
-    echo -e "${GREEN}nftables is already running.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables is already running."
   fi
 }
 
@@ -487,22 +488,22 @@ clear
 active_connection=$(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active | grep ":802-3-ethernet:" | grep ":activated")
 
 if [ -z "$active_connection" ]; then
-  echo -e "${RED}No active ethernet connections found. Exiting...${TEXTRESET}"
+  echo -e "[${RED}ERROR${TEXTRESET}] No active ethernet connections found. Exiting..."
   exit 1
 fi
 
 # Parse the active connection details
 IFS=: read -r name device type state <<<"$active_connection"
 
-echo -e "${GREEN}Active internal network connection found:${TEXTRESET} $device ($name)"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Active internal network connection found: ${GREEN}$device ($name)${TEXTREST}"
 
 # Check if the connection profile name already has the '-inside' suffix
 if [[ "$name" == *-inside ]]; then
-  echo -e "${YELLOW}The connection profile name already has the '-inside' suffix. No modification needed.${TEXTRESET}"
+  echo -e "[${YELLOW}INFO${TEXTRESET}] The connection profile name already has the '-inside' suffix. No modification needed."
 else
   # Update the connection profile name to include '-inside'
   new_profile_name="${name}-inside"
-  echo -e "${YELLOW}Updating connection profile name to: $new_profile_name${TEXTRESET}"
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Updating connection profile name to: ${GREEN}$new_profile_name${TEXTRESET}"
   nmcli connection modify "$name" connection.id "$new_profile_name"
   nmcli connection reload
 fi
@@ -600,7 +601,7 @@ while true; do
         selected_interface="${interfaces[$((selected_number - 1))]}"
         break
       else
-        echo -e "${RED}Invalid selection. Please enter a valid number corresponding to a physical interface.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}]Invalid selection. Please enter a valid number corresponding to a physical interface."
       fi
     done
 
@@ -610,7 +611,7 @@ while true; do
       if [[ "$vlan_id" -ge 1 && "$vlan_id" -le 4094 ]]; then
         break
       else
-        echo -e "${RED}Invalid VLAN ID. Please enter a number between 1 and 4094.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Invalid VLAN ID. Please enter a number between 1 and 4094."
       fi
     done
 
@@ -620,7 +621,7 @@ while true; do
       if validate_ip "$ip_address"; then
         break
       else
-        echo -e "${RED}Invalid IP address format or it's a network/broadcast address. Please enter a valid host IP in CIDR format.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Invalid IP address format or it's a network/broadcast address. Please enter a valid host IP in CIDR format."
       fi
     done
 
@@ -628,11 +629,11 @@ while true; do
     read -p "Enter a friendly name for the VLAN interface: " friendly_name
 
     # Review selections
-    echo -e "${YELLOW}You have selected:${TEXTRESET}"
-    echo -e "${GREEN}Interface: $selected_interface"
-    echo "VLAN ID: $vlan_id"
-    echo "IP Address: $ip_address"
-    echo "Friendly Name: $friendly_name${TEXTRESET}"
+    echo -e "You have selected:"
+    echo -e "Interface: ${GREEN}$selected_interface${TEXTRESET}"
+    echo "VLAN ID: ${GREEN}$vlan_id${TEXTRESET}"
+    echo "IP Address: ${GREEN}$ip_address${TEXTRESET}"
+    echo "Friendly Name: ${GREEN}$friendly_name${TEXTRESET}"
 
     # Confirm changes
     read -p "Would you like to apply these changes? (y/n): " apply_changes
@@ -645,7 +646,7 @@ while true; do
       nmcli connection modify "$vlan_connection" connection.id "$friendly_name"
       # Use the updated connection name to bring it up
       nmcli connection up "$friendly_name"
-      echo -e "${GREEN}VLAN $vlan_id configured on $selected_interface with IP $ip_address and friendly name '$friendly_name'.${TEXTRESET}"
+      echo -e "[${GREEN}SUCCESS${TEXTRESET}]VLAN ${GREEN}$vlan_id${TEXTRESET} configured on ${GREEN}$selected_interface${TEXTRESET} with IP ${GREEN}$ip_address${TEXTRESET} and friendly name ${GREEN}'$friendly_name'${TEXTRESET}."
     fi
 
     # Display updated VLAN mappings
@@ -657,7 +658,7 @@ while true; do
       break
     fi
   else
-    echo -e "${YELLOW}VLAN configuration not selected.${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] VLAN configuration not selected."
     break
   fi
 done
@@ -676,7 +677,7 @@ find_private_ip() {
   # Get the friendly name for the inside interface
   friendly_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$interface:" | cut -d':' -f2)
 
-  echo -e "${GREEN}Inside interface found: $interface ($friendly_name)${TEXTRESET}"
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interface found: ${GREEN}$interface ($friendly_name)${TEXTRESET}"
 }
 
 # Function to set up nftables rule for SSH on the inside interface and its sub-interfaces
@@ -707,19 +708,15 @@ setup_nftables() {
 
     if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
       sudo nft add rule inet filter input iifname "$iface" tcp dport 22 accept
-      echo -e "${GREEN}Rule added: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
+      echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow SSH on interface ${GREEN}$iface ($friendly_name)${TEXTRESET}"
     else
-      echo -e "${YELLOW}Rule already exists: Allow SSH on interface $iface ($friendly_name)${TEXTRESET}"
+      echo -e "[${YELLOW}INFO${TEXTRESET}] Rule already exists: Allow SSH on interface ${GREEN}$iface ($friendly_name)${TEXTRESET}"
     fi
   done
 
   # Save the current ruleset
-  echo -e "${YELLOW}Saving the current nftables ruleset...${TEXTRESET}"
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Saving the current nftables ruleset..."
   sudo nft list ruleset >/etc/sysconfig/nftables.conf
-
-  # Show the added rules in the input chain
-  echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
-  sudo nft list chain inet filter input
 
 }
 
@@ -727,7 +724,7 @@ setup_nftables() {
 echo "Restarting nftables service..."
 sudo systemctl restart nftables
 
-echo "nftables configuration completed successfully."
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables configuration completed successfully."
 
 # Main script execution
 find_private_ip
