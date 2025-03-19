@@ -22,13 +22,13 @@ TEMP_CONF="/tmp/chrony_temp.conf"
 
 # Check if /etc/chrony.conf exists
 if [ ! -f "$CHRONY_CONF" ]; then
-    echo -e "${YELLOW}/etc/chrony.conf not found. Exiting...${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] /etc/chrony.conf not found. Exiting..."
     exit 0
 fi
 
 # Backup the original configuration file
 cp $CHRONY_CONF ${CHRONY_CONF}.bak
-echo -e "${YELLOW}Backup of the original configuration file created.${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Backup of the original configuration file created."
 
 # Function to find the network interface based on connection name ending
 find_interface() {
@@ -96,20 +96,20 @@ awk -v allow_statement="$ALLOW_STATEMENT" '
 
 # Replace the original configuration with the modified one
 mv $TEMP_CONF $CHRONY_CONF
-echo -e "${YELLOW}Configuration file updated.${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuration file updated."
 
 # Set ownership and permissions
 chown root:root $CHRONY_CONF
 chmod 644 $CHRONY_CONF
 restorecon -v $CHRONY_CONF
-echo -e "${YELLOW}Permissions and SELinux context set.${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Permissions and SELinux context set."
 
 # Check if chronyd service is running
 if systemctl is-active --quiet chronyd; then
-    echo -e "${YELLOW}chronyd is running, restarting service...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] chronyd is running, restarting service..."
     systemctl restart chronyd
 else
-    echo -e "${YELLOW}chronyd is not running, starting service...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] chronyd is not running, starting service...${TEXTRESET}"
     systemctl start chronyd
 fi
 
@@ -118,10 +118,10 @@ while true; do
     CHRONYC_OUTPUT=$(chronyc tracking)
 
     if echo "$CHRONYC_OUTPUT" | grep -q "Leap status.*Not synchronised"; then
-        echo -e "${RED}System time is not synchronized. Retrying in 10 seconds...${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] System time is not synchronized. Retrying in 10 seconds..."
         sleep 10
     else
-        echo -e "${GREEN}System time is synchronized.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] System time is synchronized."
         break
     fi
 done
@@ -146,46 +146,43 @@ done
         # NTP rules
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 123 accept"; then
             sudo nft add rule inet filter input iifname "$iface" udp dport 123 accept
-            echo -e "${GREEN}Rule added: Allow NTP (UDP) on interface $iface${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow NTP (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow NTP (UDP) on interface $iface${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow NTP (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         fi
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 123 accept"; then
             sudo nft add rule inet filter input iifname "$iface" tcp dport 123 accept
-            echo -e "${GREEN}Rule added: Allow NTP (TCP) on interface $iface${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow NTP (TCP) on interface ${GREEN}$iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow NTP (TCP) on interface $iface${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow NTP (TCP) on interface ${GREEN}$iface${TEXTRESET}"
         fi
 
         # Chrony rules
         if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 323 accept"; then
             sudo nft add rule inet filter input iifname "$iface" udp dport 323 accept
-            echo -e "${GREEN}Rule added: Allow Chrony (UDP) on interface $iface${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Chrony (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         else
-            echo -e "${YELLOW}Rule already exists: Allow Chrony (UDP) on interface $iface${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Chrony (UDP) on interface ${GREEN}$iface${TEXTRESET}"
         fi
     done
     
     # Check and handle rfwb-portscan service
     rfwb_status=$(systemctl is-active rfwb-portscan)
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Stopping rfwb-portscan service before saving nftables configuration...${TEXTRESET}"
         systemctl stop rfwb-portscan
     fi
 
     # Save the current nftables configuration
     sudo nft list ruleset >/etc/sysconfig/nftables.conf
     # Restart the nftables service to apply changes
-    echo -e "${YELLOW}Restarting nftables service to apply changes...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting nftables service to apply changes...${TEXTRESET}"
     sudo systemctl restart nftables
     # Restart rfwb-portscan service if it was active
     if [ "$rfwb_status" == "active" ]; then
-        echo -e "${YELLOW}Restarting rfwb-portscan service...${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}]Restarting rfwb-portscan service...${TEXTRESET}"
         systemctl start rfwb-portscan
     fi
-    # Show the added rules in the input chain
-    echo -e "${YELLOW}Current rules in the input chain:${TEXTRESET}"
-    sudo nft list chain inet filter input
     sleep 4
 }
 
@@ -199,7 +196,7 @@ KEYS_FILE="/etc/named/keys.conf"
 ZONE_DIR="/var/named/"
 
 generate_tsig_key() {
-    echo -e "${YELLOW}Generating TSIG key using rndc-confgen...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Generating TSIG key using rndc-confgen..."
 
     # Generate an rndc key using rndc-confgen
     sudo rndc-confgen -a
@@ -210,7 +207,7 @@ generate_tsig_key() {
     # Extract the key secret
     key_secret=$(grep secret $key_file | awk '{print $2}' | tr -d '";')
 
-    echo -e "${YELLOW}Key generated: $key_secret${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Key generated: ${GREEN}$key_secret${TEXTRESET}"
 
     # Append the key to keys.conf
     sudo bash -c "cat > $KEYS_FILE" <<EOF
@@ -227,7 +224,7 @@ configure_bind() {
     full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
 
     if [[ ! "$full_hostname" == *.* ]]; then
-        echo -e "${RED}Error: Hostname does not contain a domain part.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Hostname does not contain a domain part.${TEXTRESET}"
         return 1
     fi
 
@@ -238,7 +235,7 @@ configure_bind() {
     ip_address=$(hostname -I | awk '{print $1}')
 
     if [[ -z "$ip_address" ]]; then
-        echo -e "${RED}Error: Unable to determine IP address.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Unable to determine IP address."
         return 1
     fi
 
@@ -247,7 +244,7 @@ configure_bind() {
 
     # Check if variables are set correctly
     if [[ -z "$domain" || -z "$reverse_zone" || -z "$reverse_ip" ]]; then
-        echo -e "${RED}Error: Domain or reverse zone information is missing.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Domain or reverse zone information is missing."
         return 1
     fi
 
@@ -255,7 +252,7 @@ configure_bind() {
     forward_zone_file="${ZONE_DIR}db.${domain}"
     reverse_zone_file="${ZONE_DIR}db.${reverse_zone}"
 
-    echo -e "${YELLOW}Configuring BIND with forward and reverse zones...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring BIND with forward and reverse zones..."
 
     # Insert forwarders configuration right after the crypto policy include line
     sudo sed -i '/include "\/etc\/crypto-policies\/back-ends\/bind.config";/a \
@@ -332,9 +329,9 @@ EOF
         # Set the permissions to 600
         chmod 600 "$RNDC_KEY_FILE"
 
-        echo "Permissions and ownership for $RNDC_KEY_FILE have been set."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Permissions and ownership for ${GREEN}$RNDC_KEY_FILE${TEXTRESET} have been set."
     else
-        echo "Error: $RNDC_KEY_FILE does not exist."
+        echo -e "[${RED}ERROR${TEXTRESET}] $RNDC_KEY_FILE does not exist."
         exit 1
     fi
 
@@ -346,23 +343,23 @@ EOF
         echo " "
     fi
 
-    echo -e "${GREEN}BIND configuration complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] BIND configuration complete."
     sleep 3
 }
 
 start_and_enable_service() {
     local service_name="$1"
 
-    echo -e "${YELLOW}Enabling and starting the $service_name service...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}]Enabling and starting the ${GREEN}$service_name${TEXTRESET} service..."
 
     sudo systemctl enable "$service_name"
     sudo systemctl start "$service_name"
 
     # Check if the service is running
     if sudo systemctl status "$service_name" | grep -q "running"; then
-        echo -e "${GREEN}$service_name service is running.${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}$service_name${TEXTRESET} service is running."
     else
-        echo -e "${RED}Failed to start $service_name service.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start ${GREEN}$service_name${TEXTRESET} service."
         exit 1
     fi
     sleep 2
@@ -373,12 +370,12 @@ start_and_enable_service() {
      echo -e "${GREEN}Configuring BIND${TEXTRESET}"
      sleep 2
 if [ -f "$NAMED_CONF" ]; then
-    echo -e "${GREEN}$NAMED_CONF found. Proceeding with configuration...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $NAMED_CONF found. Proceeding with configuration..."
     generate_tsig_key
     configure_bind
     start_and_enable_service "named"
 else
-    echo -e "${RED}$NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] $NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
 fi
 
 KEA_CONF="/etc/kea/kea-dhcp4.conf"
