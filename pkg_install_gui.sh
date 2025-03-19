@@ -133,6 +133,8 @@ EOF
     echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting the EveBox and evebox-agent services..."
     systemctl enable evebox
     systemctl start evebox
+    systemctl enable evebox-agent
+    systemctl start evebox-agent
 
     # Check if services are running
     if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
