@@ -402,7 +402,7 @@ dnf -y install epel-release >/dev/null 2>&1 &
 echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling Code-Ready..."
 dnf -y config-manager --set-enabled crb >/dev/null 2>&1 &
 echo -e "[${YELLOW}INFO${TEXTRESET}] Installing Updates..."
-sleep 2
+sleep 1
 #Install Core Updates
 # Define a temporary file for package names
 TEMP_FILE=$(mktemp)
