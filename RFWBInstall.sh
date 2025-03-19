@@ -45,7 +45,7 @@ ${GREEN}**************************${TEXTRESET}
 
 EOF
 
-[${YELLOW}INFO${TEXTRESET}] Installing wget and git
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing wget and git"
 
 sleep 1
 
@@ -66,7 +66,7 @@ git clone https://github.com/fumatchu/RFWB.git /root/RFWB
 chmod 700 /root/RFWB/*
 
 clear
-echo -e [${YELLOW}INFO${TEXTRESET}] Removing Git"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Removing Git"
 dnf -y remove git >/dev/null 2>&1
 
 clear
