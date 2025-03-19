@@ -45,11 +45,31 @@ ${GREEN}**************************${TEXTRESET}
 
 EOF
 
-echo -e "[${YELLOW}INFO${TEXTRESET}] Installing wget and git"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Installing wget and git..."
 
-sleep 1
+# Function to show an animated spinner
+spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
 
-dnf -y install wget git dialog >/dev/null 2>&1
+  while ps -p $pid > /dev/null; do
+    for i in $(seq 0 3); do
+      printf "\r[${YELLOW}INFO${TEXTRESET}] Installing... ${spinstr:$i:1}"
+      sleep $delay
+    done
+  done
+  printf "\r[${GREEN}SUCCESS${TEXTRESET}] Installation complete!  \n"
+}
+
+# Run dnf in the background
+dnf -y install wget git dialog >/dev/null 2>&1 &
+
+# Get the PID of the last background process
+dnf_pid=$!
+
+# Start the spinner while waiting for dnf to complete
+spinner $dnf_pid
 
 cat <<EOF
 ${YELLOW}*****************************${TEXTRESET}
