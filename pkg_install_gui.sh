@@ -202,7 +202,8 @@ EOF
    # Capture administrator credentials from /var/log/messages
 echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
 
-credentials=$(tail -n 500 /var/log/messages | grep "Created administrator username and password" | tail -n 1)
+# Remove ANSI color codes and extract the latest matching log entry
+credentials=$(tail -n 500 /var/log/messages | sed 's/\x1B\[[0-9;]*m//g' | grep "Created administrator username and password" | tail -n 1)
 
 if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
     admin_user="${BASH_REMATCH[1]}"
@@ -213,6 +214,7 @@ if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
 else
     echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
 fi
+
 
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
