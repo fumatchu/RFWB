@@ -46,7 +46,7 @@ while IFS=: read -r name device type; do
         autoconnect=$(nmcli -g connection.autoconnect connection show "$name")
 
         if [ "$autoconnect" != "yes" ]; then
-            echo -e "[${RED}ERROR${TEXTRESET}] Connection ${GREEN}$name (Device: $device)${TEXTRESET} is not set to autoconnect. Enabling autoconnect..."
+            echo -e "[${RED}ERROR${TEXTRESET}] Connection ${GREEN}$name (Device: $device)${TEXTRESET} is not set to autoconnect. ${YELLOW}Enabling autoconnect...${TEXTRESET}"
             nmcli connection modify "$name" connection.autoconnect yes
 
             if [ $? -eq 0 ]; then
