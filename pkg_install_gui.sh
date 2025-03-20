@@ -1303,7 +1303,7 @@ kill $pid  # Terminate the test process
 #WantedBy=multi-user.target
 #EOF
 
-FIX journaling ERROR
+#FIX journaling ERROR
 # Create the systemd service unit file
 cat << EOF > $SERVICE_PATH
 [Unit]
