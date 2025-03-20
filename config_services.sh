@@ -510,7 +510,7 @@ configure_kea() {
 
     # Configure Kea DHCP4 server
     KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
-    echo -e "${YELLOW}Creating Kea DHCPv4 configuration...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating initial Kea DHCPv4 configuration..."
     sudo bash -c "cat > $KEA_DHCP4_CONF" <<EOF
 {
     "Dhcp4": {
@@ -580,7 +580,7 @@ EOF
 
     # Configure Kea DHCP DDNS server
     KEA_DHCP_DDNS_CONF="/etc/kea/kea-dhcp-ddns.conf"
-    echo -e "${YELLOW}Creating Kea DHCP DDNS configuration...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating intial Kea DHCP DDNS configuration..."
     sudo bash -c "cat > $KEA_DHCP_DDNS_CONF" <<EOF
 {
     "DhcpDdns": {
@@ -633,17 +633,17 @@ EOF
 EOF
 
     # Set file permissions
-    echo -e "${YELLOW}Setting permissions for configuration files...${TEXTRESET}"
+    
     sudo chown root:kea $KEA_DHCP4_CONF $KEA_DHCP_DDNS_CONF
     sudo chmod 640 $KEA_DHCP4_CONF $KEA_DHCP_DDNS_CONF
 
-    echo -e "${GREEN}Kea DHCP server configuration complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Kea DHCP server configuration complete."
 }
 if [ -f "$KEA_CONF" ]; then
-    echo -e "${GREEN}$KEA_CONF found. Proceeding with configuration...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] $KEA_CONF found. Proceeding with configuration..."
     configure_kea
 else
-    echo -e "${RED}$KEA_CONF not found. Skipping KEA-DHCP configuration.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] $KEA_CONF not found. Skipping KEA-DHCP configuration."
 fi
 #Add additional Scopes if needed
 # Path to the KEA DHCP4 configuration file
@@ -678,7 +678,7 @@ add_subnet() {
             if validate_cidr "$network_scheme"; then
                 break
             else
-                echo -e "${RED}Invalid network scheme. Please enter a valid CIDR notation.${TEXTRESET}"
+                echo -e "[${RED}ERROR${TEXTRESET}] Invalid network scheme. Please enter a valid CIDR notation."
             fi
         done
 
@@ -732,7 +732,7 @@ add_subnet() {
             break
         else
             # If settings are not correct, loop and ask again
-            echo -e "\n${RED}Configure Scope${TEXTRESET}\n"
+            echo -e "\n[${RED}ERROR${TEXTRESET}] Configure Scope${TEXTRESET}\n"
         fi
     done
 
@@ -807,26 +807,27 @@ EOF
     sudo mv "$tmpfile" /etc/kea/kea-dhcp4.conf
 
     # Set file permissions
-    echo -e "${YELLOW}Setting permissions for configuration files...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting permissions for configuration files...${TEXTRESET}"
     sudo chown root:kea /etc/kea/kea-dhcp4.conf
     sudo chmod 640 /etc/kea/kea-dhcp4.conf
 
-    echo -e "${GREEN}New subnet added to Kea DHCP server configuration.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] New subnet added to Kea DHCP server configuration.${TEXTRESET}"
 }
 
 # Check if the KEA_DHCP4_CONF file exists
 if [ ! -f "$KEA_DHCP4_CONF" ]; then
-    echo -e "${RED}$KEA_DHCP4_CONF not found. Skipping subnet addition.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] $KEA_DHCP4_CONF not found. Skipping subnet addition."
 else
-    echo -e "${GREEN}$KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
 
     # Loop to repeatedly ask the user if they want to add another subnet
+    clear
     while true; do
         read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
         if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
             add_subnet
         else
-            echo -e "${YELLOW}No more subnets will be added.${TEXTRESET}"
+            echo -e "[${YELLOW}INFO${TEXTRESET}] No more subnets will be added."
             break
         fi
     done
@@ -848,7 +849,7 @@ INTERFACES+=($SUB_INTERFACES)
 # Check if kea-dhcp4.conf exists
 CONFIG_FILE="/etc/kea/kea-dhcp4.conf"
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo -e "${RED}Error: Configuration file $CONFIG_FILE not found.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] Error: Configuration file ${GREEN}$CONFIG_FILE${TEXTRESET} not found."
     exit 1
 fi
 
@@ -863,7 +864,7 @@ extract_subnets() {
 # Function to update the configuration file
 update_config() {
     if [ "$SUBNET_COUNT" -gt 1 ] && [ -z "$SUB_INTERFACES" ]; then
-        echo -e "${YELLOW}Warning: More subnets than interfaces. Confirm if this setup is correct.${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] ${YELLOW}Warning:${TEXTRESET} More subnets than interfaces. Confirm if this setup is correct."
         read -p "Do you want to proceed? (yes/no): " confirm
         if [ "$confirm" != "yes" ]; then
             echo "Aborting changes."
@@ -873,7 +874,7 @@ update_config() {
     fi
 
     if [ "$SUBNET_COUNT" -gt 1 ] && [ -n "$SUB_INTERFACES" ]; then
-        echo -e "${YELLOW}Multiple subnets and interfaces detected. Please select bindings:${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Multiple subnets and interfaces detected. Please select bindings:"
 
         echo "Available interfaces:"
         for i in "${!INTERFACES[@]}"; do
@@ -947,7 +948,7 @@ update_config() {
 
 # Execute the update
 update_config
-echo -e "${GREEN}Configuration update completed.${TEXTRESET}"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuration update completed."
 
 #Start KEA Services
 start_and_enable_service() {
@@ -956,20 +957,20 @@ start_and_enable_service() {
 
     # Check for the configuration file
     if [ -f "$conf_file" ]; then
-        echo -e "${YELLOW}Configuration file $conf_file found. Enabling and starting the $service_name service...${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Configuration file ${GREEN}$conf_file${TEXTRESET} found. Enabling and starting the ${GREEN}$service_name${TEXTRESET} service..."
 
         sudo systemctl enable "$service_name"
         sudo systemctl start "$service_name"
 
         # Check if the service is running
         if sudo systemctl status "$service_name" | grep -q "running"; then
-            echo -e "${GREEN}$service_name service is running.${TEXTRESET}"
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}$service_name${TEXTRESET} service is running."
         else
-            echo -e "${RED}Failed to start $service_name service.${TEXTRESET}"
+            echo -e "[${RED}ERROR${TEXTRESET}] Failed to start ${GREEN}$service_name${TEXTRESET} service."
             exit 1
         fi
     else
-        echo -e "${RED}Configuration file $conf_file not found. Cannot enable and start $service_name service.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Configuration file ${GREEN}$conf_file${TEXTRESET} not found. Cannot enable and start ${GREEN}$service_name${TEXTRESET} service."
         exit 1
     fi
 }
@@ -981,7 +982,7 @@ start_and_enable_service "kea-dhcp4" "/etc/kea/kea-dhcp4.conf"
 start_and_enable_service "kea-dhcp-ddns" "/etc/kea/kea-dhcp-ddns.conf"
 
 #Cleanup-If using VLANS we need to make sure mulitple subents are accounted for in the named configuration
-echo -e "${GREEN}Double Checking Subnet Mapping for named${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Double Checking Subnet Mapping for named"
 # Define file paths and directories
 KEA_CONF="/etc/kea/kea-dhcp4.conf"
 NAMED_CONF="/etc/named.conf"
