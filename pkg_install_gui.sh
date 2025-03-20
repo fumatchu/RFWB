@@ -1398,7 +1398,7 @@ install_bind() {
     find_inside_interfaces
     setup_nftables_for_dns
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] BIND Install Complete..."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}BIND Install Complete...${TEXTRESET}"
     sleep 4
 }
 
