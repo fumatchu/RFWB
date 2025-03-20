@@ -1283,6 +1283,28 @@ sleep 5
 kill $pid  # Terminate the test process
 
 # Create the systemd service unit file
+#cat << EOF > $SERVICE_PATH
+#[Unit]
+#Description=RFWB Port Scan Monitor
+#After=rfwb-portscan.service
+#Requires=rfwb-portscan.service
+
+#[Service]
+#Type=simple
+#ExecStart=$SCRIPT_PATH
+#ExecStop=/usr/bin/kill \$MAINPID
+#Restart=on-failure
+#RestartSec=5
+#StandardOutput=syslog
+#StandardError=syslog
+#SyslogIdentifier=rfwb-ps-mon
+
+#[Install]
+#WantedBy=multi-user.target
+#EOF
+
+FIX journaling ERROR
+# Create the systemd service unit file
 cat << EOF > $SERVICE_PATH
 [Unit]
 Description=RFWB Port Scan Monitor
@@ -1295,8 +1317,8 @@ ExecStart=$SCRIPT_PATH
 ExecStop=/usr/bin/kill \$MAINPID
 Restart=on-failure
 RestartSec=5
-StandardOutput=syslog
-StandardError=syslog
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=rfwb-ps-mon
 
 [Install]
