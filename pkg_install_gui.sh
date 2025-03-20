@@ -356,7 +356,7 @@ h323_port = 1720
 webrtc_ports = 16384-32767
 mpeg_ts_port = 1234
 EOF
-        echo -e "${GREEN}Configuration file created.${TEXTRESET}" | tee -a $LOG_FILE
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuration file created." | tee -a $LOG_FILE
     }
 
     # Create systemd timer function
