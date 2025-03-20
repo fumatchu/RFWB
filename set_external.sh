@@ -356,12 +356,13 @@ if ! sudo nft list chain inet filter output &>/dev/null; then
 fi
 
 # Add a rule to drop and log outbound packets to threat-listed IPs (OUTPUT)
-if ! sudo nft list chain inet filter output | grep -q "ip daddr @threat_block drop"; then
-    sudo nft add rule inet filter output ip daddr @threat_block log prefix \"Outbound Blocked: \" drop
+if ! sudo nft list chain inet filter output | grep -q -F 'ip daddr @threat_block log prefix "Outbound Blocked:" drop'; then
+    sudo nft add rule inet filter output ip daddr @threat_block log prefix \"Outbound Blocked:\" drop
     log "Added threat block rule to OUTPUT chain."
 else
     log "Threat block rule already exists in OUTPUT chain."
 fi
+
 
 # Verify threat list application
 if sudo nft list set inet filter threat_block | grep -q 'elements'; then
