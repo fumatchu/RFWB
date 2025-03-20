@@ -462,12 +462,9 @@ rm -f "$PIPE" "$TEMP_FILE"
 dialog --infobox "System update completed successfully!" 10 50
 sleep 3
 clear
-echo -e "[${YELLOW}INFO${TEXTRESET}] Installing additional packages..."
-sleep 2
-clear
 #Install the packages we need 
 # Define list of packages to install
-PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "fail2ban" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "bc" "nano" "curl" "wget" "policycoreutils-python-utils")  # Add or modify packages as needed
+PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "fail2ban" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "bc" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")  # Add or modify packages as needed
 TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
 
 # Create a named pipe (FIFO) for real-time updates
@@ -475,7 +472,7 @@ PIPE=$(mktemp -u)
 mkfifo "$PIPE"
 
 # Start the progress bar in the background
-dialog --title "System Update" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
+dialog --title "System Update-Ancillary Package Install" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
 exec 3>"$PIPE"
 
 # Function to update the progress bar with package name
