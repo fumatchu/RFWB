@@ -203,154 +203,136 @@ manage_inside_gw
 sleep 4
 
 
+echo -e "Applying NFT Ruleset"
 
-# Reorganize nftables
-clear
-echo -e "[${YELLOW}INFO${TEXTRESET}] Organizing nftables for efficient processing..."
-sleep 4
 
 NFTABLES_FILE="/etc/sysconfig/nftables.conf"
-BACKUP_FILE="/etc/sysconfig/nftables.conf.bak"
-TMP_FILE="/tmp/nftables_chain_input_filtered.tmp"
+TMP_FILE=$(mktemp)
+DEBUG_FILE="/tmp/nftables_debug.conf"
 
-# Backup original file
-cp "$NFTABLES_FILE" "$BACKUP_FILE"
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] Backup created at $BACKUP_FILE."
+# Backup original nftables configuration
+cp "$NFTABLES_FILE" "$NFTABLES_FILE.bak"
+echo "🔍 Backed up original file to: $NFTABLES_FILE.bak"
 
-echo -e "[${YELLOW}INFO${TEXTRESET}] Reordering nftables rules..."
-
+# Process the nftables configuration
 awk '
   BEGIN {
-    rule_order["type filter hook input priority filter; policy drop;"] = 1
-    rule_order["iif \"lo\" accept"] = 2
-    rule_order["ct state established,related accept"] = 3
+    in_input = 0;
+    in_output = 0;
+    in_portscan = 0;
+    input_header = "";
+    output_header = "";
+    input_rules = "";
+    output_rules = "";
+    input_policy = "    type filter hook input priority filter; policy drop;";
+    output_policy = "    type filter hook output priority filter; policy accept;";
+    threat_rule = "    ip saddr @threat_block drop";  # Always at the top of input chain
+    log_rule = "    log prefix \"Blocked:\" drop";  # Always at the bottom of input chain
+    threat_out_rule = "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop";  # Ensure correct format
+    threat_out_seen = 0;
   }
-  /chain input/ {in_block=1; block=""; next}
-  in_block && /}/ {
-    if (block ~ /log prefix "Blocked: " drop/) {
-      split(block, lines, "\n")
-      for (i in lines) {
-        trimmed = lines[i]
-        sub(/^[ \t]+/, "", trimmed)
-        sub(/\r$/, "", trimmed)
-        if (trimmed == "") continue
-        if (rule_order[trimmed] > 0) {
-          ordered_rules[rule_order[trimmed]] = trimmed
-        } else if (trimmed ~ /ip saddr @threat_block drop/) {
-          ip_saddr_line = trimmed
-        } else if (trimmed ~ /log prefix "Blocked: " drop/) {
-          log_prefix_line = trimmed
-        } else {
-          other_rules[++other_rules_count] = trimmed
-        }
-      }
-      formatted_block = "\tchain input {\n"
-      for (i = 1; i <= length(ordered_rules); i++) {
-        formatted_block = formatted_block "\t\t" ordered_rules[i] "\n"
-      }
-      for (i = 1; i <= other_rules_count; i++) {
-        formatted_block = formatted_block "\t\t" other_rules[i] "\n"
-      }
-      if (ip_saddr_line) formatted_block = formatted_block "\t\t" ip_saddr_line "\n"
-      if (log_prefix_line) formatted_block = formatted_block "\t\t" log_prefix_line "\n"
-      formatted_block = formatted_block "\t}"
-      print formatted_block
-    }
-    exit
+
+  # Detect table inet portscan (DO NOT MODIFY)
+  /table inet portscan/ {
+    in_portscan = 1;
   }
-  in_block {block=block "\n" $0}
-' "$NFTABLES_FILE" > "$TMP_FILE"
 
-echo -e "[${YELLOW}INFO${TEXTRESET}] Inserting updated rules back into nftables..."
-
-awk -v RS= -v ORS='\n\n' -v new_block="$(cat $TMP_FILE)" '
-  /chain input.*{/,/}/ {
-    if ($0 ~ /log prefix "Blocked: " drop/) {
-      $0 = new_block
-    }
-  }
-  { print }
-' "$BACKUP_FILE" > "$NFTABLES_FILE"
-
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] Reformatted content has been placed back into $NFTABLES_FILE."
-
-sleep 4
-clear
-
-
-# This script reorganizes the nftables input chain by placing block rules at the bottom 
-# and the IP source threat rules at the top. Run this when needed to reorder your chains.
-
-# File paths
-NFTABLES_FILE="/etc/sysconfig/nftables.conf"
-BACKUP_FILE="/etc/sysconfig/nftables.conf.bak"
-TMP_FILE="/tmp/nftables_input_reordered.tmp"
-
-# Backup original file
-cp "$NFTABLES_FILE" "$BACKUP_FILE"
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] Backup created at $BACKUP_FILE."
-
-# Get current ownership and permissions
-CURRENT_OWNER=$(stat -c "%u:%g" "$NFTABLES_FILE")
-CURRENT_PERMISSIONS=$(stat -c "%a" "$NFTABLES_FILE")
-
-echo -e "[${YELLOW}INFO${TEXTRESET}] Reorganizing nftables input chain..."
-
-# Reorganize the input chain
-awk '
-  BEGIN {
-    in_block = 0;
-    log_rule = "";
-    threat_rule = "";
-  }
-  /chain input/ { in_block = 1; block=""; print; next }
-  in_block && /}/ {
-    in_block = 0;
-    if (threat_rule != "") {
-      print threat_rule;  # Ensure threat_block drop is at the top
-    }
-    print block;  # Print all other rules
-    if (log_rule != "") {
-      print log_rule;  # Append the log rule at the bottom
-    }
-    print;
+  # Detect chain input (only in table inet filter)
+  /chain input/ && !in_portscan {
+    in_input = 1;
+    input_header = $0;
+    input_rules = "";
     next;
   }
-  in_block {
+  
+  # Detect chain output
+  /chain output/ {
+    in_output = 1;
+    output_header = $0;
+    output_rules = "";
+    next;
+  }
+
+  # Process input chain (only in table inet filter)
+  in_input && /}/ {
+    in_input = 0;
+    print input_header;
+    print input_policy;  # Ensure policy line is at the top
+    print threat_rule;   # Ensure threat_block drop is at the top
+    print input_rules;   # Print all other rules
+    print log_rule;      # Ensure log rule is at the bottom
+    print "}";
+    next;
+  }
+
+  in_input {
     if ($0 ~ /ip saddr @threat_block drop/) {
-      threat_rule = $0;  # Save threat_block drop rule for later insertion
-    } else if ($0 ~ /log prefix "Blocked: " drop/) {
-      log_rule = $0;  # Save log rule for later insertion
+      next;  # Skip duplicates
+    } else if ($0 ~ /log prefix "Blocked:/) {
+      next;  # Skip duplicates
+    } else if ($0 ~ /type filter hook input priority filter; policy/) {
+      next;  # Skip duplicates
     } else {
-      block = block "\n" $0;  # Store all other rules normally
+      input_rules = input_rules "\n" $0;
     }
     next;
   }
+
+  # Process output chain
+  in_output && /}/ {
+    in_output = 0;
+    print output_header;
+    print output_policy;  # Ensure policy line is at the top
+    if (!threat_out_seen) {
+      print threat_out_rule;  # Ensure threat_block logging exists
+      threat_out_seen = 1;
+    }
+    print output_rules;  # Print all other rules
+    print "}";
+    next;
+  }
+
+  in_output {
+    if ($0 ~ /ip daddr @threat_block log prefix "Outbound Blocked: "/) {
+      next;  # Skip duplicates
+    } else if ($0 ~ /type filter hook output priority filter; policy/) {
+      next;  # Skip duplicates
+    } else {
+      output_rules = output_rules "\n" $0;
+    }
+    next;
+  }
+
+  # Print all lines that are NOT inside chain input/output and DO NOT touch table inet portscan
   { print }
 ' "$NFTABLES_FILE" > "$TMP_FILE"
+
+# Save debug file before applying changes
+cp "$TMP_FILE" "$DEBUG_FILE"
+echo "📝 Modified nftables configuration saved to: $DEBUG_FILE"
 
 # Replace original file with updated rules
 mv "$TMP_FILE" "$NFTABLES_FILE"
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] Reorganized rules have been saved to $NFTABLES_FILE."
 
 # Restore original ownership and permissions
-sudo chown "$CURRENT_OWNER" "$NFTABLES_FILE"
-sudo chmod "$CURRENT_PERMISSIONS" "$NFTABLES_FILE"
+chown --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
+chmod --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
 
 # Fix SELinux context
-sudo restorecon -v "$NFTABLES_FILE"
+restorecon -v "$NFTABLES_FILE"
 
-# Restart nftables to apply changes
-echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting nftables service..."
-sudo systemctl restart nftables
-
-# Verify nftables status
-if systemctl is-active --quiet nftables; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables service restarted successfully!"
+# Validate configuration
+if nft -c -f "$NFTABLES_FILE"; then
+    echo "✅ nftables configuration is valid. Reloading..."
+    systemctl restart nftables
 else
-    echo -e "[${RED}ERROR${TEXTRESET}] nftables failed to restart! Check logs with: sudo journalctl -xeu nftables.service"
-    exit 1
+    echo "❌ nftables configuration test failed! Restoring previous config."
+    cp "$NFTABLES_FILE.bak" "$NFTABLES_FILE"
+    systemctl restart nftables
+    echo "🔍 Check debug output in: $DEBUG_FILE"
 fi
+
+read -p "Press aNy key"
 
 
 
