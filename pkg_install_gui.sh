@@ -316,7 +316,7 @@ install_qos() {
     # Load configuration function
     load_config() {
         if [[ ! -f "$CONFIG_FILE" ]]; then
-            echo "Configuration file not found. Creating a default configuration."
+            echo -e "[${YELLOW}INFO${TEXTRESET}] Configuration file not found. Creating a default configuration."
             create_config 10  # Create a default config with 20% bandwidth reservation
         fi
 
