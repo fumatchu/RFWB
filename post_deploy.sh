@@ -385,11 +385,6 @@ else
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
 fi
 
-# Stop slices from appearing in the logs
-echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling user lingering to prevent excessive session logs..."
-loginctl enable-linger testuser
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] User lingering enabled for 'testuser'."
-
 
 # Notify and handle firewall restart
 echo "Firewall setup complete."
