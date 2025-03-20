@@ -472,7 +472,7 @@ configure_kea() {
         fi
 
         # Display the information for review
-        echo -e "\nReview the settings:"
+        echo -e "\nReview settings:"
         echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
         echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
         echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
@@ -511,6 +511,7 @@ configure_kea() {
     # Configure Kea DHCP4 server
     KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
     echo -e "[${YELLOW}INFO${TEXTRESET}] Creating initial Kea DHCPv4 configuration..."
+    sleep 1
     sudo bash -c "cat > $KEA_DHCP4_CONF" <<EOF
 {
     "Dhcp4": {
@@ -581,6 +582,7 @@ EOF
     # Configure Kea DHCP DDNS server
     KEA_DHCP_DDNS_CONF="/etc/kea/kea-dhcp-ddns.conf"
     echo -e "[${YELLOW}INFO${TEXTRESET}] Creating intial Kea DHCP DDNS configuration..."
+    sleep 1
     sudo bash -c "cat > $KEA_DHCP_DDNS_CONF" <<EOF
 {
     "DhcpDdns": {
@@ -638,6 +640,7 @@ EOF
     sudo chmod 640 $KEA_DHCP4_CONF $KEA_DHCP_DDNS_CONF
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Kea DHCP server configuration complete."
+    sleep 2
 }
 if [ -f "$KEA_CONF" ]; then
     echo -e "[${YELLOW}INFO${TEXTRESET}] $KEA_CONF found. Proceeding with configuration..."
@@ -812,6 +815,7 @@ EOF
     sudo chmod 640 /etc/kea/kea-dhcp4.conf
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] New subnet added to Kea DHCP server configuration.${TEXTRESET}"
+    sleep 1
 }
 
 # Check if the KEA_DHCP4_CONF file exists
@@ -949,6 +953,7 @@ update_config() {
 # Execute the update
 update_config
 echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuration update completed."
+sleep 1
 
 #Start KEA Services
 start_and_enable_service() {
