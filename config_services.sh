@@ -385,7 +385,7 @@ find_interface() {
     interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
     if [ -z "$interface" ]; then
-        echo -e "${RED}Error: No interface with a connection ending in '-inside' found.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] No interface with a connection ending in ${YELLOW}'-inside'${TEXTRESET} found."
         exit 1
     fi
 
@@ -401,7 +401,7 @@ find_private_ip() {
     ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
 
     if [ -z "$ip" ]; then
-        echo -e "${RED}Error: No IP address found for the interface $interface.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] No IP address found for the interface ${GREEN}$interface${TEXTRESET}"
         exit 1
     fi
 
@@ -435,7 +435,7 @@ configure_kea() {
             if validate_cidr "$network_scheme"; then
                 break
             else
-                echo -e "${RED}Invalid Network Scope. Please enter a valid CIDR notation.${TEXTRESET}"
+                echo -e "[${RED}ERROR${TEXTRESET}] Invalid Network Scope. Please enter a valid CIDR notation."
             fi
         done
 
@@ -504,7 +504,7 @@ configure_kea() {
 
     # Check if Kea configuration directory exists, if not, create it
     if [ ! -d "/etc/kea" ]; then
-        echo -e "${YELLOW}Creating /etc/kea directory...${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /etc/kea directory..."
         sudo mkdir /etc/kea
     fi
 
@@ -715,7 +715,7 @@ add_subnet() {
         fi
 
         # Display the information for review
-        echo -e "\n${YELLOW}Review the settings:${TEXTRESET}"
+        echo -e "\nReview settings:"
         echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
         echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
         echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
@@ -1013,7 +1013,7 @@ ip_addresses=($(hostname -I))
 subnets=$(grep '"subnet":' "$KEA_CONF" | awk -F '"' '{print $4}')
 
 # Stop the named service
-echo -e "${YELLOW}Stopping named service...${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Stopping named service..."
 sudo systemctl stop named
 
 # Ensure KEA-DDNS key is included once
@@ -1043,16 +1043,16 @@ for subnet in $subnets; do
     done
 
     if [ -z "$closest_ip" ]; then
-        echo -e "${RED}Error: No close IP address match found for subnet $subnet${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] No close IP address match found for subnet ${GREEN}$subnet${TEXTRESET}"
         continue
     fi
 
     # Use the closest matching IP address for the reverse zone
-    echo -e "${GREEN}Using IP address $closest_ip for subnet $subnet${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Using IP address ${GREEN}$closest_ip${TEXTRESET} for subnet ${GREEN}$subnet${TEXTRESET}"
 
     # Check if the reverse zone exists in the named configuration
     if ! grep -q "zone \"$reverse_zone\"" "$NAMED_CONF"; then
-        echo -e "${YELLOW}No matching reverse zone for subnet $subnet: creating $reverse_zone${TEXTRESET}"
+        echo -e "[${YELLOW}INFO${TEXTRESET}] No matching reverse zone for subnet ${GREEN}$subnet:${TEXTRESET} creating ${GREEN}$reverse_zone${TEXTRESET}"
 
         # Add reverse zone to named.conf
         sudo bash -c "cat >> $NAMED_CONF" <<EOF
@@ -1082,51 +1082,49 @@ EOF
         sudo chmod 640 $reverse_zone_file
         sudo chown named:named $reverse_zone_file
     else
-        echo -e "${GREEN}Match found for subnet $subnet: $reverse_zone${TEXTRESET}"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Match found for subnet ${GREEN}$subnet:${TEXTRESET} ${GREEN}$reverse_zone${TEXTRESET}"
     fi
 done
 
 # Start the named service
-echo -e "${YELLOW}Starting named service...${TEXTRESET}"
+echo -e "[${YELLOW}INFO${TEXTRESET}] Starting named service..."
 sudo systemctl start named
 
 # Validate that the named service is running
 if systemctl is-active --quiet named; then
-    echo -e "${GREEN}Named service is running successfully.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Named service is running successfully."
 else
-    echo -e "${RED}Error: Named service failed to start after KEA subnet Cleanup.${TEXTRESET}"
+    echo -e "[${RED}ERROR${TEXTRESET}] Named service failed to start after KEA subnet Cleanup."
     exit 1
 fi
 
 configure_fail2ban() {
-    echo -e "${YELLOW}Configuring Fail2ban Service...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Fail2ban Service..."
     # Define the original and new file paths
     ORIGINAL_FILE="/etc/fail2ban/jail.conf"
     JAIL_LOCAL_FILE="/etc/fail2ban/jail.local"
     SSHD_LOCAL_FILE="/etc/fail2ban/jail.d/sshd.local"
 
     # Copy the original jail.conf to jail.local
-    echo -e "${YELLOW}Copying $ORIGINAL_FILE to $JAIL_LOCAL_FILE...${TEXTRESET}"
     cp -v "$ORIGINAL_FILE" "$JAIL_LOCAL_FILE"
 
     # Check if the copy was successful
     if [[ $? -ne 0 ]]; then
-        echo -e "${RED}Failed to copy file. Exiting.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to copy ${GREEN}$ORIGINAL_FILE${TEXTRESET} to ${GREEN}$JAIL_LOCAL_FILE${TEXTRESET} file. ${RED}Exiting.${TEXTRESET}"
         exit 1
     fi
 
     # Use sed to modify the jail.local file
-    echo -e "${YELLOW}Modifying $JAIL_LOCAL_FILE to enable SSH jail...${TEXTRESET}"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Modifying ${GREEN}$JAIL_LOCAL_FILE${TEXTRESET} to enable SSH jail..."
     sed -i '/^\[sshd\]/,/^$/ s/#mode.*normal/&\nenabled = true/' "$JAIL_LOCAL_FILE"
 
     # Check if the modification was successful
     if [[ $? -ne 0 ]]; then
-        echo -e "${RED}Failed to modify $JAIL_LOCAL_FILE. Exiting.${TEXTRESET}"
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to modify ${GREEN}$JAIL_LOCAL_FILE${TEXTRESET}. ${RED}Exiting.${TEXTRESET}"
         exit 1
     fi
 
     # Create or overwrite the sshd.local file with the desired content
-    echo -e "${YELLOW}Creating or modifying $SSHD_LOCAL_FILE...${TEXTRESET}"
     cat <<EOL >"$SSHD_LOCAL_FILE"
 [sshd]
 enabled = true
