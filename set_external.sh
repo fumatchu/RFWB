@@ -227,7 +227,7 @@ echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling nftables service..." | tee >(logge
 sudo systemctl enable nftables
 sudo systemctl start nftables
 
-echo "nftables ruleset applied and saved successfully." | tee >(logger)
+echo "[${GREEN}SUCCESS${TEXTRESET}] nftables ruleset applied and saved successfully." | tee >(logger)
 
 #Install NFT-Threat-Lists
 
