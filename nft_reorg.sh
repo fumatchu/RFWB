@@ -6,7 +6,7 @@ DEBUG_FILE="/tmp/nftables_debug.conf"
 
 # Backup original nftables configuration
 cp "$NFTABLES_FILE" "$NFTABLES_FILE.bak"
-echo "Backed up original file to: $NFTABLES_FILE.bak"
+echo -e  "[${YELLOW}INFO${TEXTRESET}] Backed up original file to: ${GREEN}$NFTABLES_FILE.bak${TEXTRESET}"
 
 # Function to check if a service is installed
 service_is_installed() {
@@ -32,10 +32,10 @@ if service_is_installed "rfwb-portscan"; then
         PORTSCAN_WAS_RUNNING=true
         sleep 2  # Allow time for rfwb-ps-mon to stop automatically
     else
-        echo "rfwb-portscan is installed but not running."
+        echo ""
     fi
 else
-    echo "rfwb-portscan is NOT installed. Continuing..."
+    echo ""
 fi
 
 # === ADD YOUR NFTABLES RULES ADJUSTMENTS HERE ===
@@ -141,10 +141,10 @@ restorecon -v "$NFTABLES_FILE"
 
 # Validate configuration
 if nft -c -f "$NFTABLES_FILE"; then
-    echo "nftables configuration is valid. Reloading..."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables configuration is valid. Reloading..."
     systemctl restart nftables
 else
-    echo "nftables configuration test failed! Restoring previous config."
+    echo -e "[${RED}ERROR${TEXTRESET}] nftables configuration test failed! Restoring previous config."
     cp "$NFTABLES_FILE.bak" "$NFTABLES_FILE"
     systemctl restart nftables
     echo "🔍 Check debug output in: $DEBUG_FILE"
@@ -153,7 +153,7 @@ fi
 
 # Step 3: Restart services if rfwb-portscan was stopped
 if [[ "$PORTSCAN_WAS_RUNNING" == true ]]; then
-    echo "Restarting rfwb-portscan..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting rfwb-portscan..."
     systemctl start rfwb-portscan
     sleep 2
 fi
@@ -162,13 +162,13 @@ fi
 
 # Start rfwb-portscan if installed and not running
 if service_is_installed "rfwb-portscan" && ! service_is_running "rfwb-portscan"; then
-    echo "rfwb-portscan was not running. Attempting to start..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-portscan was not running. Attempting to start..."
     systemctl start rfwb-portscan
 fi
 
 # Start rfwb-ps-mon if installed and not running
 if service_is_installed "rfwb-ps-mon" && ! service_is_running "rfwb-ps-mon"; then
-    echo "rfwb-ps-mon was not running. Attempting to start..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-ps-mon was not running. Attempting to start..."
     systemctl start rfwb-ps-mon
 fi
 
@@ -177,17 +177,17 @@ echo "🔍 Verifying service status..."
 
 if service_is_installed "rfwb-portscan"; then
     if service_is_running "rfwb-portscan"; then
-        echo "rfwb-portscan is running."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] rfwb-portscan is running."
     else
-        echo "rfwb-portscan is NOT running!"
+        echo "[${RED}ERROR${TEXTRESET}] rfwb-portscan is NOT running!"
     fi
 fi
 
 if service_is_installed "rfwb-ps-mon"; then
     if service_is_running "rfwb-ps-mon"; then
-        echo "rfwb-ps-mon is running."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] rfwb-ps-mon is running."
     else
-        echo "rfwb-ps-mon is NOT running!"
+        echo "[${RED}ERROR${TEXTRESET}] rfwb-ps-mon is NOT running!"
     fi
 fi
 
