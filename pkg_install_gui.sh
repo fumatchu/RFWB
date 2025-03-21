@@ -233,7 +233,7 @@ done
 nft list ruleset > /etc/sysconfig/nftables.conf
 
 echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN firewall rules applied successfully!"
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN Server Install successfully...
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN Server Install successfull"
 sleep 4
 
 }
