@@ -24,6 +24,20 @@ set -e  # Exit immediately if any command fails
 echo "Installing OpenVPN..."
 sudo dnf install openvpn easy-rsa -y
 
+# Copy client to /etc/openvpn/clients
+echo -e "[${YELLOW}INFO${TEXTRESET}] Copying OpenVPN client creation tool..."
+sleep 2
+mkdir -p /etc/openvpn/clients
+\cp -r /root/RFWB/ovpn_client_create.sh /etc/openvpn/clients
+
+# Verify the copy was successful
+if [ -f /etc/openvpn/clients/ovpn_client_create.sh ]; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Client creation tool copied successfully."
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to copy client creation tool!"
+    exit 1
+fi
+
 # Create Easy-RSA directory
 echo -e "[${YELLOW}INFO${TEXTRESET}] Creating Easy-RSA directory..."
 sudo mkdir /etc/openvpn/easy-rsa
