@@ -54,7 +54,7 @@ STATIC_HOSTNAME=$(hostnamectl | grep "Static hostname" | awk '{print $3}' | cut 
 echo "Using static hostname as Common Name (CN): $STATIC_HOSTNAME"
 
 # Initialize the Public Key Infrastructure (PKI)
-echo "[${YELLOW}INFO${TEXTRESET}] Initializing PKI..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Initializing PKI..."
 sleep 2
 sudo ./easy-rsa/3/easyrsa init-pki
 
@@ -233,7 +233,7 @@ done
 nft list ruleset > /etc/sysconfig/nftables.conf
 
 echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN firewall rules applied successfully!"
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN Server Install successfull"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}OpenVPN Server Install successfull"${TEXTRESET}
 sleep 4
 
 }
