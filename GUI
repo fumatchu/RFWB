@@ -1,0 +1,309 @@
+#!/bin/bash
+
+# ========= VALIDATION HELPERS =========
+validate_cidr() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$ ]]; }
+validate_ip()   { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
+validate_fqdn() { [[ "$1" =~ ^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$ ]]; }
+check_hostname_in_domain() {
+  local fqdn="$1"
+  local hostname="${fqdn%%.*}"
+  local domain="${fqdn#*.}"
+  [[ ! "$domain" =~ (^|\.)"$hostname"(\.|$) ]]
+}
+
+# ========= SYSTEM CHECKS =========
+check_root_and_os() {
+  if [[ "$EUID" -ne 0 ]]; then
+    dialog --aspect 9 --title "Permission Denied" --msgbox "This script must be run as root." 7 50
+    clear; exit 1
+  fi
+
+  if [[ -f /etc/redhat-release ]]; then
+    MAJOROS=$(grep -oP '\d+' /etc/redhat-release | head -1)
+  else
+    dialog --title "OS Check Failed" --msgbox "/etc/redhat-release not found. Cannot detect OS." 7 50
+    exit 1
+  fi
+
+  if [[ "$MAJOROS" -lt 9 ]]; then
+    dialog --title "Unsupported OS" --msgbox "This installer requires Rocky Linux 9.x or later." 7 50
+    exit 1
+  fi
+}
+# ========= NETWORK DETECTION =========
+detect_active_interface() {
+  dialog --title "Interface Check" --infobox "Checking active network interface..." 5 50
+  sleep 1
+
+  # Attempt 1: Use nmcli to find connected Ethernet
+  INTERFACE=$(nmcli -t -f DEVICE,TYPE,STATE device | grep "ethernet:connected" | cut -d: -f1 | head -n1)
+
+  # Attempt 2: Fallback to any interface with an IP if nmcli fails
+  if [[ -z "$INTERFACE" ]]; then
+    INTERFACE=$(ip -o -4 addr show up | grep -v ' lo ' | awk '{print $2}' | head -n1)
+  fi
+
+  # Get the matching connection profile name
+  if [[ -n "$INTERFACE" ]]; then
+    CONNECTION=$(nmcli -t -f NAME,DEVICE connection show | grep ":$INTERFACE" | cut -d: -f1)
+  fi
+
+  # Log to /tmp in case of failure
+  echo "DEBUG: INTERFACE=$INTERFACE" >> /tmp/rfwb_debug.log
+  echo "DEBUG: CONNECTION=$CONNECTION" >> /tmp/rfwb_debug.log
+
+  if [[ -z "$INTERFACE" || -z "$CONNECTION" ]]; then
+    dialog --clear  --no-ok --title "Interface Error" --aspect 9 --msgbox "No active network interface with IP found. Check /tmp/rfwb_debug.log for details." 5 70
+    exit 1
+  fi
+
+  export INTERFACE CONNECTION
+}
+# ========= STATIC IP CONFIG =========
+prompt_static_ip_if_dhcp() {
+  IP_METHOD=$(nmcli -g ipv4.method connection show "$CONNECTION" | tr -d '
+' | xargs)
+
+  if [[ "$IP_METHOD" == "manual" ]]; then
+  dialog --clear --title "Static IP Detected" --aspect 9 --msgbox "Interface '$INTERFACE' is already using a static IP.
+No changes needed." 6 70
+  return
+elif [[ "$IP_METHOD" == "auto" ]]; then
+    while true; do
+      while true; do
+        IPADDR=$(dialog --title "Static IP" --inputbox "Enter static IP in CIDR format (e.g., 192.168.1.100/24):" 8 60 3>&1 1>&2 2>&3)
+        validate_cidr "$IPADDR" && break || dialog --msgbox "Invalid CIDR format. Try again." 6 40
+      done
+
+      while true; do
+        GW=$(dialog --title "Gateway" --inputbox "Enter default gateway:" 8 60 3>&1 1>&2 2>&3)
+        validate_ip "$GW" && break || dialog --msgbox "Invalid IP address. Try again." 6 40
+      done
+
+      while true; do
+        HOSTNAME=$(dialog --title "FQDN" --inputbox "Enter FQDN (e.g., host.domain.com):" 8 60 3>&1 1>&2 2>&3)
+        if validate_fqdn "$HOSTNAME" && check_hostname_in_domain "$HOSTNAME"; then break
+        else dialog --msgbox "Invalid FQDN or hostname repeated in domain. Try again." 7 60
+        fi
+      done
+
+      while true; do
+        DNSSERVER=$(dialog --title "DNS Server" --inputbox "Enter DNS server IP:" 8 60 3>&1 1>&2 2>&3)
+        validate_ip "$DNSSERVER" && break || dialog --msgbox "Invalid IP address. Try again." 6 40
+      done
+
+      while true; do
+        DNSSEARCH=$(dialog --title "DNS Search" --inputbox "Enter domain search suffix (e.g., localdomain):" 8 60 3>&1 1>&2 2>&3)
+        [[ -n "$DNSSEARCH" ]] && break || dialog --msgbox "Search domain cannot be blank." 6 40
+      done
+
+      dialog --title "Confirm Settings" --yesno "Apply these settings?\n\nInterface: $INTERFACE\nIP: $IPADDR\nGW: $GW\nFQDN: $HOSTNAME\nDNS: $DNSSERVER\nSearch: $DNSS
+EARCH" 12 60
+
+      if [[ $? -eq 0 ]]; then
+        nmcli con mod "$CONNECTION" ipv4.address "$IPADDR"
+        nmcli con mod "$CONNECTION" ipv4.gateway "$GW"
+        nmcli con mod "$CONNECTION" ipv4.method manual
+        nmcli con mod "$CONNECTION" ipv4.dns "$DNSSERVER"
+        nmcli con mod "$CONNECTION" ipv4.dns-search "$DNSSEARCH"
+        hostnamectl set-hostname "$HOSTNAME"
+        echo "/root/RFWB/rfwb_install.sh" >> /root/.bash_profile
+
+        dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Static IP and hostname set. System will reboot. Reconnect at: ${IPADDR%%/*}"
+ 5 70
+        reboot
+      fi
+    done
+  fi
+}
+# ========= UI SCREENS =========
+show_welcome_screen() {
+  clear
+  echo -e "${GREEN}
+                               .*((((((((((((((((*
+                         .(((((((((((((((((((((((((((/
+                      ,((((((((((((((((((((((((((((((((((.
+                    (((((((((((((((((((((((((((((((((((((((/
+                  (((((((((((((((((((((((((((((((((((((((((((/
+                .(((((((((((((((((((((((((((((((((((((((((((((
+               ,((((((((((((((((((((((((((((((((((((((((((((((((.
+               ((((((((((((((((((((((((((((((/   ,(((((((((((((((
+              /((((((((((((((((((((((((((((.        /((((((((((((*
+              ((((((((((((((((((((((((((/              ((((((((((
+              ((((((((((((((((((((((((                   *((((((/
+              /((((((((((((((((((((*                        (((((*
+               ((((((((((((((((((             (((*            ,((
+               .((((((((((((((.            /(((((((
+                 ((((((((((/             (((((((((((((/
+                  *((((((.            /((((((((((((((((((.
+                    *(*)            ,(((((((((((((((((((((((,
+                                 (((((((((((((((((((((((/
+                              /((((((((((((((((((((((.
+                                ,((((((((((((((,
+${RESET}"
+  echo -e "${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${RESET}"
+
+  sleep 2
+  dialog --title "Rocky Firewall Builder Installation Script" --msgbox "\nWelcome to the Rocky Firewall Builder!\n\nThis script will configure networking and install 
+required components.\n\nNext, you will set a static IP address for the system." 12 60
+}
+
+# ========= SELINUX CHECK =========
+check_and_enable_selinux() {
+  local current_status=$(getenforce)
+
+  if [[ "$current_status" == "Enforcing" ]]; then
+    dialog --title "SELinux Status" --infobox "SELinux is already enabled and enforcing. Continuing in 4 seconds..." 6 50
+    sleep 4
+  else
+    dialog --title "SELinux Disabled" --msgbox "SELinux is not enabled. Enabling SELinux now..." 6 50
+    sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
+    setenforce 1
+
+    if [[ "$(getenforce)" == "Enforcing" ]]; then
+      dialog --title "SELinux Enabled" --msgbox "SELinux has been successfully enabled and is now enforcing." 6 50
+    else
+      dialog --title "SELinux Error" --msgbox "Failed to enable SELinux. Please check the configuration manually." 6 50
+      exit 1
+    fi
+  fi
+}
+
+# ========= INTERNET CONNECTIVITY CHECK =========
+check_internet_connectivity() {
+  dialog --title "Network Test" --infobox "Checking internet connectivity..." 5 50
+  sleep 2
+
+  local dns_test="FAILED"
+  local ip_test="FAILED"
+
+  if ping -c 1 -W 2 google.com &>/dev/null; then
+    dns_test="SUCCESS"
+  fi
+
+  if ping -c 1 -W 2 8.8.8.8 &>/dev/null; then
+    ip_test="SUCCESS"
+  fi
+
+  dialog --title "Connectivity Test Results" --infobox "DNS Resolution: $dns_test
+Direct IP (8.8.8.8): $ip_test
+Continuing in 4 seconds..." 7 50
+  sleep 4
+
+  if [[ "$dns_test" == "FAILED" || "$ip_test" == "FAILED" ]]; then
+    dialog --title "Network Warning" --yesno "Internet connectivity issues detected. Do you want to continue?" 7 50
+    if [[ $? -ne 0 ]]; then
+      exit 1
+    fi
+  fi
+}
+
+# ========= HOSTNAME VALIDATION =========
+validate_and_set_hostname() {
+  local current_hostname=$(hostname)
+  if [[ "$current_hostname" == "localhost.localdomain" ]]; then
+    while true; do
+      NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):"
+ 8 60 3>&1 1>&2 2>&3)
+      if validate_fqdn "$NEW_HOSTNAME" && check_hostname_in_domain "$NEW_HOSTNAME"; then
+        hostnamectl set-hostname "$NEW_HOSTNAME"
+        dialog --title "Hostname Set" --msgbox "Hostname updated to: $NEW_HOSTNAME" 6 50
+        break
+      else
+        dialog --title "Invalid Hostname" --msgbox "The entered hostname is invalid. Please try again." 6 50
+      fi
+    done
+  else
+    dialog --title "Hostname Check" --msgbox "The current hostname is '$current_hostname'. No changes needed." 6 50
+  fi
+}
+
+update_and_install_packages() {
+  local current_hostname=$(hostname)
+  if [[ "$current_hostname" == "localhost.localdomain" ]]; then
+    while true; do
+      NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):"
+ 8 60 3>&1 1>&2 2>&3)
+      if validate_fqdn "$NEW_HOSTNAME" && check_hostname_in_domain "$NEW_HOSTNAME"; then
+        hostnamectl set-hostname "$NEW_HOSTNAME"
+        dialog --title "Hostname Set" --msgbox "Hostname updated to: $NEW_HOSTNAME" 6 50
+        break
+      else
+        dialog --title "Invalid Hostname" --msgbox "The entered hostname is invalid. Please try again." 6 50
+      fi
+    done
+  else
+    dialog --title "Hostname Check" --msgbox "The current hostname is '$current_hostname'. No changes needed." 6 50
+  fi
+}
+
+# ========= SYSTEM UPDATE & PACKAGE INSTALL =========
+update_and_install_packages() {
+  dialog --title "System Update" --infobox "Checking for updates..." 5 50
+  sleep 2
+
+  dnf check-update -y &>/dev/null
+  
+  TEMP_FILE=$(mktemp)
+  dnf check-update | awk '{print $1}' | grep -vE '^$|Obsoleting|Last' | awk -F'.' '{print $1}' | sort -u > "$TEMP_FILE"
+
+  PACKAGE_LIST=($(cat "$TEMP_FILE"))
+  TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
+
+  if [[ "$TOTAL_PACKAGES" -eq 0 ]]; then
+    dialog --title "System Update" --msgbox "No updates available!" 6 50
+    rm -f "$TEMP_FILE"
+  else
+    PIPE=$(mktemp -u)
+    mkfifo "$PIPE"
+    dialog --title "System Update" --gauge "Installing updates..." 10 70 0 < "$PIPE" &
+    exec 3>"$PIPE"
+    COUNT=0
+    for PACKAGE in "${PACKAGE_LIST[@]}"; do
+      ((COUNT++))
+      PERCENT=$(( (COUNT * 100) / TOTAL_PACKAGES ))
+      echo "$PERCENT" > "$PIPE"
+      echo "XXX" > "$PIPE"
+      echo "Updating: $PACKAGE" > "$PIPE"
+      echo "XXX" > "$PIPE"
+      dnf -y install "$PACKAGE" >/dev/null 2>&1
+    done
+    exec 3>&-
+    rm -f "$PIPE" "$TEMP_FILE"
+  fi
+
+  dialog --title "Package Installation" --infobox "Installing required packages..." 5 50
+  sleep 2
+  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-u
+tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
+  TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
+
+  PIPE=$(mktemp -u)
+  mkfifo "$PIPE"
+  dialog --title "Ancillary Package Install" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
+  exec 3>"$PIPE"
+  COUNT=0
+  for PACKAGE in "${PACKAGE_LIST[@]}"; do
+    ((COUNT++))
+    PERCENT=$(( (COUNT * 100) / TOTAL_PACKAGES ))
+    echo "$PERCENT" > "$PIPE"
+    echo "XXX" > "$PIPE"
+    echo "Installing: $PACKAGE" > "$PIPE"
+    echo "XXX" > "$PIPE"
+    dnf -y install "$PACKAGE" >/dev/null 2>&1
+  done
+  exec 3>&-
+  rm -f "$PIPE"
+  dialog --title "Installation Complete" --msgbox "All packages installed successfully!" 6 50
+}
+
+# ========= MAIN =========
+show_welcome_screen
+detect_active_interface
+prompt_static_ip_if_dhcp
+check_root_and_os
+check_and_enable_selinux
+check_internet_connectivity
+validate_and_set_hostname
+update_and_install_packages
+
