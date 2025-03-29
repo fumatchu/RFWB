@@ -8,6 +8,22 @@ TEXTRESET="\033[0m"
 validate_cidr() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$ ]]; }
 validate_ip()   { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
 validate_fqdn() { [[ "$1" =~ ^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$ ]]; }
+
+is_host_ip() {
+  local cidr="$1"
+  local ip_part="${cidr%/*}"
+  local mask="${cidr#*/}"
+
+  IFS='.' read -r o1 o2 o3 o4 <<< "$ip_part"
+  ip_dec=$(( (o1 << 24) + (o2 << 16) + (o3 << 8) + o4 ))
+
+  netmask=$(( 0xFFFFFFFF << (32 - mask) & 0xFFFFFFFF ))
+  network=$(( ip_dec & netmask ))
+  broadcast=$(( network | ~netmask & 0xFFFFFFFF ))
+
+  [[ "$ip_dec" -eq "$network" || "$ip_dec" -eq "$broadcast" ]] && return 1 || return 0
+}
+
 check_hostname_in_domain() {
   local fqdn="$1"
   local hostname="${fqdn%%.*}"
