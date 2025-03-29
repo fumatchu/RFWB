@@ -480,7 +480,21 @@ set_inside_interface() {
     "$status_msg\n\nInterface detected: $device\n\n" 8 60
   sleep 4
 }
+
 # ========= SET VLANS IF we need to  =========
+vlan_main(){
+dialog --yesno "Would you like to configure VLANs on this system?" 7 50
+response=$?
+
+if [[ $response -eq 0 ]]; then
+  vlan_configurator
+else
+  echo "Skipping VLAN configuration..."
+  sleep 1
+fi
+
+}
+
 vlan_configurator() {
   DEBUG_LOG="/tmp/vlan_debug.txt"
   echo "=== VLAN Setup Log ===" > "$DEBUG_LOG"
@@ -666,3 +680,4 @@ update_and_install_packages
 vm_detection
 config_fw_service
 set_inside_interface
+vlan_main
