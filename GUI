@@ -188,7 +188,7 @@ ${RESET}"
 
   sleep 2
   dialog --title "Rocky Firewall Builder Installation Script" --msgbox "\nWelcome to the Rocky Firewall Builder!\n\nThis script will configure networking and install 
-required components.\n\nNext, you will set a static IP address for the system." 12 60
+required components.\n\n" 12 60
 }
 
 
