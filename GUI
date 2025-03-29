@@ -326,6 +326,7 @@ tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   rm -f "$PIPE"
   dialog --title "Installation Complete" --msgbox "All packages installed successfully!" 6 50
 }
+# ========= Check hardware platform for VM state and install Guest Agent if needed =========
 vm_detection() {
   PIPE=$(mktemp -u)
   mkfifo "$PIPE"
@@ -389,6 +390,7 @@ vm_detection() {
     8 60
   sleep 4
 }
+# ========= CHECK Firewall States and Services =========
 config_fw_service() {
   local FIREWALLD_STATUS=""
   local NFTABLES_STATUS=""
