@@ -210,8 +210,7 @@ check_internet_connectivity() {
   fi
 
   dialog --title "Connectivity Test Results" --infobox "DNS Resolution: $dns_test
-Direct IP (8.8.8.8): $ip_test
-Continuing in 4 seconds..." 7 50
+Direct IP (8.8.8.8): $ip_test " 7 50
   sleep 4
 
   if [[ "$dns_test" == "FAILED" || "$ip_test" == "FAILED" ]]; then
