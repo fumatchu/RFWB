@@ -226,8 +226,10 @@ validate_and_set_hostname() {
   local current_hostname=$(hostname)
   if [[ "$current_hostname" == "localhost.localdomain" ]]; then
     while true; do
-      NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):"
- 8 60 3>&1 1>&2 2>&3)
+      NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox \
+        "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):" \
+        8 60 3>&1 1>&2 2>&3)
+      
       if validate_fqdn "$NEW_HOSTNAME" && check_hostname_in_domain "$NEW_HOSTNAME"; then
         hostnamectl set-hostname "$NEW_HOSTNAME"
         dialog --title "Hostname Set" --msgbox "Hostname updated to: $NEW_HOSTNAME" 6 50
@@ -237,9 +239,14 @@ validate_and_set_hostname() {
       fi
     done
   else
-    dialog --title "Hostname Check" --msgbox "The current hostname is '$current_hostname'. No changes needed." 6 50
+    # Auto-dismiss message after 4 seconds, no OK button
+    dialog --title "Hostname Check" --infobox \
+      "The current hostname is '$current_hostname'." \
+      6 60
+    sleep 4
   fi
 }
+
 
 update_and_install_packages() {
   local current_hostname=$(hostname)
