@@ -64,10 +64,10 @@ network_interface_count() {
     interface_list=$(echo "$interfaces" | sed 's/^/ - /')
 
     # Build the dialog message using printf to preserve line breaks
-    dialog --title "Network Interface Check" --infobox "$(printf "PASS: At Least 2 Interfaces found\n\n%s\n\n" "$interface_list")" 15 60
+    dialog --title "Hardware Interface Check" --infobox "$(printf "PASS: At Least 2 Interfaces found\n\n%s\n\n" "$interface_list")" 15 60
     sleep 3
   else
-    dialog --title "Network Interface Check Failed" \
+    dialog --title "Hardware Interface Check Failed" \
            --msgbox "Less than two usable network interfaces were found.\n\nPlease make sure this system has at least two active interfaces. Tha
 t are detected by nmcli." 10 60
     exit 1
