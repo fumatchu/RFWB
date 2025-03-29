@@ -389,6 +389,41 @@ vm_detection() {
     8 60
   sleep 4
 }
+config_fw_service() {
+  local FIREWALLD_STATUS=""
+  local NFTABLES_STATUS=""
+  DEBUG_LOG="/tmp/firewall_config_debug.txt"
+  echo "=== Firewall Configuration Log ===" > "$DEBUG_LOG"
+
+  # Disable firewalld if running
+  if systemctl is-active --quiet firewalld; then
+    echo "[INFO] firewalld is running, disabling it..." >> "$DEBUG_LOG"
+    systemctl stop firewalld >> "$DEBUG_LOG" 2>&1
+    systemctl disable firewalld >> "$DEBUG_LOG" 2>&1
+    FIREWALLD_STATUS="firewalld was running and has been disabled."
+  else
+    echo "[INFO] firewalld is not running." >> "$DEBUG_LOG"
+    FIREWALLD_STATUS="firewalld was already stopped."
+  fi
+
+  # Enable nftables if not running
+  if ! systemctl is-active --quiet nftables; then
+    echo "[INFO] nftables is not running, enabling it..." >> "$DEBUG_LOG"
+    systemctl start nftables >> "$DEBUG_LOG" 2>&1
+    systemctl enable nftables >> "$DEBUG_LOG" 2>&1
+    NFTABLES_STATUS="nftables was not running and has been started."
+  else
+    echo "[INFO] nftables is already running." >> "$DEBUG_LOG"
+    NFTABLES_STATUS="nftables was already running."
+  fi
+
+  # Show final status to user with infobox
+  dialog --title "Firewall Configuration" --infobox \
+    "${FIREWALLD_STATUS}\n${NFTABLES_STATUS}" \
+    8 60
+  sleep 4
+}
+
 
 
 # ========= MAIN =========
@@ -402,3 +437,4 @@ check_internet_connectivity
 validate_and_set_hostname
 update_and_install_packages
 vm_detection
+config_fw_service
