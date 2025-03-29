@@ -390,6 +390,7 @@ vm_detection() {
     8 60
   sleep 4
 }
+
 # ========= CHECK Firewall States and Services =========
 config_fw_service() {
   local FIREWALLD_STATUS=""
