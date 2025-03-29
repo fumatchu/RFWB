@@ -30,6 +30,45 @@ check_root_and_os() {
     exit 1
   fi
 }
+# ========= SELINUX CHECK =========
+check_and_enable_selinux() {
+  local current_status=$(getenforce)
+
+  if [[ "$current_status" == "Enforcing" ]]; then
+    dialog --title "SELinux Status" --infobox "SELinux is already enabled and enforcing. Continuing in 4 seconds..." 6 50
+    sleep 4
+  else
+    dialog --title "SELinux Disabled" --msgbox "SELinux is not enabled. Enabling SELinux now..." 6 50
+    sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
+    setenforce 1
+
+    if [[ "$(getenforce)" == "Enforcing" ]]; then
+      dialog --title "SELinux Enabled" --msgbox "SELinux has been successfully enabled and is now enforcing." 6 50
+    else
+      dialog --title "SELinux Error" --msgbox "Failed to enable SELinux. Please check the configuration manually." 6 50
+      exit 1
+    fi
+  fi
+}
+# ========= NETWORK INTERFACE CHECK =========
+network_interface_count() {
+  # Get the list of network interfaces excluding loopback, bridges, and virtual interfaces
+  interfaces=$(ip link show | awk -F: '$0 !~ "lo|vir|br|^[^0-9]"{gsub(/^[ \t]+/, "", $2); print $2; getline}')
+  interface_count=$(echo "$interfaces" | wc -l)
+
+  if [ "$interface_count" -ge 2 ]; then
+    interface_list=$(echo "$interfaces" | sed 's/^/ - /')
+
+    # Build the dialog message using printf to preserve line breaks
+    dialog --title "Network Interface Check" --infobox "$(printf "PASS: At Least 2 Interfaces found\n\n%s\n\n" "$interface_list")" 15 60
+    sleep 3
+  else
+    dialog --title "Network Interface Check Failed" \
+           --msgbox "Less than two usable network interfaces were found.\n\nPlease make sure this system has at least two active interfaces. Tha
+t are detected by nmcli." 10 60
+    exit 1
+  fi
+}
 # ========= NETWORK DETECTION =========
 detect_active_interface() {
   dialog --title "Interface Check" --infobox "Checking active network interface..." 5 50
@@ -148,26 +187,7 @@ ${RESET}"
 required components.\n\nNext, you will set a static IP address for the system." 12 60
 }
 
-# ========= SELINUX CHECK =========
-check_and_enable_selinux() {
-  local current_status=$(getenforce)
 
-  if [[ "$current_status" == "Enforcing" ]]; then
-    dialog --title "SELinux Status" --infobox "SELinux is already enabled and enforcing. Continuing in 4 seconds..." 6 50
-    sleep 4
-  else
-    dialog --title "SELinux Disabled" --msgbox "SELinux is not enabled. Enabling SELinux now..." 6 50
-    sed -i 's/SELINUX=disabled/SELINUX=enforcing/' /etc/selinux/config
-    setenforce 1
-
-    if [[ "$(getenforce)" == "Enforcing" ]]; then
-      dialog --title "SELinux Enabled" --msgbox "SELinux has been successfully enabled and is now enforcing." 6 50
-    else
-      dialog --title "SELinux Error" --msgbox "Failed to enable SELinux. Please check the configuration manually." 6 50
-      exit 1
-    fi
-  fi
-}
 
 # ========= INTERNET CONNECTIVITY CHECK =========
 check_internet_connectivity() {
@@ -299,6 +319,7 @@ tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
 
 # ========= MAIN =========
 show_welcome_screen
+network_interface_count
 detect_active_interface
 prompt_static_ip_if_dhcp
 check_root_and_os
