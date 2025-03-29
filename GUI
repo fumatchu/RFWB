@@ -39,7 +39,7 @@ check_and_enable_selinux() {
   local current_status=$(getenforce)
 
   if [[ "$current_status" == "Enforcing" ]]; then
-    dialog --title "SELinux Status" --infobox "SELinux is already enabled and enforcing. Continuing in 4 seconds..." 6 50
+    dialog --title "SELinux Status" --infobox "SELinux is already enabled and enforcing." 6 50
     sleep 4
   else
     dialog --title "SELinux Disabled" --msgbox "SELinux is not enabled. Enabling SELinux now..." 6 50
