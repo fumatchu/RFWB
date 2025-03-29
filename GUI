@@ -76,7 +76,7 @@ t are detected by nmcli." 10 60
 # ========= NETWORK DETECTION =========
 detect_active_interface() {
   dialog --title "Interface Check" --infobox "Checking active network interface..." 5 50
-  sleep 1
+  sleep 3
 
   # Attempt 1: Use nmcli to find connected Ethernet
   INTERFACE=$(nmcli -t -f DEVICE,TYPE,STATE device | grep "ethernet:connected" | cut -d: -f1 | head -n1)
