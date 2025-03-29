@@ -426,6 +426,45 @@ config_fw_service() {
     8 60
   sleep 4
 }
+# ========= SET the inside interface with -inside =========
+set_inside_interface() {
+  DEBUG_LOG="/tmp/set_inside_interface_debug.txt"
+  echo "=== Inside Interface Setup ===" > "$DEBUG_LOG"
+
+  # Get active Ethernet connection
+  active_connection=$(nmcli -t -f NAME,DEVICE,TYPE,STATE connection show --active \
+    | grep ":802-3-ethernet:" \
+    | grep ":activated")
+
+  if [ -z "$active_connection" ]; then
+    dialog --title "Error: No Ethernet Connection" --msgbox \
+      "No active ethernet connections found.\n\nPlease connect to the internal network and try again." 7 60
+    echo "[ERROR] No active ethernet connections found." >> "$DEBUG_LOG"
+    exit 1
+  fi
+
+  # Parse connection info
+  IFS=: read -r name device type state <<<"$active_connection"
+  echo "[INFO] Active connection: $device ($name)" >> "$DEBUG_LOG"
+
+  # Determine new name
+  if [[ "$name" == *-inside ]]; then
+    status_msg="The connection profile \"$name\" already ends with '-inside'. No change needed."
+    echo "[INFO] Profile already ends with -inside" >> "$DEBUG_LOG"
+  else
+    new_profile_name="${name}-inside"
+    echo "[INFO] Renaming connection $name -> $new_profile_name" >> "$DEBUG_LOG"
+    nmcli connection modify "$name" connection.id "$new_profile_name" >> "$DEBUG_LOG" 2>&1
+    nmcli connection reload >> "$DEBUG_LOG" 2>&1
+    status_msg="Renamed connection \"$name\" to \"$new_profile_name\"."
+  fi
+
+  # Show final infobox message
+  dialog --title "Inside Interface" --infobox \
+    "$status_msg\n\nInterface detected: $device\n\n" 8 60
+  sleep 4
+}
+
 
 
 
@@ -441,3 +480,4 @@ validate_and_set_hostname
 update_and_install_packages
 vm_detection
 config_fw_service
+set_inside_interface
