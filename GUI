@@ -739,6 +739,83 @@ setup_nftables_inside() {
   sleep 4
 }
 
+# ========= Make sure connections are set to autoconnect and detect the outside interface=========
+setup_outside_interface() {
+  local connections
+  connections=$(nmcli -t -f NAME,DEVICE,TYPE connection show)
+
+  local checked_list=""
+  while IFS=: read -r name device type; do
+    if [[ "$type" == "802-3-ethernet" || "$type" == "wifi" ]]; then
+      checked_list+="• $device ($name) [Type: $type]\n"
+    fi
+  done <<< "$connections"
+
+  dialog --title "Checking Autoconnect" --infobox "Checking the following interfaces for autoconnect:\n\n$checked_list" 15 60
+  sleep 4
+
+  local result_log=""
+  while IFS=: read -r name device type; do
+    if [[ "$type" == "802-3-ethernet" || "$type" == "wifi" ]]; then
+      autoconnect=$(nmcli -g connection.autoconnect connection show "$name")
+
+      if [[ "$autoconnect" != "yes" ]]; then
+        nmcli connection modify "$name" connection.autoconnect yes
+        if [[ $? -eq 0 ]]; then
+          result_log+="[✓] Enabled autoconnect: $name (Device: $device)\n"
+        else
+          result_log+="[✗] Failed to enable autoconnect: $name (Device: $device)\n"
+        fi
+      else
+        result_log+="[✓] Already autoconnected: $name (Device: $device)\n"
+      fi
+    fi
+  done <<< "$connections"
+
+  dialog --title "Autoconnect Update" --infobox "$result_log" 20 70
+  sleep 4
+
+  local existing_connections
+  existing_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
+
+  dialog --title "Connected Interfaces" --infobox "Currently connected interfaces:\n\n$existing_connections" 10 50
+  sleep 4
+
+  dialog --title "WAN Setup" --infobox "Please plug in your Internet (WAN) connection.\n\nWaiting for a new interface to come up..." 7 60
+  sleep 3
+
+  # Wait for new interface to appear
+  local new_connection=""
+  while true; do
+    current_connections=$(nmcli -t -f DEVICE,STATE dev status | grep ":connected" | cut -d: -f1)
+    new_connection=$(comm -13 <(echo "$existing_connections" | sort) <(echo "$current_connections" | sort) | grep -v "^lo$")
+
+    if [[ -n "$new_connection" ]]; then
+      break
+    fi
+
+    sleep 0.5
+  done
+
+  dialog --title "New Connection" --infobox "Detected new connection:\n\n$new_connection" 7 50
+  sleep 3
+
+  local current_profile
+  current_profile=$(nmcli -t -f NAME,DEVICE connection show --active | grep ":${new_connection}$" | cut -d: -f1)
+
+  if [[ -n "$current_profile" ]]; then
+    new_profile_name="${new_connection}-outside"
+    nmcli connection modify "$current_profile" connection.id "$new_profile_name"
+    nmcli connection reload
+
+    dialog --title "Outside Interface Set" --infobox "Updated profile name to:\n$new_profile_name" 6 50
+    sleep 3
+  else
+    dialog --title "Error" --infobox "Could not find an active profile for $new_connection" 6 50
+    sleep 4
+  fi
+}
+
 
 
 
@@ -758,3 +835,4 @@ config_fw_service
 set_inside_interface
 vlan_main
 setup_nftables_inside
+setup_outside_interface
