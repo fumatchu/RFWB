@@ -84,8 +84,7 @@ network_interface_count() {
     sleep 3
   else
     dialog --title "Hardware Interface Check Failed" \
-           --msgbox "Less than two usable network interfaces were found.\n\nPlease make sure this system has at least two active interfaces. Tha
-t are detected by nmcli." 10 60
+           --msgbox "Less than two usable network interfaces were found.\n\nPlease make sure this system has at least two active interfaces. That are detected by nmcli." 10 60
     exit 1
   fi
 }
@@ -167,8 +166,7 @@ elif [[ "$IP_METHOD" == "auto" ]]; then
         hostnamectl set-hostname "$HOSTNAME"
         echo "/root/RFWB/rfwb_install.sh" >> /root/.bash_profile
 
-        dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Static IP and hostname set. System will reboot. Reconnect at: ${IPADDR%%/*}"
- 5 70
+        dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Static IP and hostname set. System will reboot. Reconnect at: ${IPADDR%%/*}" 5 70
         reboot
       fi
     done
@@ -202,8 +200,7 @@ ${RESET}"
   echo -e "${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${RESET}"
 
   sleep 2
-  dialog --title "Rocky Firewall Builder Installation Script" --msgbox "\nWelcome to the Rocky Firewall Builder!\n\nThis script will configure networking and install 
-required components.\n\n" 12 60
+  dialog --title "Rocky Firewall Builder Installation Script" --msgbox "\nWelcome to the Rocky Firewall Builder!\n\n" 12 60
 }
 
 
