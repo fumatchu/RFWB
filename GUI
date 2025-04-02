@@ -146,7 +146,7 @@ elif [[ "$IP_METHOD" == "auto" ]]; then
       done
 
       while true; do
-        DNSSERVER=$(dialog --title "DNS Server" --inputbox "Enter DNS server IP:" 8 60 3>&1 1>&2 2>&3)
+        DNSSERVER=$(dialog --title "DNS Server" --inputbox "Enter Upstream DNS server IP:" 8 60 3>&1 1>&2 2>&3)
         validate_ip "$DNSSERVER" && break || dialog --msgbox "Invalid IP address. Try again." 6 40
       done
 
