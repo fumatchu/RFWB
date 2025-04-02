@@ -817,6 +817,7 @@ setup_outside_interface() {
 # ========= Install the threatlist update script and download NFT rulesets apply them to the tables=========
 configure_nftables_threatlists() {
   LOG_TAG="nft-threat-list"
+  BLOCK_SET="threat_block"
 
   THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
   MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
@@ -827,41 +828,35 @@ configure_nftables_threatlists() {
   LOG_FILE="/var/log/nft-threat-list.log"
 
   dialog --title "NFTables Setup" --infobox "Installing NFTables Threat List Updater..." 5 60
-  sleep 3
+  sleep 2
 
+  # Create necessary files
   mkdir -p /etc/nft-threat-list
   touch "$THREAT_LIST_FILE" "$TMP_FILE" "$LOG_FILE"
 
+  # Manual block list template
   cat <<EOF > "$MANUAL_BLOCK_LIST"
 # Manual Block List for NFTables
 # Add IP addresses below the marker to be blocked
-#
-# Example:
-# 203.0.113.45  # Suspicious traffic
-# 192.168.100.50  # Internal policy block
-#
 ######### Place IP Addresses under this line to be compiled #########
 EOF
 
   chmod 644 "$MANUAL_BLOCK_LIST"
 
-  # Create the threat list update script
-  cat <<'EOF' >"$UPDATE_SCRIPT"
+  # Create the update script
+  cat <<'EOF' > "$UPDATE_SCRIPT"
 #!/bin/bash
-
 LOG_TAG="nft-threat-list"
 THREAT_LISTS=(
   "https://iplists.firehol.org/files/firehol_level1.netset"
   "https://www.abuseipdb.com/blacklist.csv"
   "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
 )
-
 THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
 MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
 COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
 TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
 LOG_FILE="/var/log/nft-threat-list.log"
-MAX_RETRIES=3
 
 log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE" | logger -t $LOG_TAG
@@ -879,12 +874,11 @@ for URL in "${THREAT_LISTS[@]}"; do
 done
 
 grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$TMP_FILE" | sort -u > "$THREAT_LIST_FILE"
-
 awk '/#########/{found=1; next} found && /^[0-9]+\./' "$MANUAL_BLOCK_LIST" > "$TMP_FILE"
 cat "$THREAT_LIST_FILE" "$TMP_FILE" | sort -u > "$COMBINED_BLOCK_LIST"
 
 if ! nft list set inet filter threat_block &>/dev/null; then
-  nft add table inet filter
+  nft add table inet filter 2>/dev/null
   nft add set inet filter threat_block { type ipv4_addr\; flags timeout\; }
 else
   nft flush set inet filter threat_block
@@ -903,7 +897,7 @@ if ! nft list chain inet filter output &>/dev/null; then
 fi
 
 if ! nft list chain inet filter output | grep -q 'ip daddr @threat_block log prefix "Outbound Blocked:" drop'; then
-  nft add rule inet filter output ip daddr @threat_block log prefix \"Outbound Blocked:\" drop
+  nft add rule inet filter output ip daddr @threat_block log prefix "Outbound Blocked:" drop
 fi
 
 IP_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
@@ -912,8 +906,8 @@ EOF
 
   chmod +x "$UPDATE_SCRIPT"
 
-  # Setup cron job
-  cat <<EOF >"$CRON_JOB"
+  # Create cron job
+  cat <<EOF > "$CRON_JOB"
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 @reboot root $UPDATE_SCRIPT
@@ -923,29 +917,76 @@ EOF
   chmod 644 "$CRON_JOB"
   systemctl enable --now crond
 
-  # Run update with progress gauge
-  dialog --title "Threat List Update" --gauge "Downloading threat feeds and compiling list..." 10 60 0 < <(
+  # Interface detection
+  find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+  }
+
+  find_sub_interfaces() {
+    local main="$1"
+    nmcli -t -f DEVICE device status | grep -E "^${main}\.[0-9]+" | awk '{print $1}'
+  }
+
+  INSIDE_INTERFACE=$(find_interface "-inside")
+  OUTSIDE_INTERFACE=$(find_interface "-outside")
+  SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+
+  if [[ -z "$INSIDE_INTERFACE" || -z "$OUTSIDE_INTERFACE" ]]; then
+    dialog --msgbox "Could not determine interfaces. Check your -inside/-outside naming." 8 50
+    return 1
+  fi
+
+  # Enable IP forwarding
+  echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+  sysctl -p
+
+  # nftables base config
+  nft add table inet filter 2>/dev/null
+  nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null
+  nft add rule inet filter input iifname lo accept
+  nft add rule inet filter input ct state established,related accept
+  nft add rule inet filter input iifname "$INSIDE_INTERFACE" accept
+
+  for sub_iface in $SUB_INTERFACES; do
+    nft add rule inet filter input iifname "$sub_iface" accept
+  done
+
+  nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" tcp dport 22 accept
+  nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" log prefix \"Blocked: \" drop
+
+  nft add chain inet filter forward { type filter hook forward priority 0 \; policy drop \; } 2>/dev/null
+  nft add rule inet filter forward ct state established,related accept
+  nft add rule inet filter forward iifname "$INSIDE_INTERFACE" oifname "$OUTSIDE_INTERFACE" accept
+
+  for sub_iface in $SUB_INTERFACES; do
+    nft add rule inet filter forward iifname "$INSIDE_INTERFACE" oifname "$sub_iface" accept
+    nft add rule inet filter forward iifname "$sub_iface" oifname "$INSIDE_INTERFACE" accept
+    nft add rule inet filter forward iifname "$sub_iface" oifname "$sub_iface" accept
+    nft add rule inet filter forward iifname "$sub_iface" oifname "$OUTSIDE_INTERFACE" accept
+  done
+
+  nft add table inet nat 2>/dev/null
+  nft add chain inet nat postrouting { type nat hook postrouting priority 100 \; } 2>/dev/null
+  nft add rule inet nat postrouting oifname "$OUTSIDE_INTERFACE" masquerade
+
+  # Trigger update with dialog gauge
+  dialog --title "Threat List Update" --gauge "Downloading and applying threat list..." 10 60 0 < <(
     echo 10; sleep 1
     echo 40; bash "$UPDATE_SCRIPT" >/dev/null 2>&1
     echo 90; sleep 1
     echo 100
   )
 
-  # Count blocked IPs and show summary
   BLOCKED_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
-  dialog --title "Update Complete" --infobox "Threat list compiled successfully.\nBlocked IPs: $BLOCKED_COUNT" 6 60
-  sleep 4
+  dialog --title "Setup Complete" --msgbox "Threat list applied successfully.\nBlocked IPs: $BLOCKED_COUNT" 7 60
 
-  # Optional: show log viewer
-  if [ -f "$LOG_FILE" ]; then
-    dialog --title "Threat List Update Log" --yesno "Would you like to view the log?" 7 50
-    if [[ $? -eq 0 ]]; then
-      dialog --title "Update Log" --textbox "$LOG_FILE" 20 80
-    fi
+  if dialog --title "View Log" --yesno "Would you like to view the threat list update log?" 7 50; then
+    dialog --textbox "$LOG_FILE" 20 80
   fi
 
-  dialog --title "Setup Complete" --infobox "NFTables Threat List system is active.\nCron job installed to update daily at 4 AM and on boot." 7 60
-  sleep 4
+  nft list ruleset > /etc/sysconfig/nftables.conf
+  systemctl enable --now nftables
 }
 
 
