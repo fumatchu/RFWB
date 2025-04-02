@@ -402,6 +402,29 @@ vm_detection() {
     8 60
   sleep 4
 }
+#===========Install Speed test cli==============
+install_speedtest_cli() {
+  dialog --title "Speedtest Install" --infobox "Adding Ookla Speedtest repository..." 5 50
+  curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash >/dev/null 2>&1
+  
+
+  dialog --title "Speedtest Install" --infobox "Installing speedtest CLI..." 5 50
+  dnf -y install speedtest >/dev/null 2>&1
+  sleep 1
+
+  dialog --title "Speedtest License" --infobox "Auto-accepting license agreement for speedtest CLI..." 6 60
+
+  /usr/bin/expect <<EOF
+    spawn speedtest
+    expect "Do you accept the license? \\[type YES to accept\\]:"
+    send "YES\r"
+    expect eof
+EOF
+
+  dialog --title "Speedtest Installed" --infobox "Speedtest CLI installed and initialized successfully." 5 60
+  sleep 4
+}
+
 
 # ========= CHECK Firewall States and Services =========
 config_fw_service() {
@@ -729,6 +752,7 @@ check_internet_connectivity
 validate_and_set_hostname
 update_and_install_packages
 vm_detection
+install_speedtest_cli
 config_fw_service
 set_inside_interface
 vlan_main
