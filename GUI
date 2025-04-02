@@ -707,11 +707,11 @@ setup_nftables_inside() {
   nft list ruleset > /etc/sysconfig/nftables.conf
   sleep 4
 
-  dialog --title "nftables Reload" --infobox "Restarting nftables service to apply changes..." 5 50
+  dialog --title "nftables Reload" --infobox "Restarting nftables service to apply changes..." 5 70
   systemctl restart nftables
   sleep 4
 
-  dialog --title "Done" --infobox "nftables SSH configuration completed successfully." 5 80
+  dialog --title "Done" --infobox "nftables SSH configuration completed successfully." 5 70
   sleep 4
 }
 
