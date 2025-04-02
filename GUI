@@ -663,6 +663,61 @@ Name: $friendly_name"
     esac
   done
 }
+# ========= Setup nftables SSH Allow rule inside interface with -inside =========
+setup_nftables_inside() {
+  # Locate interface ending in -inside
+  interface=$(nmcli device status | awk '/-inside/ {print $1}')
+  if [ -z "$interface" ]; then
+    dialog --title "ERROR" --infobox "No interface ending in '-inside' found. Exiting..." 6 50
+    sleep 4
+    return 1
+  fi
+
+  friendly_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$interface:" | cut -d':' -f2)
+  dialog --title "Inside Interface Found" --infobox "Inside interface: $interface\nConnection name: $friendly_name" 6 60
+  sleep 4
+
+  # Enable and start nftables
+  systemctl enable nftables
+  systemctl start nftables
+  nft list ruleset > /etc/sysconfig/nftables.conf
+  systemctl restart nftables
+
+  # Ensure inet filter table/chain exist
+  if ! nft list tables | grep -q 'inet filter'; then
+    nft add table inet filter
+  fi
+  if ! nft list chain inet filter input &>/dev/null; then
+    nft add chain inet filter input { type filter hook input priority 0 \; }
+  fi
+
+  # Find all related sub-interfaces
+  all_interfaces=$(nmcli device status | awk -v intf="$interface" '$1 ~ intf {print $1}')
+
+  for iface in $all_interfaces; do
+    friendly_name=$(nmcli -t -f DEVICE,NAME connection show --active | grep "^$iface:" | cut -d':' -f2)
+
+    if ! nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 22 accept"; then
+      nft add rule inet filter input iifname "$iface" tcp dport 22 accept
+      dialog --title "Rule Added" --infobox "SSH allowed on $iface ($friendly_name)" 6 60
+      sleep 4
+    else
+      dialog --title "Rule Exists" --infobox "SSH rule already present for $iface ($friendly_name)" 6 60
+      sleep 4
+    fi
+  done
+
+  dialog --title "Saving Ruleset" --infobox "Saving nftables rules to /etc/sysconfig/nftables.conf..." 5 60
+  nft list ruleset > /etc/sysconfig/nftables.conf
+  sleep 4
+
+  dialog --title "nftables Reload" --infobox "Restarting nftables service to apply changes..." 5 50
+  systemctl restart nftables
+  sleep 4
+
+  dialog --title "Done" --infobox "nftables SSH configuration completed successfully." 5 50
+  sleep 4
+}
 
 
 
@@ -681,3 +736,4 @@ vm_detection
 config_fw_service
 set_inside_interface
 vlan_main
+setup_nftables_inside
