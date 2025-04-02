@@ -336,7 +336,8 @@ tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   done
   exec 3>&-
   rm -f "$PIPE"
-  dialog --title "Installation Complete" --msgbox "All packages installed successfully!" 6 50
+  dialog --title "Installation Complete" --infobox "All packages installed successfully!" 6 50
+  sleep 3
 }
 # ========= Check hardware platform for VM state and install Guest Agent if needed =========
 vm_detection() {
