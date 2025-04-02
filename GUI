@@ -123,8 +123,8 @@ prompt_static_ip_if_dhcp() {
 ' | xargs)
 
   if [[ "$IP_METHOD" == "manual" ]]; then
-  dialog --clear --title "Static IP Detected" --aspect 9 --msgbox "Interface '$INTERFACE' is already using a static IP.
-No changes needed." 6 70
+  dialog --clear --title "Static IP Detected" --infobox "Interface '$INTERFACE' is already using a static IP.\nNo changes needed." 6 70
+  sleep 3
   return
 elif [[ "$IP_METHOD" == "auto" ]]; then
     while true; do
