@@ -166,7 +166,7 @@ elif [[ "$IP_METHOD" == "auto" ]]; then
         hostnamectl set-hostname "$HOSTNAME"
         echo "/root/RFWB/rfwb_install.sh" >> /root/.bash_profile
 
-        dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Network set. System will reboot. Reconnect at: ${IPADDR%%/*}" 5 100
+        dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Network set. System will reboot. Reconnect at: ${IPADDR%%/*}" 5 95
         reboot
       fi
     done
