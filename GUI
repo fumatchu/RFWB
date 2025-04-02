@@ -703,7 +703,7 @@ setup_nftables_inside() {
     fi
   done
 
-  dialog --title "Saving Ruleset" --infobox "Saving nftables rules to /etc/sysconfig/nftables.conf..." 5 60
+  dialog --title "Saving Ruleset" --infobox "Saving nftables rules to /etc/sysconfig/nftables.conf..." 5 70
   nft list ruleset > /etc/sysconfig/nftables.conf
   sleep 4
 
@@ -711,7 +711,7 @@ setup_nftables_inside() {
   systemctl restart nftables
   sleep 4
 
-  dialog --title "Done" --infobox "nftables SSH configuration completed successfully." 5 50
+  dialog --title "Done" --infobox "nftables SSH configuration completed successfully." 5 80
   sleep 4
 }
 
