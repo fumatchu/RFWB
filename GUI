@@ -1067,11 +1067,9 @@ install_cockpit() {
 install_ntopng() {
     INSTALLED_SERVICES[ntopng]=1
     {
-        echo "10"; log "Adding ntop repo..."; curl -s https://packages.ntop.org/centos-stable/ntop.repo -o /etc/yum.rep
-os.d/ntop.repo; sleep 0.5
+        echo "10"; log "Adding ntop repo..."; curl -s https://packages.ntop.org/centos-stable/ntop.repo -o /etc/yum.repos.d/ntop.repo; sleep 0.5
         echo "40"; log "Cleaning DNF cache..."; dnf -y clean all >> "$LOG_FILE" 2>&1; sleep 0.5
-        echo "80"; log "Installing ntopng..."; dnf -y install pfring-dkms n2disk nprobe ntopng cento ntopng-data ntopng
--utils >> "$LOG_FILE" 2>&1; sleep 0.5
+        echo "80"; log "Installing ntopng..."; dnf -y install pfring-dkms n2disk nprobe ntopng cento ntopng-data ntopng-utils >> "$LOG_FILE" 2>&1; sleep 0.5
         echo "100"; log "ntopng installation complete."; sleep 0.5
     } | dialog --gauge "Installing ntopng..." 10 60 0
 }
@@ -1103,8 +1101,7 @@ install_suricata() {
     INSTALLED_SERVICES[suricata]=1
     {
         echo "10"; log "Installing dnf copr..."; dnf install -y 'dnf-command(copr)' >> "$LOG_FILE" 2>&1; sleep 0.5
-        echo "40"; log "Enabling Suricata repo..."; echo 'y' | dnf copr enable @oisf/suricata-7.0 >> "$LOG_FILE" 2>&1; 
-sleep 0.5
+        echo "40"; log "Enabling Suricata repo..."; echo 'y' | dnf copr enable @oisf/suricata-7.0 >> "$LOG_FILE" 2>&1; sleep 0.5
         echo "80"; log "Installing Suricata..."; dnf install -y suricata >> "$LOG_FILE" 2>&1; sleep 0.5
         echo "100"; log "Suricata installation complete."; sleep 0.5
     } | dialog --gauge "Installing Suricata..." 10 60 0
@@ -1130,10 +1127,8 @@ install_netdata() {
     INSTALLED_SERVICES[netdata]=1
     {
         echo "10"; log "Updating system..."; dnf -y update >> "$LOG_FILE" 2>&1; sleep 0.5
-        echo "40"; log "Downloading Netdata installer..."; wget -q -O /tmp/netdata-kickstart.sh https://get.netdata.clo
-ud/kickstart.sh; sleep 0.5
-        echo "70"; log "Running Netdata installer..."; sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetr
-y --non-interactive >> "$LOG_FILE" 2>&1; sleep 0.5
+        echo "40"; log "Downloading Netdata installer..."; wget -q -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh; sleep 0.5
+        echo "70"; log "Running Netdata installer..."; sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive >> "$LOG_FILE" 2>&1; sleep 0.5
         echo "90"; rm -f /tmp/netdata-kickstart.sh; log "Cleanup complete."; sleep 0.5
         echo "100"; log "Netdata installation complete."; sleep 0.5
     } | dialog --gauge "Installing Netdata..." 10 60 0
@@ -1168,8 +1163,7 @@ install_eve() {
 install_ovpn() {
     INSTALLED_SERVICES[openvpn]=1
     {
-        echo "50"; log "Installing OpenVPN and Easy-RSA..."; dnf -y install openvpn easy-rsa >> "$LOG_FILE" 2>&1; sleep
- 0.5
+        echo "50"; log "Installing OpenVPN and Easy-RSA..."; dnf -y install openvpn easy-rsa >> "$LOG_FILE" 2>&1; sleep 0.5
         echo "100"; log "OpenVPN installation complete."; sleep 0.5
     } | dialog --gauge "Installing OpenVPN..." 10 60 0
 }
