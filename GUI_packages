@@ -882,6 +882,73 @@ configure_netdata() {
     sleep 2
 }
 
+configure_ntopng() {
+    CONFIG_FILE="/etc/ntopng/ntopng.conf"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        dialog --msgbox "ntopng configuration file not found. Exiting..." 7 60
+        return 1
+    fi
+
+    sed -i 's|^-G=/var/run/ntopng.pid|-G=/var/tmp/ntopng.pid --community|' "$CONFIG_FILE"
+
+    if grep -q "^-G=/var/tmp/ntopng.pid --community" "$CONFIG_FILE"; then
+        dialog --msgbox "ntopng configuration updated successfully." 6 50
+    else
+        dialog --msgbox "Failed to update ntopng configuration. Please check manually." 7 60
+        return 1
+    fi
+
+    systemctl enable ntopng
+    systemctl start ntopng
+
+    if systemctl is-active --quiet ntopng; then
+        dialog --msgbox "ntopng service is running." 6 50
+    else
+        dialog --msgbox "ntopng failed to start. Please check service status." 7 60
+        return 1
+    fi
+
+    inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    if [ -z "$inside_interfaces" ]; then
+        dialog --msgbox "No interface with '-inside' profile found. Exiting..." 7 60
+        return 1
+    fi
+
+    systemctl enable nftables
+    systemctl start nftables
+
+    if ! nft list tables | grep -q 'inet filter'; then
+        nft add table inet filter
+    fi
+
+    if ! nft list chain inet filter input &>/dev/null; then
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    for iface in $inside_interfaces; do
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 3000 accept"; then
+            nft add rule inet filter input iifname "$iface" tcp dport 3000 accept
+        fi
+    done
+
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl stop rfwb-portscan
+    fi
+
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    systemctl restart nftables
+
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl start rfwb-portscan
+    fi
+
+    dialog --msgbox "ntopng configuration complete." 6 50
+    sleep 2
+}
+
 
 
 # === PHASE 3: Configure Installed Services ===
