@@ -280,11 +280,38 @@ update_and_install_packages() {
 
 # ========= SYSTEM UPDATE & PACKAGE INSTALL =========
 update_and_install_packages() {
+  # Simulate progress while enabling EPEL and CRB
+  dialog --title "Repository Setup" --gauge "Enabling EPEL and CRB repositories..." 10 60 0 < <(
+    (
+      (
+        dnf install -y epel-release >/dev/null 2>&1
+        dnf config-manager --set-enabled crb >/dev/null 2>&1
+      ) &
+      PID=$!
+      PROGRESS=0
+      while kill -0 "$PID" 2>/dev/null; do
+        echo "$PROGRESS"
+        echo "XXX"
+        echo "Enabling EPEL and CRB..."
+        echo "XXX"
+        ((PROGRESS += 5))
+        if [[ $PROGRESS -ge 95 ]]; then
+          PROGRESS=5
+        fi
+        sleep 0.5
+      done
+      echo "100"
+      echo "XXX"
+      echo "Repositories enabled."
+      echo "XXX"
+    )
+  )
+
   dialog --title "System Update" --infobox "Checking for updates..." 5 50
   sleep 2
 
   dnf check-update -y &>/dev/null
-  
+
   TEMP_FILE=$(mktemp)
   dnf check-update | awk '{print $1}' | grep -vE '^$|Obsoleting|Last' | awk -F'.' '{print $1}' | sort -u > "$TEMP_FILE"
 
@@ -315,8 +342,8 @@ update_and_install_packages() {
 
   dialog --title "Package Installation" --infobox "Installing required packages..." 5 50
   sleep 2
-  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-u
-tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
+  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-
+utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
 
   PIPE=$(mktemp -u)
@@ -338,70 +365,7 @@ tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   dialog --title "Installation Complete" --infobox "All packages installed successfully!" 6 50
   sleep 3
 }
-# ========= Check hardware platform for VM state and install Guest Agent if needed =========
-vm_detection() {
-  PIPE=$(mktemp -u)
-  mkfifo "$PIPE"
 
-  # Start dialog gauge in background
-  dialog --title "VM Guest Installation" --gauge "Initializing..." 10 60 0 < "$PIPE" &
-  GAUGE_PID=$!
-
-  DEBUG_LOG="/tmp/vm_detection_debug.txt"
-  echo "=== VM Detection Debug Log ===" > "$DEBUG_LOG"
-
-  (
-    echo "10"
-    echo "XXX"
-    echo "Detecting virtualization platform..."
-    echo "XXX"
-    sleep 1
-
-    # Get platform info
-    PLATFORM_INFO=$(dmidecode)
-    echo "$PLATFORM_INFO" >> "$DEBUG_LOG"
-
-    # Detect platforms
-    HWKVM=$(echo "$PLATFORM_INFO" | grep -i -e manufacturer -e product -e vendor | grep -w KVM)
-    HWVMWARE=$(echo "$PLATFORM_INFO" | grep -i -e manufacturer -e product -e vendor | grep -w "VMware, Inc.")
-    HWSEABIOS=$(echo "$PLATFORM_INFO" | grep -A5 "BIOS Information" | grep -i "Vendor" | grep -i "SeaBIOS")
-
-    echo "Detected KVM: $HWKVM" >> "$DEBUG_LOG"
-    echo "Detected VMware: $HWVMWARE" >> "$DEBUG_LOG"
-    echo "Detected SeaBIOS: $HWSEABIOS" >> "$DEBUG_LOG"
-
-    if [[ -n "$HWKVM" || -n "$HWSEABIOS" ]]; then
-      echo "40"
-      echo "XXX"
-      echo "Installing qemu-guest-agent..."
-      echo "XXX"
-      dnf -y install qemu-guest-agent >> "$DEBUG_LOG" 2>&1
-    fi
-
-    if [[ -n "$HWVMWARE" ]]; then
-      echo "70"
-      echo "XXX"
-      echo "Installing open-vm-tools..."
-      echo "XXX"
-      dnf -y install open-vm-tools >> "$DEBUG_LOG" 2>&1
-    fi
-
-    echo "100"
-    echo "XXX"
-    echo "VM guest tools installation complete."
-    echo "XXX"
-    sleep 1
-  ) > "$PIPE" &
-
-  wait "$GAUGE_PID"
-  rm -f "$PIPE"
-
-  # Auto-dismiss final message after 4 seconds
-  dialog --title "VM Guest Installation" --infobox \
-    "Guest tools installed successfully." \
-    8 60
-  sleep 4
-}
 #===========Install Speed test cli==============
 install_speedtest_cli() {
   dialog --title "Speedtest Install" --infobox "Adding Ookla Speedtest repository..." 5 50
