@@ -1146,11 +1146,11 @@ install_qos() {
     log "Installing RFWB-QOS tools..."
     {
         echo "50"
-        dnf -y install tc qperf /root/RFWB/rfwb-qos-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
+        dnf -y install iproute-tc qperf /root/RFWB/rfwb-qos-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
         sleep 0.5
         echo "100"
         sleep 0.5
-    } | dialog --gauge "Installing QOS for VOICE..." 10 60 0
+    } | dialog --gauge "Installing QOS for VOICE" 10 60 0
     log "QOS installation complete."
 }
 
