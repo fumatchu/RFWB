@@ -873,7 +873,6 @@ EOF
   cat <<EOF > "$CRON_JOB"
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-@reboot root $UPDATE_SCRIPT
 0 4 * * * root $UPDATE_SCRIPT
 EOF
 
