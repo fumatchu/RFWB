@@ -1095,10 +1095,10 @@ install_suricata() {
 
 install_portscan() {
     INSTALLED_SERVICES[portscan]=1
-    log "Installing Portscan detection (psad)..."
+    log "Installing RFWB Portscan detection (psad)..."
     {
         echo "50"
-        dnf -y install psad >> "$LOG_FILE" 2>&1
+        dnf -y install /root/RFWB/rfwb-portscan-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
         sleep 0.5
         echo "100"
         sleep 0.5
@@ -1143,10 +1143,10 @@ install_netdata() {
 
 install_qos() {
     INSTALLED_SERVICES[qos]=1
-    log "Installing QOS tools..."
+    log "Installing RFWB-QOS tools..."
     {
         echo "50"
-        dnf -y install tc qperf >> "$LOG_FILE" 2>&1
+        dnf -y install tc qperf /root/RFWB/rfwb-qos-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
         sleep 0.5
         echo "100"
         sleep 0.5
