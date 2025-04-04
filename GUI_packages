@@ -633,18 +633,15 @@ configure_openvpn() {
 }
 # === CONFIGURE TIME ===
 configure_time() {
-    dialog --infobox "Configuring Chrony Time Service..." 5 50
-    sleep 2
-
     CHRONY_CONF="/etc/chrony.conf"
     TEMP_CONF="/tmp/chrony_temp.conf"
 
     if [ ! -f "$CHRONY_CONF" ]; then
-        dialog --msgbox "chrony.conf not found. Exiting..." 6 40
+        dialog --msgbox "chrony.conf not found. Exiting..." 6 50
         return 1
     fi
 
-    cp "$CHRONY_CONF" "${CHRONY_CONF}.bak"
+    cp "$CHRONY_CONF" ${CHRONY_CONF}.bak
 
     find_interface() {
         local suffix="$1"
@@ -658,28 +655,32 @@ configure_time() {
 
     find_ip_scheme() {
         local interface="$1"
-        nmcli -t -f IP4.ADDRESS dev show $interface | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+'
+        nmcli -t -f IP4.ADDRESS dev show "$interface" | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+'
     }
 
-    INSIDE_INTERFACES=($(find_interface "-inside"))
+    INSIDE_INTERFACES=()
+    INSIDE_INTERFACES+=($(find_interface "-inside"))
+
     for iface in "${INSIDE_INTERFACES[@]}"; do
-        SUB_IFACES=($(find_sub_interfaces "$iface"))
-        INSIDE_INTERFACES+=("${SUB_IFACES[@]}")
+        SUB_INTERFACES=($(find_sub_interfaces "$iface"))
+        INSIDE_INTERFACES+=("${SUB_INTERFACES[@]}")
     done
 
     declare -A NETWORK_PREFIXES
     for iface in "${INSIDE_INTERFACES[@]}"; do
         IP_SCHEME=$(find_ip_scheme "$iface")
-        if [[ $IP_SCHEME =~ ([0-9]+\.[0-9]+)\.[0-9]+\.[0-9]+/[0-9]+ ]]; then
+        if [[ $IP_SCHEME =~ ([0-9]+\\.[0-9]+)\\.[0-9]+\\.[0-9]+/[0-9]+ ]]; then
             NETWORK_PREFIXES["${BASH_REMATCH[1]}"]=1
         fi
     done
 
-    ALLOW_STATEMENT="0.0.0.0/0"
+    ALLOW_STATEMENT=""
     if [[ ${#NETWORK_PREFIXES[@]} -eq 1 ]]; then
         for prefix in "${!NETWORK_PREFIXES[@]}"; do
             ALLOW_STATEMENT="${prefix}.0.0/16"
         done
+    else
+        ALLOW_STATEMENT="0.0.0.0/0"
     fi
 
     awk -v allow_statement="$ALLOW_STATEMENT" '
@@ -688,7 +689,7 @@ configure_time() {
             print "allow " allow_statement
             next
         }
-        /^server[[:space:]]+([0-9]{1,3}\.){3}[0-9]{1,3}.*$/ {
+        /^server[[:space:]]+/ {
             if (!pool_added) {
                 print "pool 2.rocky.pool.ntp.org iburst"
                 pool_added = 1
@@ -703,12 +704,19 @@ configure_time() {
     chmod 644 "$CHRONY_CONF"
     restorecon -v "$CHRONY_CONF"
 
-    systemctl enable chronyd
-    systemctl restart chronyd
+    if systemctl is-active --quiet chronyd; then
+        systemctl restart chronyd
+    else
+        systemctl start chronyd
+    fi
 
-    until chronyc tracking | grep -qv "Not synchronised"; do
-        dialog --infobox "Waiting for time sync..." 5 40
-        sleep 5
+    while true; do
+        CHRONYC_OUTPUT=$(chronyc tracking)
+        if echo "$CHRONYC_OUTPUT" | grep -q "Leap status.*Not synchronised"; then
+            sleep 10
+        else
+            break
+        fi
     done
 
     systemctl enable nftables
@@ -723,26 +731,31 @@ configure_time() {
     fi
 
     for iface in "${INSIDE_INTERFACES[@]}"; do
-        nft add rule inet filter input iifname "$iface" udp dport 123 accept 2>/dev/null || true
-        nft add rule inet filter input iifname "$iface" tcp dport 123 accept 2>/dev/null || true
-        nft add rule inet filter input iifname "$iface" udp dport 323 accept 2>/dev/null || true
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 123 accept"; then
+            nft add rule inet filter input iifname "$iface" udp dport 123 accept
+        fi
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 123 accept"; then
+            nft add rule inet filter input iifname "$iface" tcp dport 123 accept
+        fi
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 323 accept"; then
+            nft add rule inet filter input iifname "$iface" udp dport 323 accept
+        fi
     done
 
-    if systemctl is-active --quiet rfwb-portscan; then
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
         systemctl stop rfwb-portscan
-        RFWB_WAS_ACTIVE=1
     fi
 
-    nft list ruleset > /etc/sysconfig/nftables.conf
+    nft list ruleset >/etc/sysconfig/nftables.conf
     systemctl restart nftables
 
-    if [[ $RFWB_WAS_ACTIVE -eq 1 ]]; then
+    if [ "$rfwb_status" == "active" ]; then
         systemctl start rfwb-portscan
     fi
-
-    dialog --msgbox "Chrony configured and time is synchronized." 7 50
     sleep 2
 }
+
 # === CONFIGURE FAIL2BAN ===
 configure_fail2ban() {
     {
