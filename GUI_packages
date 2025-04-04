@@ -1,0 +1,854 @@
+#========APPLICATION INSTALL==============
+
+# === Logging ===
+LOG_FILE="/var/log/RFWB-installer.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"
+}
+
+# Track installed services for Phase 3 configuration
+declare -A INSTALLED_SERVICES
+
+# === PHASE 1: Dialog selection menu ===
+select_and_install_services() {
+    cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
+    options=(
+        1 "Install BIND and ISC KEA DHCP" off
+        2 "Install Cockpit" off
+        3 "Install ntopng" off
+        4 "Install DDNS Client" off
+        5 "Install Suricata (Only Suricata Engine)" off
+        6 "Install RFWB Portscan detection" off
+        7 "Install SNMP Daemon" off
+        8 "Install Netdata" off
+        9 "Install/Configure QOS for VOICE" off
+       10 "Install mDNS Reflector (Avahi)" off
+       11 "Install EVEBOX for Suricata" off
+       12 "Install OpenVPN Server" off
+    )
+    choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
+    clear
+
+    for choice in $choices; do
+        case $choice in
+        1) install_net_services ;;
+        2) install_cockpit ;;
+        3) install_ntopng ;;
+        4) install_ddclient ;;
+        5) install_suricata ;;
+        6) install_portscan ;;
+        7) install_snmpd ;;
+        8) install_netdata ;;
+        9) install_qos ;;
+        10) install_avahi ;;
+        11) install_eve ;;
+        12) install_ovpn ;;
+        esac
+    done
+}
+
+install_net_services() {
+    INSTALLED_SERVICES[net_services]=1
+    log "Installing BIND and ISC KEA..."
+    {
+        echo "10"
+        dnf -y install bind bind-utils >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "40"
+        curl -1sLf 'https://dl.cloudsmith.io/public/isc/kea-2-6/cfg/setup/bash.rpm.sh' | bash >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "70"
+        dnf -y update >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "90"
+        dnf -y install isc-kea >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing BIND and ISC KEA..." 10 60 0
+    log "BIND and ISC KEA installation complete."
+}
+
+install_ntopng() {
+    INSTALLED_SERVICES[ntopng]=1
+    log "Installing ntopng..."
+    {
+        echo "10"
+        curl -s https://packages.ntop.org/centos-stable/ntop.repo -o /etc/yum.repos.d/ntop.repo
+        sleep 0.5
+        echo "40"
+        dnf -y clean all >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "80"
+        dnf -y install pfring-dkms n2disk nprobe ntopng cento ntap >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing ntopng..." 10 60 0
+    log "ntopng installation complete."
+}
+
+install_ddclient() {
+    INSTALLED_SERVICES[ddclient]=1
+    log "Installing ddclient..."
+    {
+        echo "30"
+        dnf -y install ddclient >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing ddclient..." 10 60 0
+    log "ddclient installation complete."
+}
+
+install_suricata() {
+    total_mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    total_mem_gb=$(echo "$total_mem_kb / 1024 / 1024" | bc -l | awk '{print ($1 == int($1)) ? $1 : int($1) + 1}')
+    cpu_count=$(grep -c ^processor /proc/cpuinfo)
+
+    if (( total_mem_gb < 8 )); then
+        dialog --msgbox "RAM Check Failed: ${total_mem_gb} GB detected.\nNeed at least 8 GB." 8 50
+        log "Suricata install aborted: insufficient RAM (${total_mem_gb} GB)"
+        return 1
+    fi
+    if (( cpu_count < 2 )); then
+        dialog --msgbox "CPU Check Failed: ${cpu_count} CPU(s) detected.\nNeed at least 2." 8 50
+        log "Suricata install aborted: insufficient CPUs (${cpu_count})"
+        return 1
+    fi
+
+    INSTALLED_SERVICES[suricata]=1
+    log "Installing Suricata..."
+    {
+        echo "10"
+        dnf install -y 'dnf-command(copr)' >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "40"
+        echo 'y' | dnf copr enable @oisf/suricata-7.0 >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "80"
+        dnf install -y suricata >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Suricata..." 10 60 0
+    log "Suricata installation complete."
+}
+
+install_portscan() {
+    INSTALLED_SERVICES[portscan]=1
+    log "Installing RFWB Portscan detection (psad)..."
+    {
+        echo "50"
+        dnf -y install /root/RFWB/rfwb-portscan-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Portscan Detection..." 10 60 0
+    log "psad installation complete."
+}
+
+install_snmpd() {
+    INSTALLED_SERVICES[snmpd]=1
+    log "Installing SNMP daemon..."
+    {
+        echo "50"
+        dnf -y install net-snmp net-snmp-utils >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing SNMP Daemon..." 10 60 0
+    log "SNMP installation complete."
+}
+
+install_netdata() {
+    INSTALLED_SERVICES[netdata]=1
+    log "Installing Netdata..."
+    {
+        echo "10"
+        dnf -y update >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "40"
+        wget -q -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh
+        sleep 0.5
+        echo "70"
+        sh /tmp/netdata-kickstart.sh --stable-channel --disable-telemetry --non-interactive >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "90"
+        rm -f /tmp/netdata-kickstart.sh
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Netdata..." 10 60 0
+    log "Netdata installation complete."
+}
+
+install_qos() {
+    INSTALLED_SERVICES[qos]=1
+    log "Installing RFWB-QOS tools..."
+    {
+        echo "50"
+        dnf -y install iproute-tc qperf /root/RFWB/rfwb-qos-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing QOS for VOICE" 10 60 0
+    log "QOS installation complete."
+}
+
+install_avahi() {
+    INSTALLED_SERVICES[avahi]=1
+    log "Installing Avahi..."
+    {
+        echo "50"
+        dnf -y install avahi avahi-tools >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Avahi..." 10 60 0
+    log "Avahi installation complete."
+}
+
+install_eve() {
+    INSTALLED_SERVICES[evebox]=1
+    log "Installing EVEBOX..."
+    {
+        echo "30"
+        rpm -Uvh https://evebox.org/files/rpm/stable/evebox-release.noarch.rpm >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "80"
+        dnf -y install sqlite evebox >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing EVEBOX..." 10 60 0
+    log "EVEBOX installation complete."
+}
+
+install_ovpn() {
+    INSTALLED_SERVICES[openvpn]=1
+    log "Installing OpenVPN..."
+    {
+        echo "50"
+        dnf -y install openvpn easy-rsa >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing OpenVPN..." 10 60 0
+    log "OpenVPN installation complete."
+}
+
+install_cockpit() {
+    INSTALLED_SERVICES[cockpit]=1
+    log "Installing Cockpit..."
+    {
+        echo "10"
+        sleep 0.5
+        echo "70"
+        dnf -y install cockpit cockpit-storaged cockpit-files tuned >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Cockpit..." 10 60 0
+    log "Cockpit installation complete."
+}
+
+# === SUPPORTING FUNCTIONS FOR COCKPIT CONFIG ===
+
+# Detect interfaces with "-inside" in their connection name
+find_inside_interfaces() {
+    inside_interfaces=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1}')
+    log "Detected inside interfaces: $inside_interfaces"
+}
+
+# Set up nftables rule to allow Cockpit (port 9090) on inside interfaces
+setup_nftables_for_cockpit() {
+    log "Setting up nftables rules for Cockpit..."
+
+    systemctl enable --now nftables >> "$LOG_FILE" 2>&1
+
+    # Ensure table and chain exist
+    if ! nft list tables | grep -q 'inet filter'; then
+        nft add table inet filter
+    fi
+    if ! nft list chain inet filter input &>/dev/null; then
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    # Add rule per interface
+    for iface in $inside_interfaces; do
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
+            nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
+            log "Rule added: Allow Cockpit on port 9090 for $iface"
+        else
+            log "Rule already exists: Cockpit 9090 for $iface"
+        fi
+    done
+
+    # If rfwb-portscan is running, stop it temporarily
+    if systemctl is-active --quiet rfwb-portscan; then
+        systemctl stop rfwb-portscan
+        restart_rfwb_portscan=true
+        log "Temporarily stopped rfwb-portscan for nftables reload"
+    fi
+
+    # Save and reload nftables
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    systemctl restart nftables
+
+    # Restart portscan service if it was stopped
+    if [[ "$restart_rfwb_portscan" == true ]]; then
+        systemctl start rfwb-portscan
+        log "Restarted rfwb-portscan after nftables update"
+    fi
+}
+
+# === CONFIGURE COCKPIT ===
+
+configure_cockpit() {
+    log "Configuring Cockpit..."
+
+    systemctl enable --now cockpit.socket
+    systemctl start cockpit
+
+    if systemctl is-active --quiet cockpit; then
+        log "Cockpit is running."
+
+        # Find the inside interface and IP
+        inside_iface=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1; exit}')
+        inside_ip=$(ip -4 addr show "$inside_iface" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+
+        # Dialog with IP info
+        dialog --title "Cockpit Access" --msgbox "Cockpit is running.\n\nYou can access it in your browser at:\n\nhttps://$inside_ip:9090" 10 60
+    else
+        log "Cockpit failed to start."
+        dialog --title "Cockpit Error" --msgbox "Cockpit failed to start. Please check the service status." 8 50
+    fi
+}
+
+# === CONFIGURE RFWB-QOS ===
+
+configure_qos() {
+    log "Configuring RFWB QoS..."
+
+    dialog --title "QoS Configuration" --infobox "Enabling and starting rfwb-qos service and timer..." 5 60
+    sleep 2
+
+    systemctl enable --now rfwb-qos.service >> "$LOG_FILE" 2>&1
+    systemctl enable --now rfwb-qos.timer >> "$LOG_FILE" 2>&1
+
+    service_active=$(systemctl is-active rfwb-qos.service)
+    timer_active=$(systemctl is-active rfwb-qos.timer)
+
+    if [[ "$service_active" == "active" && "$timer_active" == "active" ]]; then
+        log "rfwb-qos service and timer are active."
+        dialog --title "QoS Configuration" --msgbox "QoS for Voice is active and running.\nService: rfwb-qos.service\nTimer: rfwb-qos.timer" 9 60
+    else
+        log "ERROR: rfwb-qos service or timer failed to start."
+        dialog --title "QoS Configuration" --msgbox "ERROR: rfwb-qos failed to start.\nCheck logs or run:\n\njournalctl -xe\nsystemctl status rfwb-qos.service" 10 60
+    fi
+}
+# === CONFIGURE RFWB-PORTSCAN ===
+
+configure_portscan() {
+    log "Configuring RFWB Portscan Detection..."
+
+    dialog --title "RFWB Portscan Setup" --infobox "Starting and enabling portscan services..." 5 60
+    sleep 2
+
+    # Start and enable services
+    systemctl daemon-reexec
+    systemctl daemon-reload
+    systemctl enable --now rfwb-portscan.service >> "$LOG_FILE" 2>&1
+    systemctl enable --now rfwb-ps-mon.service >> "$LOG_FILE" 2>&1
+
+    # Validate service states
+    portscan_status=$(systemctl show -p ActiveState --value rfwb-portscan.service)
+    monitor_status=$(systemctl is-active rfwb-ps-mon.service)
+
+    if [[ "$portscan_status" == "active" && "$monitor_status" == "active" ]]; then
+        log "RFWB portscan services are active. (portscan: $portscan_status, monitor: $monitor_status)"
+        dialog --title "RFWB Portscan Configuration" --msgbox "Portscan detection is active.\n\nrfwb-portscan: $portscan_status (exited)\nrfwb-ps-mon: $monitor_status (running)" 10 60
+    else
+        log "ERROR: One or both portscan services failed. (portscan: $portscan_status, monitor: $monitor_status)"
+        dialog --title "RFWB Portscan Error" --msgbox "ERROR: One or both portscan services are not running correctly.\n\nrfwb-portscan: $portscan_status\nrfwb-ps-mon: $monitor_status\n\nCheck logs with:\n  journalctl -u rfwb-portscan.service\n  journalctl -u rfwb-ps-mon.service" 12 70
+    fi
+}
+
+# === CONFIGURE SNMP ===
+configure_snmpd() {
+    log "Configuring SNMP Daemon..."
+
+    # Prompt SNMP version
+    snmp_version=$(dialog --title "SNMP Version" --menu "Select SNMP Version:" 10 50 3 \
+        1 "SNMPv1" \
+        2 "SNMPv2c" \
+        3 "SNMPv3" \
+        3>&1 1>&2 2>&3)
+    [ $? -ne 0 ] && return
+
+    # Community string if SNMPv1 or v2c
+    if [[ "$snmp_version" == "1" || "$snmp_version" == "2" ]]; then
+        community_string=$(dialog --inputbox "Enter SNMP community string:" 8 50 "public" 3>&1 1>&2 2>&3)
+    fi
+
+    # SNMPv3 credentials
+    if [[ "$snmp_version" == "3" ]]; then
+        snmpv3_user=$(dialog --inputbox "Enter SNMPv3 username:" 8 50 "" 3>&1 1>&2 2>&3)
+        auth_protocol=$(dialog --menu "Authentication Protocol:" 10 40 2 MD5 "" SHA "" 3>&1 1>&2 2>&3)
+        auth_pass=$(dialog --insecure --passwordbox "Enter authentication password:" 8 50 3>&1 1>&2 2>&3)
+        priv_protocol=$(dialog --menu "Privacy Protocol:" 10 40 2 DES "" AES "" 3>&1 1>&2 2>&3)
+        priv_pass=$(dialog --insecure --passwordbox "Enter privacy password:" 8 50 3>&1 1>&2 2>&3)
+    fi
+
+    allowed_network=$(dialog --inputbox "Enter allowed monitoring network (e.g. 192.168.1.0/24):" 8 60 "" 3>&1 1>&2 2>&3)
+    syslocation=$(dialog --inputbox "Enter system location:" 8 50 "" 3>&1 1>&2 2>&3)
+    syscontact=$(dialog --inputbox "Enter system contact:" 8 50 "" 3>&1 1>&2 2>&3)
+
+    # Backup existing config
+    cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.backup 2>/dev/null || true
+
+    # Generate config
+    {
+        echo "syslocation $syslocation"
+        echo "syscontact $syscontact"
+        if [[ "$snmp_version" == "1" || "$snmp_version" == "2" ]]; then
+            echo "com2sec notConfigUser  $allowed_network   $community_string"
+        fi
+        if [[ "$snmp_version" == "3" ]]; then
+            echo "createUser $snmpv3_user $auth_protocol \"$auth_pass\" $priv_protocol \"$priv_pass\""
+            echo "rouser $snmpv3_user"
+        fi
+        cat <<EOF
+group notConfigGroup v1 notConfigUser
+group notConfigGroup v2c notConfigUser
+view systemview included .1
+access notConfigGroup "" any noauth exact systemview none none
+
+proc nftables
+load 12 14 14
+disk / 10000000
+EOF
+    } > /etc/snmp/snmpd.conf
+
+    # Enable port 161 on inside interfaces
+    inside_interfaces=$(nmcli device status | awk '/-inside/ {print $1}')
+    for iface in $inside_interfaces; do
+        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 161 accept"; then
+            nft add rule inet filter input iifname "$iface" udp dport 161 accept
+            log "Added SNMP rule on interface $iface"
+        fi
+    done
+
+    # Handle rfwb-portscan stop/start
+    if systemctl is-active --quiet rfwb-portscan; then
+        systemctl stop rfwb-portscan
+        portscan_was_running=1
+    fi
+
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    systemctl restart nftables
+
+    [[ "$portscan_was_running" == 1 ]] && systemctl start rfwb-portscan
+
+    # Start SNMP service
+    systemctl enable --now snmpd
+
+    if systemctl is-active --quiet snmpd; then
+        log "SNMPd service is running"
+        dialog --title "SNMP Daemon" --msgbox "SNMP Daemon is configured and running." 7 50
+    else
+        log "ERROR: SNMPd failed to start"
+        dialog --title "SNMP Error" --msgbox "SNMP Daemon failed to start. Check configuration." 7 50
+    fi
+}
+
+# === CONFIGURE AVAHI ===
+
+configure_avahi() {
+    log "Configuring Avahi for mDNS reflection on inside interfaces..."
+
+    dialog --title "Configuring Avahi" --infobox "Setting up Avahi on inside interfaces..." 5 50
+    sleep 2
+
+    # Get inside interface and sub-interfaces
+    INSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1; exit}')
+    SUB_INTERFACES=$(nmcli -t -f DEVICE device status | grep -E "^${INSIDE_INTERFACE}\.[0-9]+" | awk '{print $1}')
+    OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside/ {print $1; exit}')
+
+    log "Inside interface: $INSIDE_INTERFACE"
+    log "Sub-interfaces: $SUB_INTERFACES"
+    log "Outside interface: $OUTSIDE_INTERFACE"
+
+    # Create interface list
+    INTERFACES="$INSIDE_INTERFACE"
+    for sub in $SUB_INTERFACES; do
+        INTERFACES+=",${sub}"
+    done
+
+    # Backup and update Avahi configuration
+    cp /etc/avahi/avahi-daemon.conf /etc/avahi/avahi-daemon.conf.bak 2>/dev/null
+    cat <<EOF > /etc/avahi/avahi-daemon.conf
+[server]
+use-ipv4=yes
+use-ipv6=yes
+allow-interfaces=$INTERFACES
+
+[reflector]
+enable-reflector=yes
+EOF
+
+    log "Avahi configuration updated with interfaces: $INTERFACES"
+
+    # Enable and start Avahi
+    systemctl enable --now avahi-daemon
+    log "Avahi service started and enabled."
+
+    # Ensure nftables table and chain exist
+    nft add table inet filter 2>/dev/null || true
+    nft add chain inet filter input { type filter hook input priority 0 \; policy drop \; } 2>/dev/null || true
+
+    # Allow mDNS on inside interfaces
+    nft add rule inet filter input iifname "$INSIDE_INTERFACE" udp dport 5353 accept 2>/dev/null || true
+    for sub in $SUB_INTERFACES; do
+        nft add rule inet filter input iifname "$sub" udp dport 5353 accept 2>/dev/null || true
+    done
+
+    log "nftables rules for Avahi mDNS reflection applied."
+
+    # Save rules and restart nftables
+    systemctl is-active rfwb-portscan && rfwb_active=1 || rfwb_active=0
+    [ "$rfwb_active" -eq 1 ] && systemctl stop rfwb-portscan
+
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    systemctl restart nftables
+    log "nftables ruleset saved and service restarted."
+
+    [ "$rfwb_active" -eq 1 ] && systemctl start rfwb-portscan
+
+    dialog --title "Avahi Configuration" --msgbox "Avahi has been configured and is now reflecting mDNS on:\n\n$INTERFACES" 10 60
+    log "Avahi configuration complete."
+}
+
+# === CONFIGURE OPENVPN ===
+configure_openvpn() {
+    dialog --infobox "Configuring OpenVPN..." 5 50
+    sleep 2
+
+    # === Copy Client Tool ===
+    mkdir -p /etc/openvpn/clients
+    cp /root/RFWB/ovpn_client_create.sh /etc/openvpn/clients
+
+    if [[ ! -f /etc/openvpn/clients/ovpn_client_create.sh ]]; then
+        dialog --msgbox "Failed to copy client creation script!" 6 40
+        return 1
+    fi
+
+    # === Easy-RSA Setup ===
+    mkdir -p /etc/openvpn/easy-rsa
+    ln -sf /usr/share/easy-rsa /etc/openvpn/easy-rsa
+
+    cd /etc/openvpn/easy-rsa
+
+    STATIC_HOSTNAME=$(hostnamectl | awk -F': ' '/Static hostname/ {print $2}' | cut -d '.' -f1)
+
+    ./easy-rsa/3/easyrsa init-pki
+    EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
+    EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
+    echo "yes" | ./easy-rsa/3/easyrsa sign-req server server
+    ./easy-rsa/3/easyrsa gen-dh
+
+    # === Server Configuration ===
+    mkdir -p /etc/openvpn/server
+    cp /usr/share/doc/openvpn/sample/sample-config-files/server.conf /etc/openvpn/server/
+
+    sed -i 's|^ca .*|ca /etc/openvpn/easy-rsa/pki/ca.crt|' /etc/openvpn/server/server.conf
+    sed -i 's|^cert .*|cert /etc/openvpn/easy-rsa/pki/issued/server.crt|' /etc/openvpn/server/server.conf
+    sed -i 's|^key .*|key /etc/openvpn/easy-rsa/pki/private/server.key|' /etc/openvpn/server/server.conf
+    sed -i 's|^dh .*|dh /etc/openvpn/easy-rsa/pki/dh.pem|' /etc/openvpn/server/server.conf
+    sed -i 's/^tls-auth/#tls-auth/' /etc/openvpn/server/server.conf
+    sed -i '/^;user nobody/s/^;//' /etc/openvpn/server/server.conf
+    sed -i '/^;group nobody/s/^;//' /etc/openvpn/server/server.conf
+    sed -i '/^;push "redirect-gateway def1 bypass-dhcp"/i push "route 0.0.0.0 0.0.0.0"' /etc/openvpn/server/server.conf
+
+    # === Custom DNS Push ===
+    if systemctl is-active --quiet named; then
+        dialog --inputbox "Enter the primary DNS IP to push to clients:" 8 60 2> /tmp/dns_ip
+        DNS_IP=$(</tmp/dns_ip)
+        if [[ -n "$DNS_IP" ]]; then
+            sed -i "/push \"dhcp-option DNS 208.67.222.222\"/i push \"dhcp-option DNS $DNS_IP\"" /etc/openvpn/server/server.conf
+            echo "$DNS_IP" > /etc/openvpn/primary_dns
+        fi
+    fi
+
+    # === SELinux ===
+    setsebool -P openvpn_enable_homedirs on
+    restorecon -Rv /etc/openvpn
+
+    # === Start OpenVPN ===
+    systemctl enable openvpn-server@server
+    systemctl restart openvpn-server@server
+
+    if systemctl is-active --quiet openvpn-server@server; then
+        dialog --msgbox "OpenVPN server started successfully." 6 50
+    else
+        dialog --msgbox "OpenVPN failed to start. Check journalctl logs." 6 50
+        return 1
+    fi
+
+    # === Interface Selection via dialog checklist ===
+    INSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1}')
+    SUB_INTERFACES=$(nmcli -t -f DEVICE device status | awk -F: -v main="$INSIDE_INTERFACE" '$1 ~ "^"main"\\." {print $1}')
+    OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside/ {print $1}')
+
+    INTERFACES=("$INSIDE_INTERFACE" "" off)
+    for sub in $SUB_INTERFACES; do
+        INTERFACES+=("$sub" "" off)
+    done
+
+    dialog --checklist "Select interfaces for VPN traffic:" 15 60 6 "${INTERFACES[@]}" 2> /tmp/vpn_ifaces
+    mapfile -t SELECTED_INTERFACES < <(tr -d '"' < /tmp/vpn_ifaces)
+
+    if [[ ${#SELECTED_INTERFACES[@]} -eq 0 ]]; then
+        dialog --msgbox "No interfaces selected. Skipping firewall rule application." 6 50
+        return 0
+    fi
+
+    # === nftables Rules ===
+    nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" udp dport 1194 accept
+    nft add rule inet filter input iifname "tun0" accept
+    nft add rule inet filter forward iifname "tun0" oifname "$OUTSIDE_INTERFACE" ct state new accept
+
+    for IFACE in "${SELECTED_INTERFACES[@]}"; do
+        nft add rule inet filter forward iifname "tun0" oifname "$IFACE" accept
+        nft add rule inet filter forward iifname "$IFACE" oifname "tun0" ct state new accept
+    done
+
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    dialog --msgbox "OpenVPN configuration and nftables rules applied successfully." 6 60
+}
+configure_time() {
+    dialog --infobox "Configuring Chrony Time Service..." 5 50
+    sleep 2
+
+    CHRONY_CONF="/etc/chrony.conf"
+    TEMP_CONF="/tmp/chrony_temp.conf"
+
+    if [ ! -f "$CHRONY_CONF" ]; then
+        dialog --msgbox "chrony.conf not found. Exiting..." 6 40
+        return 1
+    fi
+
+    cp "$CHRONY_CONF" "${CHRONY_CONF}.bak"
+
+    find_interface() {
+        local suffix="$1"
+        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+    }
+
+    find_sub_interfaces() {
+        local main_interface="$1"
+        nmcli -t -f DEVICE device status | grep -E "^${main_interface}\\.[0-9]+" | awk '{print $1}'
+    }
+
+    find_ip_scheme() {
+        local interface="$1"
+        nmcli -t -f IP4.ADDRESS dev show $interface | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+'
+    }
+
+    INSIDE_INTERFACES=($(find_interface "-inside"))
+    for iface in "${INSIDE_INTERFACES[@]}"; do
+        SUB_IFACES=($(find_sub_interfaces "$iface"))
+        INSIDE_INTERFACES+=("${SUB_IFACES[@]}")
+    done
+
+    declare -A NETWORK_PREFIXES
+    for iface in "${INSIDE_INTERFACES[@]}"; do
+        IP_SCHEME=$(find_ip_scheme "$iface")
+        if [[ $IP_SCHEME =~ ([0-9]+\.[0-9]+)\.[0-9]+\.[0-9]+/[0-9]+ ]]; then
+            NETWORK_PREFIXES["${BASH_REMATCH[1]}"]=1
+        fi
+    done
+
+    ALLOW_STATEMENT="0.0.0.0/0"
+    if [[ ${#NETWORK_PREFIXES[@]} -eq 1 ]]; then
+        for prefix in "${!NETWORK_PREFIXES[@]}"; do
+            ALLOW_STATEMENT="${prefix}.0.0/16"
+        done
+    fi
+
+    awk -v allow_statement="$ALLOW_STATEMENT" '
+        BEGIN { pool_added = 0 }
+        /^#allow .*$/ {
+            print "allow " allow_statement
+            next
+        }
+        /^server[[:space:]]+([0-9]{1,3}\.){3}[0-9]{1,3}.*$/ {
+            if (!pool_added) {
+                print "pool 2.rocky.pool.ntp.org iburst"
+                pool_added = 1
+            }
+            next
+        }
+        { print }
+    ' "$CHRONY_CONF" > "$TEMP_CONF"
+
+    mv "$TEMP_CONF" "$CHRONY_CONF"
+    chown root:root "$CHRONY_CONF"
+    chmod 644 "$CHRONY_CONF"
+    restorecon -v "$CHRONY_CONF"
+
+    systemctl enable chronyd
+    systemctl restart chronyd
+
+    until chronyc tracking | grep -qv "Not synchronised"; do
+        dialog --infobox "Waiting for time sync..." 5 40
+        sleep 5
+    done
+
+    systemctl enable nftables
+    systemctl start nftables
+
+    if ! nft list tables | grep -q 'inet filter'; then
+        nft add table inet filter
+    fi
+
+    if ! nft list chain inet filter input &>/dev/null; then
+        nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    for iface in "${INSIDE_INTERFACES[@]}"; do
+        nft add rule inet filter input iifname "$iface" udp dport 123 accept 2>/dev/null || true
+        nft add rule inet filter input iifname "$iface" tcp dport 123 accept 2>/dev/null || true
+        nft add rule inet filter input iifname "$iface" udp dport 323 accept 2>/dev/null || true
+    done
+
+    if systemctl is-active --quiet rfwb-portscan; then
+        systemctl stop rfwb-portscan
+        RFWB_WAS_ACTIVE=1
+    fi
+
+    nft list ruleset > /etc/sysconfig/nftables.conf
+    systemctl restart nftables
+
+    if [[ $RFWB_WAS_ACTIVE -eq 1 ]]; then
+        systemctl start rfwb-portscan
+    fi
+
+    dialog --msgbox "Chrony configured and time is synchronized." 7 50
+    sleep 2
+}
+
+configure_fail2ban() {
+    {
+        echo 10; sleep 0.5
+        echo 30; sleep 0.5
+        echo 50; sleep 0.5
+    } | dialog --gauge "Configuring Fail2Ban Service..." 10 60 0
+
+    ORIGINAL_FILE="/etc/fail2ban/jail.conf"
+    JAIL_LOCAL_FILE="/etc/fail2ban/jail.local"
+    SSHD_LOCAL_FILE="/etc/fail2ban/jail.d/sshd.local"
+
+    cp -v "$ORIGINAL_FILE" "$JAIL_LOCAL_FILE" 2>>$LOG_FILE || {
+        dialog --msgbox "Failed to copy $ORIGINAL_FILE to $JAIL_LOCAL_FILE. Exiting." 7 60
+        return 1
+    }
+
+    sed -i '/^\[sshd\]/,/^$/ s/#mode.*normal/&\nenabled = true/' "$JAIL_LOCAL_FILE" 2>>$LOG_FILE || {
+        dialog --msgbox "Failed to modify $JAIL_LOCAL_FILE. Exiting." 7 60
+        return 1
+    }
+
+    cat <<EOL >"$SSHD_LOCAL_FILE"
+[sshd]
+enabled = true
+maxretry = 5
+findtime = 300
+bantime = 3600
+bantime.increment = true
+bantime.factor = 2
+EOL
+
+    systemctl enable fail2ban
+    systemctl start fail2ban
+    sleep 2
+
+    if systemctl is-active --quiet fail2ban; then
+        dialog --msgbox "Fail2Ban is running." 6 50
+    else
+        selinux_status=$(sestatus | grep "SELinux status" | awk '{print $3}')
+
+        if [ "$selinux_status" == "enabled" ]; then
+            restorecon -v /etc/fail2ban/jail.local
+            denials=$(ausearch -m avc -ts recent | grep "fail2ban-server" | wc -l)
+            if [ "$denials" -gt 0 ]; then
+                ausearch -c 'fail2ban-server' --raw | audit2allow -M my-fail2banserver
+                semodule -X 300 -i my-fail2banserver.pp
+                dialog --msgbox "Custom SELinux policy for Fail2Ban applied." 6 50
+            fi
+        fi
+
+        systemctl restart fail2ban
+        if systemctl is-active --quiet fail2ban; then
+            dialog --msgbox "Fail2Ban started successfully after SELinux adjustments." 6 50
+        else
+            dialog --msgbox "Fail2Ban still failed to start. Please investigate further." 7 60
+        fi
+    fi
+
+    sshd_status=$(fail2ban-client status sshd 2>&1)
+
+    if echo "$sshd_status" | grep -q "ERROR   NOK: ('sshd',)"; then
+        dialog --msgbox "SSHD jail failed to start. Please check configuration." 7 60
+    elif echo "$sshd_status" | grep -E "Banned IP list:"; then
+        dialog --msgbox "SSHD jail is active and functional." 6 50
+    else
+        dialog --msgbox "SSHD jail may not be functional. Please check configuration." 7 60
+    fi
+
+    dialog --msgbox "Fail2Ban configuration complete." 6 50
+    sleep 2
+}
+
+configure_ddclient() {
+    dialog --title "DDClient Notice" --msgbox "DDClient has been installed but requires manual configuration before the service can be started." 8 60
+}
+
+
+
+# === PHASE 3: Configure Installed Services ===
+configure_services() {
+configure_time  # Always configure chrony, even if not selected
+configure_fail2ban # Always configure not user optional 
+    for service in "${!INSTALLED_SERVICES[@]}"; do
+        case "$service" in
+            net_services) configure_bind_and_kea ;;
+            cockpit) configure_cockpit ;;
+            ntopng) configure_ntopng ;;
+            ddclient) configure_ddclient ;;
+            suricata) configure_suricata ;;
+            portscan) configure_portscan ;;
+            snmpd) configure_snmpd ;;
+            netdata) configure_netdata ;;
+            qos) configure_qos ;;
+            avahi) configure_avahi ;;
+            evebox) configure_evebox ;;
+            openvpn) configure_openvpn ;;
+        esac
+    done
+}
+
+
+
+
+# === MAIN EXECUTION- Application install ===
+log "=== Script started ==="
+select_and_install_services
+log "=== Installation phase completed ==="
+configure_services
+log "=== Script finished ==="
