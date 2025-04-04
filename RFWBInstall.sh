@@ -117,16 +117,16 @@ cat <<EOF
 EOF
 
 read -p "Press Any Key to Continue"
+/root/RFWB/GUI
+#items=(1 "Install RFWB Setup"
+#)
 
-items=(1 "Install RFWB Setup"
-)
-
-while choice=$(dialog --title "$TITLE" \
-  --backtitle "RFWB Installer" \
-  --menu "Please select the install type" 15 65 3 "${items[@]}" \
-  2>&1 >/dev/tty); do
-  case $choice in
-  1) /root/RFWB/rfwb_install.sh ;;
-  esac
-done
-clear # clear after user pressed Cancel
+#while choice=$(dialog --title "$TITLE" \
+#  --backtitle "RFWB Installer" \
+#  --menu "Please select the install type" 15 65 3 "${items[@]}" \
+#  2>&1 >/dev/tty); do
+#  case $choice in
+#  1) /root/RFWB/rfwb_install.sh ;;
+#  esac
+#done
+#clear # clear after user pressed Cancel
