@@ -413,7 +413,7 @@ install_speedtest_cli() {
   sleep 1
 
   dialog --title "Speedtest License" --infobox "Auto-accepting license agreement for speedtest CLI..." 6 60
-
+  echo -e "${YELLOW}The Speedtest Acceptance is automated no Interaction required.. Please Wait${TEXTRESET}"
   /usr/bin/expect <<EOF
     spawn speedtest
     expect "Do you accept the license? \\[type YES to accept\\]:"
