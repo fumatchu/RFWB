@@ -631,6 +631,7 @@ configure_openvpn() {
     nft list ruleset > /etc/sysconfig/nftables.conf
     dialog --msgbox "OpenVPN configuration and nftables rules applied successfully." 6 60
 }
+# === CONFIGURE TIME ===
 configure_time() {
     dialog --infobox "Configuring Chrony Time Service..." 5 50
     sleep 2
@@ -742,7 +743,7 @@ configure_time() {
     dialog --msgbox "Chrony configured and time is synchronized." 7 50
     sleep 2
 }
-
+# === CONFIGURE FAIL2BAN ===
 configure_fail2ban() {
     {
         echo 10; sleep 0.5
@@ -814,7 +815,7 @@ EOL
     dialog --msgbox "Fail2Ban configuration complete." 6 50
     sleep 2
 }
-
+# === CONFIGURE DDCLIENT ===
 configure_ddclient() {
     dialog --title "DDClient Notice" --msgbox "DDClient has been installed but requires manual configuration before the service can be started." 8 60
 }
