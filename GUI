@@ -321,7 +321,7 @@ tils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
 
   PIPE=$(mktemp -u)
   mkfifo "$PIPE"
-  dialog --title "Ancillary/Support Package(s) Install" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
+  dialog --title "Installing Dependency Packages" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
   exec 3>"$PIPE"
   COUNT=0
   for PACKAGE in "${PACKAGE_LIST[@]}"; do
