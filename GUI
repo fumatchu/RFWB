@@ -1196,6 +1196,20 @@ install_ovpn() {
     log "OpenVPN installation complete."
 }
 
+install_cockpit() {
+    INSTALLED_SERVICES[cockpit]=1
+    log "Installing Cockpit..."
+    {
+        echo "10"
+        sleep 0.5
+        echo "70"
+        dnf -y install cockpit cockpit-storaged cockpit-files tuned >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing Cockpit..." 10 60 0
+    log "Cockpit installation complete."
+}
 configure_services() {
     log "Configuration phase skipped (stub)."
 }
