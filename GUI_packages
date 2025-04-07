@@ -392,15 +392,136 @@ install_netdata() {
 
 install_qos() {
     INSTALLED_SERVICES[qos]=1
-    log "Installing RFWB-QOS tools..."
-    {
-        echo "50"
-        dnf -y install iproute-tc qperf /root/RFWB/rfwb-qos-1.0-1.el9.x86_64.rpm >> "$LOG_FILE" 2>&1
-        sleep 0.5
-        echo "100"
-        sleep 0.5
-    } | dialog --gauge "Installing QOS for VOICE" 10 60 0
-    log "QOS installation complete."
+    log "Installing RFWB QoS for Voice..."
+
+    dialog --title "RFWB QoS" --infobox "Installing RFWB QoS for Voice with 10% reserved bandwidth..." 6 60
+    sleep 2
+
+    CONFIG_FILE="/etc/rfwb-qos.conf"
+    SCRIPT_FILE="/usr/local/bin/rfwb-qos.sh"
+    SERVICE_FILE="/etc/systemd/system/rfwb-qos.service"
+    TIMER_FILE="/etc/systemd/system/rfwb-qos.timer"
+    LOG_FILE="/var/log/rfwb-qos.log"
+    ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
+
+    mkdir -p /etc/nftables
+
+    cat <<EOF > "$CONFIG_FILE"
+percentage_bandwidth = 10
+adjust_interval_hours = 0.25
+wifi_calling_ports = 500,4500
+sip_ports = 5060
+rtp_ports = 10000-20000
+rtsp_ports = 554,8554
+h323_port = 1720
+webrtc_ports = 16384-32767
+mpeg_ts_port = 1234
+EOF
+
+    dialog --title "QoS Configuration" --msgbox "10% of your total bandwidth will be reserved for Voice services." 7 60
+
+    cat << 'EOF' > "$SCRIPT_FILE"
+#!/bin/bash
+CONFIG_FILE="/etc/rfwb-qos.conf"
+LOG_FILE="/var/log/rfwb-qos.log"
+ERROR_LOG_FILE="/var/log/rfwb-qos-errors.log"
+
+load_config() {
+    while IFS='= ' read -r key value; do
+        if [[ $key =~ ^[a-zA-Z_]+$ ]]; then
+            value="${value//\"/}"
+            declare "$key=$value"
+        fi
+    done < "$CONFIG_FILE"
+}
+
+find_interface() {
+    local suffix="$1"
+    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+}
+
+configure_qos() {
+    load_config
+    OUTSIDE_INTERFACE=$(find_interface "-outside")
+    [ -z "$OUTSIDE_INTERFACE" ] && echo "No outside interface found." | tee -a "$ERROR_LOG_FILE" && exit 1
+
+    echo "Running speed test..." | tee -a "$LOG_FILE"
+    speedtest_output=$(speedtest --format=json 2>>"$ERROR_LOG_FILE") || {
+        echo "Speedtest failed." | tee -a "$ERROR_LOG_FILE"
+        exit 1
+    }
+
+    DOWNLOAD_SPEED=$(echo "$speedtest_output" | jq '.download.bandwidth')
+    UPLOAD_SPEED=$(echo "$speedtest_output" | jq '.upload.bandwidth')
+
+    DOWNLOAD_SPEED_KBIT=$((DOWNLOAD_SPEED * 8 / 1000))
+    UPLOAD_SPEED_KBIT=$((UPLOAD_SPEED * 8 / 1000))
+
+    [[ $DOWNLOAD_SPEED_KBIT -lt 10000 ]] && R2Q_VALUE=1 || [[ $DOWNLOAD_SPEED_KBIT -lt 100000 ]] && R2Q_VALUE=2 || R2Q_VALUE=10
+
+    CEIL_DOWNLOAD=$((DOWNLOAD_SPEED_KBIT / 1000 - 1))
+    CEIL_UPLOAD=$((UPLOAD_SPEED_KBIT / 1000 - 1))
+
+    RESERVED_DOWNLOAD_BANDWIDTH=$((CEIL_DOWNLOAD * 1000 * percentage_bandwidth / 100))
+    RESERVED_UPLOAD_BANDWIDTH=$((CEIL_UPLOAD * 1000 * percentage_bandwidth / 100))
+
+    tc qdisc del dev "$OUTSIDE_INTERFACE" root 2>>"$ERROR_LOG_FILE" || true
+    tc qdisc add dev "$OUTSIDE_INTERFACE" root handle 1: htb default 20 r2q "$R2Q_VALUE" 2>>"$ERROR_LOG_FILE"
+    tc class add dev "$OUTSIDE_INTERFACE" parent 1: classid 1:1 htb rate ${CEIL_DOWNLOAD}Mbit ceil ${CEIL_DOWNLOAD}Mbit
+    tc class add dev "$OUTSIDE_INTERFACE" parent 1: classid 1:2 htb rate ${CEIL_UPLOAD}Mbit ceil ${CEIL_UPLOAD}Mbit
+
+    for port in ${wifi_calling_ports//,/ }; do
+        tc filter add dev "$OUTSIDE_INTERFACE" protocol ip parent 1:0 prio 1 u32 match ip dport "$port" 0xffff flowid 1:1
+    done
+    for port in ${sip_ports//,/ }; do
+        tc filter add dev "$OUTSIDE_INTERFACE" protocol ip parent 1:0 prio 1 u32 match ip dport "$port" 0xffff flowid 1:1
+    done
+
+    echo "QoS applied on $OUTSIDE_INTERFACE" | tee -a "$LOG_FILE"
+    tc -s class show dev "$OUTSIDE_INTERFACE" | tee -a "$LOG_FILE"
+}
+
+configure_qos
+EOF
+    chmod +x "$SCRIPT_FILE"
+
+    cat <<EOF > "$SERVICE_FILE"
+[Unit]
+Description=RFWB QoS Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=$SCRIPT_FILE
+Type=simple
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat <<EOF > "$TIMER_FILE"
+[Unit]
+Description=Run RFWB QoS Service every 15 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable rfwb-qos.service
+    systemctl start rfwb-qos.service
+    systemctl enable rfwb-qos.timer
+    systemctl start rfwb-qos.timer
+
+    dialog --msgbox "RFWB QoS for Voice Installed with 10% reserved bandwidth." 7 60
+    log "RFWB QoS for Voice installation complete."
 }
 
 install_avahi() {
