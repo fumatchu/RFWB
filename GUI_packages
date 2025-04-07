@@ -1156,7 +1156,7 @@ EOL
 configure_ddclient() {
     dialog --title "DDClient Notice" --msgbox "DDClient has been installed but requires manual configuration before the service can be started." 8 60
 }
-
+# === CONFIGURE NETDATA ===
 configure_netdata() {
     dialog --gauge "Configuring Netdata..." 10 60 0 < <(
         echo 20; sleep 0.5
@@ -1205,7 +1205,7 @@ configure_netdata() {
     dialog --msgbox "Netdata configuration complete." 6 50
     sleep 2
 }
-
+# === CONFIGURE NTOPNG ===
 configure_ntopng() {
     CONFIG_FILE="/etc/ntopng/ntopng.conf"
 
@@ -1272,6 +1272,184 @@ configure_ntopng() {
     dialog --msgbox "ntopng configuration complete." 6 50
     sleep 2
 }
+# === CONFIGURE BIND ===
+# Define file paths and directories
+NAMED_CONF="/etc/named.conf"
+KEYS_FILE="/etc/named/keys.conf"
+ZONE_DIR="/var/named/"
+
+generate_tsig_key() {
+    dialog --title "BIND Setup" --infobox "Generating TSIG key..." 5 50
+    sleep 1
+    sudo rndc-confgen -a
+    key_file="/etc/rndc.key"
+    key_secret=$(grep secret $key_file | awk '{print $2}' | tr -d '";')
+    sudo bash -c "cat > $KEYS_FILE" <<EOF
+key "Kea-DDNS" {
+    algorithm hmac-sha256;
+    secret "$key_secret";
+};
+EOF
+    sleep 1
+}
+
+configure_bind() {
+    full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
+
+    if [[ ! "$full_hostname" == *.* ]]; then
+        dialog --title "BIND Configuration" --infobox "[ERROR] Hostname does not contain a domain part." 6 60
+        sleep 2
+        return 1
+    fi
+
+    hostname="${full_hostname%%.*}"
+    domain="${full_hostname#*.}"
+    ip_address=$(hostname -I | awk '{print $1}')
+
+    if [[ -z "$ip_address" ]]; then
+        dialog --title "BIND Configuration" --infobox "[ERROR] Unable to determine IP address." 6 60
+        sleep 2
+        return 1
+    fi
+
+    reverse_zone=$(echo $ip_address | awk -F. '{print $3"."$2"."$1}')
+    reverse_ip=$(echo $ip_address | awk -F. '{print $4}')
+
+    forward_zone_file="${ZONE_DIR}db.${domain}"
+    reverse_zone_file="${ZONE_DIR}db.${reverse_zone}"
+
+    dialog --title "BIND Configuration" --infobox "Configuring BIND zones and settings..." 6 60
+    sleep 2
+
+    sudo sed -i '/include "/etc/crypto-policies/back-ends/bind.config";/a \
+forwarders {\n    208.67.222.222;\n    208.67.220.220;\n};\nforward only;' $NAMED_CONF
+
+    sudo bash -c "cat >> $NAMED_CONF" <<EOF
+
+include "$KEYS_FILE";
+
+zone "$domain" {
+    type master;
+    file "$forward_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+
+zone "${reverse_zone}.in-addr.arpa" {
+    type master;
+    file "$reverse_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+EOF
+
+    sudo sed -i '/listen-on port 53 {/s/{ 127.0.0.1; }/{ 127.0.0.1; any; }/' $NAMED_CONF
+    sudo sed -i 's/allow-query[[:space:]]*{[[:space:]]*localhost;[[:space:]]*};/allow-query { localhost; any; };/' $NAMED_CONF
+
+    sudo bash -c "cat > $forward_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$hostname IN  A     $ip_address
+EOF
+
+    sudo bash -c "cat > $reverse_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$reverse_ip  IN  PTR   $full_hostname.
+EOF
+
+    sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    semanage boolean -m --on named_write_master_zones
+    sudo chown named:named $forward_zone_file $reverse_zone_file
+    sudo chmod g+w /var/named
+
+    RNDC_KEY_FILE="/etc/rndc.key"
+    if [[ -f "$RNDC_KEY_FILE" ]]; then
+        sudo chown named:named "$RNDC_KEY_FILE"
+        sudo chmod 600 "$RNDC_KEY_FILE"
+    else
+        dialog --title "BIND Configuration" --infobox "[ERROR] $RNDC_KEY_FILE does not exist." 6 60
+        sleep 2
+        exit 1
+    fi
+
+    SELINUX_STATUS=$(getenforce)
+    dialog --title "SELinux Status" --infobox "SELinux status: $SELINUX_STATUS" 5 50
+    sleep 2
+
+    find_inside_interfaces() {
+        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
+        [ -z "$main_interface" ] && dialog --infobox "[ERROR] No '-inside' interface found." 5 50 && sleep 2 && exit 1
+        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf"\\." {print $1}')
+        inside_interfaces="$main_interface $sub_interfaces"
+    }
+
+    setup_nftables_for_dns() {
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
+            fi
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
+            fi
+        done
+
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        [ "$rfwb_status" == "active" ] && sudo systemctl stop rfwb-portscan
+        sudo nft list ruleset > /etc/sysconfig/nftables.conf
+        sudo systemctl restart nftables
+        [ "$rfwb_status" == "active" ] && sudo systemctl start rfwb-portscan
+    }
+
+    find_inside_interfaces
+    setup_nftables_for_dns
+
+    dialog --title "BIND Configuration" --infobox "BIND configuration complete." 5 50
+    sleep 2
+}
+
+start_and_enable_service() {
+    local service_name="$1"
+    dialog --title "Service" --infobox "Starting $service_name..." 5 50
+    sleep 2
+    sudo systemctl enable "$service_name"
+    sudo systemctl start "$service_name"
+}
+
+dialog --title "BIND Setup" --infobox "Starting BIND configuration..." 5 50
+sleep 2
+
+if [ -f "$NAMED_CONF" ]; then
+    generate_tsig_key
+    configure_bind
+    start_and_enable_service "named"
+else
+    dialog --title "BIND Configuration" --infobox "$NAMED_CONF not found. Skipping configuration." 5 60
+    sleep 2
+fi
 
 
 
