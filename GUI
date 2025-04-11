@@ -233,47 +233,28 @@ Direct IP (8.8.8.8): $ip_test " 7 50
 
 # ========= HOSTNAME VALIDATION =========
 validate_and_set_hostname() {
-  local current_hostname=$(hostname)
+  local current_hostname
+  current_hostname=$(hostname)
+
   if [[ "$current_hostname" == "localhost.localdomain" ]]; then
     while true; do
       NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox \
         "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):" \
         8 60 3>&1 1>&2 2>&3)
-      
+
       if validate_fqdn "$NEW_HOSTNAME" && check_hostname_in_domain "$NEW_HOSTNAME"; then
         hostnamectl set-hostname "$NEW_HOSTNAME"
         dialog --title "Hostname Set" --msgbox "Hostname updated to: $NEW_HOSTNAME" 6 50
         break
       else
-        dialog --title "Invalid Hostname" --msgbox "The entered hostname is invalid. Please try again." 6 50
+        dialog --title "Invalid Hostname" --msgbox "Invalid hostname. Please try again." 6 50
       fi
     done
   else
-    # Auto-dismiss message after 4 seconds, no OK button
+    # Show a temporary info box with current hostname, no OK button
     dialog --title "Hostname Check" --infobox \
-      "The current hostname is '$current_hostname'." \
-      6 60
+      "Hostname is already set to: $current_hostname\nNo changes needed." 6 60
     sleep 4
-  fi
-}
-
-
-update_and_install_packages() {
-  local current_hostname=$(hostname)
-  if [[ "$current_hostname" == "localhost.localdomain" ]]; then
-    while true; do
-      NEW_HOSTNAME=$(dialog --title "Hostname Configuration" --inputbox "Current hostname is '$current_hostname'. Please enter a new FQDN (e.g., server.example.com):"
- 8 60 3>&1 1>&2 2>&3)
-      if validate_fqdn "$NEW_HOSTNAME" && check_hostname_in_domain "$NEW_HOSTNAME"; then
-        hostnamectl set-hostname "$NEW_HOSTNAME"
-        dialog --title "Hostname Set" --msgbox "Hostname updated to: $NEW_HOSTNAME" 6 50
-        break
-      else
-        dialog --title "Invalid Hostname" --msgbox "The entered hostname is invalid. Please try again." 6 50
-      fi
-    done
-  else
-    dialog --title "Hostname Check" --msgbox "The current hostname is '$current_hostname'. No changes needed." 6 50
   fi
 }
 
@@ -341,8 +322,7 @@ update_and_install_packages() {
 
   dialog --title "Package Installation" --infobox "Installing required packages..." 5 50
   sleep 2
-  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-
-utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
+  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
 
   PIPE=$(mktemp -u)
@@ -369,7 +349,7 @@ utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
 install_speedtest_cli() {
   dialog --title "Speedtest Install" --infobox "Adding Ookla Speedtest repository..." 5 50
   curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash >/dev/null 2>&1
-  
+
 
   dialog --title "Speedtest Install" --infobox "Installing speedtest CLI..." 5 50
   dnf -y install speedtest >/dev/null 2>&1
@@ -964,13 +944,12 @@ check_root_and_os
 check_and_enable_selinux
 check_internet_connectivity
 validate_and_set_hostname
+set_inside_interface
+vlan_main
+setup_outside_interface
+config_fw_service
+setup_nftables_inside
+configure_nftables_threatlists
 update_and_install_packages
 vm_detection
 install_speedtest_cli
-config_fw_service
-set_inside_interface
-vlan_main
-setup_nftables_inside
-setup_outside_interface
-configure_nftables_threatlists
-
