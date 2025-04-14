@@ -344,6 +344,44 @@ update_and_install_packages() {
   dialog --title "Installation Complete" --infobox "All packages installed successfully!" 6 50
   sleep 3
 }
+#===========Detect if system is running Virtualization and install Guest=============
+# Function to show a dialog infobox
+vm_detection() {
+show_info() {
+    dialog --title "$1" --infobox "$2" 5 60
+    sleep 2
+}
+
+# Function to show a progress bar during installation
+show_progress() {
+    (
+        echo "10"; sleep 1
+        echo "40"; sleep 1
+        echo "70"; sleep 1
+        echo "100"
+    ) | dialog --title "$1" --gauge "$2" 7 60 0
+}
+
+# Detect virtualization platform
+HWKVM=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep KVM | cut -c16-)
+HWVMWARE=$(dmidecode | grep -i -e manufacturer -e product -e vendor | grep Manufacturer | grep "VMware, Inc." | cut -c16- | cut -d , -f1)
+
+show_info "Virtualization Check" "Checking for virtualization platform..."
+
+# Install guest agent for KVM
+if [ "$HWKVM" = "KVM" ]; then
+    show_info "Platform Detected" "KVM platform detected.\nInstalling qemu-guest-agent..."
+    show_progress "Installing qemu-guest-agent" "Installing guest tools for KVM..."
+    dnf -y install qemu-guest-agent &>/dev/null
+fi
+
+# Install guest agent for VMware
+if [ "$HWVMWARE" = "VMware" ]; then
+    show_info "Platform Detected" "VMware platform detected.\nInstalling open-vm-tools..."
+    show_progress "Installing open-vm-tools" "Installing guest tools for VMware..."
+    dnf -y install open-vm-tools &>/dev/null
+fi
+}
 
 #===========Install Speed test cli==============
 install_speedtest_cli() {
