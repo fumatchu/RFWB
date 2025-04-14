@@ -138,15 +138,15 @@ elif [[ "$IP_METHOD" == "auto" ]]; then
       done
 
       while true; do
+        DNSSERVER=$(dialog --title "DNS Server" --inputbox "Enter Upstream DNS server IP:" 8 60 3>&1 1>&2 2>&3)
+        validate_ip "$DNSSERVER" && break || dialog --msgbox "Invalid IP address. Try again." 6 40
+      done
+      
+      while true; do
         HOSTNAME=$(dialog --title "FQDN" --inputbox "Enter FQDN (e.g., host.domain.com):" 8 60 3>&1 1>&2 2>&3)
         if validate_fqdn "$HOSTNAME" && check_hostname_in_domain "$HOSTNAME"; then break
         else dialog --msgbox "Invalid FQDN or hostname repeated in domain. Try again." 7 60
         fi
-      done
-
-      while true; do
-        DNSSERVER=$(dialog --title "DNS Server" --inputbox "Enter Upstream DNS server IP:" 8 60 3>&1 1>&2 2>&3)
-        validate_ip "$DNSSERVER" && break || dialog --msgbox "Invalid IP address. Try again." 6 40
       done
 
       while true; do
