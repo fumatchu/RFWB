@@ -2258,6 +2258,55 @@ install_netdata() {
     } | dialog --gauge "Installing Netdata..." 10 60 0
     log "Netdata installation complete."
 }
+configure_netdata() {
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Netdata..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Cleaning up temporary files..."
+    rm -f /tmp/netdata-kickstart.sh
+
+    inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+    if [ -z "$inside_interfaces" ]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
+        exit 1
+    fi
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
+
+    sudo systemctl enable nftables
+    sudo systemctl start nftables
+
+    if ! sudo nft list tables | grep -q 'inet filter'; then
+        sudo nft add table inet filter
+    fi
+
+    if ! sudo nft list chain inet filter input &>/dev/null; then
+        sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+    fi
+
+    for iface in $inside_interfaces; do
+        if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 19999 accept"; then
+            sudo nft add rule inet filter input iifname "$iface" tcp dport 19999 accept
+            echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Netdata on port 19999 for interface ${GREEN}$iface${TEXTRESET}"
+        else
+            echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Netdata on port 19999 for interface ${GREEN}$iface${TEXTRESET}"
+        fi
+    done
+
+    rfwb_status=$(systemctl is-active rfwb-portscan)
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl stop rfwb-portscan
+    fi
+
+    sudo nft list ruleset > /etc/sysconfig/nftables.conf
+    sudo systemctl restart nftables
+
+    if [ "$rfwb_status" == "active" ]; then
+        systemctl start rfwb-portscan
+    fi
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Netdata Install Complete...${TEXTRESET}"
+    sleep 4
+}
 
 install_qos() {
     INSTALLED_SERVICES[qos]=1
