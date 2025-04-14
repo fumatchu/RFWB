@@ -117,7 +117,7 @@ cat <<EOF
 EOF
 
 read -p "Press Any Key to Continue"
-/root/RFWB/GUI
+/root/RFWB/test.sh
 #items=(1 "Install RFWB Setup"
 #)
 
