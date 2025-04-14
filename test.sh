@@ -2411,10 +2411,9 @@ configure_fail2ban # Always configure not user optional
             portscan) configure_portscan ;;
             snmpd) configure_snmpd ;;
             netdata) configure_netdata ;;
-            qos) configure_qos ;;
             avahi) configure_avahi ;;
             evebox) configure_evebox ;;
-            openvpn) configure_openvpn ;;
+            openvpn) configure_ovpn ;;
         esac
     done
 }
