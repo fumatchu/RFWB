@@ -1487,108 +1487,181 @@ install_ovpn() {
 }
 
 configure_openvpn() {
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring OpenVPN..."
-    log "Starting OpenVPN configuration..."
+    configure_ovpn() {
+    LOG_FILE="/var/log/rfwb-openvpn-install.log"
+    exec > >(tee -a "$LOG_FILE") 2>&1
 
-    # === Copy Client Tool ===
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Copying OpenVPN client creation tool..."
+    sleep 2
     mkdir -p /etc/openvpn/clients
-    cp /root/RFWB/ovpn_client_create.sh /etc/openvpn/clients
+    \cp -r /root/RFWB/ovpn_client_create.sh /etc/openvpn/clients
 
-    if [[ ! -f /etc/openvpn/clients/ovpn_client_create.sh ]]; then
-        echo -e "[${RED}ERROR${TEXTRESET}] Failed to copy client creation script!"
-        log "Failed to copy ovpn_client_create.sh"
-        return 1
-    fi
-    log "Copied ovpn_client_create.sh to /etc/openvpn/clients"
-
-    # === Easy-RSA Setup ===
-    mkdir -p /etc/openvpn/easy-rsa
-    ln -sf /usr/share/easy-rsa /etc/openvpn/easy-rsa
-    cd /etc/openvpn/easy-rsa || return 1
-
-    STATIC_HOSTNAME=$(hostnamectl | awk -F': ' '/Static hostname/ {print $2}' | cut -d '.' -f1)
-
-    ./easy-rsa/3/easyrsa init-pki
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
-    EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
-    echo "yes" | ./easy-rsa/3/easyrsa sign-req server server
-    ./easy-rsa/3/easyrsa gen-dh
-
-    log "Easy-RSA certificates and keys generated."
-
-    # === Server Configuration ===
-    mkdir -p /etc/openvpn/server
-    cp /usr/share/doc/openvpn/sample/sample-config-files/server.conf /etc/openvpn/server/
-
-    sed -i 's|^ca .*|ca /etc/openvpn/easy-rsa/pki/ca.crt|' /etc/openvpn/server/server.conf
-    sed -i 's|^cert .*|cert /etc/openvpn/easy-rsa/pki/issued/server.crt|' /etc/openvpn/server/server.conf
-    sed -i 's|^key .*|key /etc/openvpn/easy-rsa/pki/private/server.key|' /etc/openvpn/server/server.conf
-    sed -i 's|^dh .*|dh /etc/openvpn/easy-rsa/pki/dh.pem|' /etc/openvpn/server/server.conf
-    sed -i 's/^tls-auth/#tls-auth/' /etc/openvpn/server/server.conf
-    sed -i '/^;user nobody/s/^;//' /etc/openvpn/server/server.conf
-    sed -i '/^;group nobody/s/^;//' /etc/openvpn/server/server.conf
-    sed -i '/^;push "redirect-gateway def1 bypass-dhcp"/i push "route 0.0.0.0 0.0.0.0"' /etc/openvpn/server/server.conf
-
-    # === Custom DNS Push (non-interactive fallback) ===
-    if systemctl is-active --quiet named; then
-        DEFAULT_DNS="192.168.0.1"
-        DNS_IP="${DNS_IP:-$DEFAULT_DNS}"
-        echo -e "[${YELLOW}INFO${TEXTRESET}] Detected BIND. Using DNS push: $DNS_IP"
-        sed -i "/push \"dhcp-option DNS 208.67.222.222\"/i push \"dhcp-option DNS $DNS_IP\"" /etc/openvpn/server/server.conf
-        echo "$DNS_IP" > /etc/openvpn/primary_dns
-        log "Configured OpenVPN DNS push for $DNS_IP"
-    fi
-
-    # === SELinux ===
-    setsebool -P openvpn_enable_homedirs on
-    restorecon -Rv /etc/openvpn >> "$LOG_FILE" 2>&1
-    log "Applied SELinux policies for OpenVPN"
-
-    # === Start OpenVPN ===
-    systemctl enable openvpn-server@server >> "$LOG_FILE" 2>&1
-    systemctl restart openvpn-server@server >> "$LOG_FILE" 2>&1
-
-    if systemctl is-active --quiet openvpn-server@server; then
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN server started successfully."
-        log "OpenVPN server started."
+    if [ -f /etc/openvpn/clients/ovpn_client_create.sh ]; then
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Client creation tool copied successfully."
     else
-        echo -e "[${RED}ERROR${TEXTRESET}] OpenVPN failed to start. Check journalctl logs."
-        log "OpenVPN server failed to start."
-        return 1
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to copy client creation tool!"
+        exit 1
     fi
 
-    # === Interface Detection ===
-    INSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1}')
-    SUB_INTERFACES=$(nmcli -t -f DEVICE device status | awk -F: -v main="$INSIDE_INTERFACE" '$1 ~ "^"main"\\." {print $1}')
-    OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside/ {print $1}')
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating Easy-RSA directory..."
+    sudo mkdir /etc/openvpn/easy-rsa
+    sleep 2
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating symbolic link for Easy-RSA..."
+    sleep 2
+    sudo ln -s /usr/share/easy-rsa /etc/openvpn/easy-rsa
+
+    cd /etc/openvpn/easy-rsa
+
+    STATIC_HOSTNAME=$(hostnamectl | grep "Static hostname" | awk '{print $3}' | cut -d '.' -f1)
+    echo "Using static hostname as Common Name (CN): $STATIC_HOSTNAME"
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Initializing PKI..."
+    sleep 2
+    sudo ./easy-rsa/3/easyrsa init-pki
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Building the Certificate Authority (CA) with hostname as CN..."
+    sleep 2
+    sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa build-ca nopass
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Generating server certificate request with hostname as CN..."
+    sleep 2
+    sudo EASYRSA_BATCH=1 EASYRSA_REQ_CN="$STATIC_HOSTNAME" ./easy-rsa/3/easyrsa gen-req server nopass
+
+    echo -e  "[${YELLOW}INFO${TEXTRESET}] Signing the server certificate request..."
+    sleep 2
+    echo "yes" | sudo ./easy-rsa/3/easyrsa sign-req server server
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Generating Diffie-Hellman parameters..."
+    sleep 2
+    sudo ./easy-rsa/3/easyrsa gen-dh
+
+    echo -e  "[${YELLOW}INFO${TEXTRESET}] Copying OpenVPN sample configuration..."
+    sleep 2
+    sudo cp /usr/share/doc/openvpn/sample/sample-config-files/server.conf /etc/openvpn/server/
+
+    echo -e  "[${YELLOW}INFO${TEXTRESET}] Updating OpenVPN certificate and key paths..."
+    sleep 2
+    sudo sed -i '75,81s|^ca .*|ca /etc/openvpn/easy-rsa/pki/ca.crt|' /etc/openvpn/server/server.conf
+    sudo sed -i '75,81s|^cert .*|cert /etc/openvpn/easy-rsa/pki/issued/server.crt|' /etc/openvpn/server/server.conf
+    sudo sed -i '75,81s|^key .*|key /etc/openvpn/easy-rsa/pki/private/server.key|' /etc/openvpn/server/server.conf
+
+    sudo sed -i '80,85s|^dh .*|dh /etc/openvpn/easy-rsa/pki/dh.pem|' /etc/openvpn/server/server.conf
+    sudo sed -i '240,244s|^tls-auth ta.key 0 # This file is secret|#tls-auth ta.key 0 # This file is secret|' /etc/openvpn/server/server.conf
+    sudo sed -i '143i push "route 0.0.0.0 0.0.0.0"\n' /etc/openvpn/server/server.conf
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting process to user and Group nobody"
+    sleep 2
+    sudo sed -i 's/^;user nobody/user nobody/' /etc/openvpn/server/server.conf
+    sudo sed -i 's/^;group nobody/group nobody/' /etc/openvpn/server/server.conf
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Checking for named process"
+    sleep 2
+    if sudo systemctl is-active --quiet named; then
+        read -p "Enter the primary DNS IP for OpenVPN clients: " DNS_IP
+        sudo sed -i '/push "dhcp-option DNS 208.67.222.222"/i push "dhcp-option DNS '"$DNS_IP"'"' /etc/openvpn/server/server.conf
+        echo "$DNS_IP" | sudo tee /etc/openvpn/primary_dns > /dev/null
+    fi
+
+    sudo setsebool -P openvpn_enable_homedirs on
+    sudo restorecon -Rv /etc/openvpn
+
+    sudo systemctl enable openvpn-server@server
+    sudo systemctl start openvpn-server@server
+
+    if sudo systemctl is-active --quiet openvpn-server@server; then
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN server is running successfully!"
+    else
+        echo -e "[${RED}ERROR${TEXTRESET}] OpenVPN server failed to start. Check logs with: sudo journalctl -u openvpn-server@server --no-pager -n 50"
+    fi
+
+    echo " "
+    echo " "
+    echo "Select your interface(s) to pass VPN traffic on the firewall"
+
+    set -e
+
+    find_interface() {
+        local suffix="$1"
+        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
+    }
+
+    find_sub_interfaces() {
+        local main_interface="$1"
+        nmcli -t -f DEVICE device status | grep -E "^${main_interface}\\.[0-9]+" | awk '{print $1}'
+    }
+
+    INSIDE_INTERFACE=$(find_interface "-inside")
+    OUTSIDE_INTERFACE=$(find_interface "-outside")
+
+    if [[ -z "$INSIDE_INTERFACE" ]]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] No inside interface found."
+        exit 1
+    fi
+
+    if [[ -z "$OUTSIDE_INTERFACE" ]]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] No outside interface found."
+        exit 1
+    fi
+
+    echo -e "Inside interface detected: ${GREEN}$INSIDE_INTERFACE${TEXTRESET}"
+    echo -e "Outside interface detected: ${GREEN}$OUTSIDE_INTERFACE${TEXTRESET}"
+
+    SUB_INTERFACES=$(find_sub_interfaces "$INSIDE_INTERFACE")
+    ALL_INTERFACES=("$INSIDE_INTERFACE" $SUB_INTERFACES)
+    TOTAL_INTERFACES=${#ALL_INTERFACES[@]}
 
     SELECTED_INTERFACES=()
-    SELECTED_INTERFACES+=("$INSIDE_INTERFACE")
-    for sub in $SUB_INTERFACES; do
-        SELECTED_INTERFACES+=("$sub")
+    echo -e "Select the interfaces that should participate in ${YELLOW}VPN traffic:${TEXTRESET}"
+    echo "0. Exit without applying rules"
+
+    for i in "${!ALL_INTERFACES[@]}"; do
+        echo "$((i+1)). ${ALL_INTERFACES[i]}"
     done
 
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Applying nftables rules for interfaces: ${SELECTED_INTERFACES[*]}"
-    log "Selected VPN interfaces: ${SELECTED_INTERFACES[*]}"
+    while true; do
+        if [[ ${#SELECTED_INTERFACES[@]} -eq $TOTAL_INTERFACES ]]; then
+            echo -e "[${YELLOW}INFO${TEXTRESET}] All available interfaces have been selected. Proceeding..."
+            break
+        fi
 
-    # === nftables Rules ===
-    nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" udp dport 1194 accept 2>/dev/null || true
-    nft add rule inet filter input iifname "tun0" accept 2>/dev/null || true
-    nft add rule inet filter forward iifname "tun0" oifname "$OUTSIDE_INTERFACE" ct state new accept 2>/dev/null || true
+        read -p "Enter the number of the interface to include (0 to finish): " CHOICE
+
+        if [[ "$CHOICE" == "0" ]]; then
+            if [[ ${#SELECTED_INTERFACES[@]} -eq 0 ]]; then
+                echo "No interfaces selected. Exiting..."
+                exit 0
+            else
+                break
+            fi
+        elif [[ "$CHOICE" =~ ^[0-9]+$ ]] && ((CHOICE >= 1 && CHOICE <= TOTAL_INTERFACES)); then
+            INTERFACE_SELECTED="${ALL_INTERFACES[CHOICE-1]}"
+            if [[ ! " ${SELECTED_INTERFACES[@]} " =~ " ${INTERFACE_SELECTED} " ]]; then
+                SELECTED_INTERFACES+=("$INTERFACE_SELECTED")
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Added ${GREEN}$INTERFACE_SELECTED${TEXTRESET} to VPN traffic."
+            else
+                echo -e "[${RED}ERROR${TEXTRESET}] ${YELLOW}$INTERFACE_SELECTED${TEXTRESET} is already selected."
+            fi
+        else
+            echo -e "[${RED}ERROR${TEXTRESET}] Invalid choice. Please enter a valid number from the list."
+        fi
+    done
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Applying rules to nftables..."
+    nft add rule inet filter input iifname "$OUTSIDE_INTERFACE" udp dport 1194 accept
+    nft add rule inet filter input iifname "tun0" accept
+    nft add rule inet filter forward iifname "tun0" oifname "$OUTSIDE_INTERFACE" ct state new accept
 
     for IFACE in "${SELECTED_INTERFACES[@]}"; do
-        nft add rule inet filter forward iifname "tun0" oifname "$IFACE" accept 2>/dev/null || true
-        nft add rule inet filter forward iifname "$IFACE" oifname "tun0" ct state new accept 2>/dev/null || true
+        nft add rule inet filter forward iifname "tun0" oifname "$IFACE" accept
+        nft add rule inet filter forward iifname "$IFACE" oifname "tun0" ct state new accept
     done
 
     nft list ruleset > /etc/sysconfig/nftables.conf
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN nftables rules applied."
-    log "nftables rules for OpenVPN applied."
 
-    echo -e "[${GREEN}DONE${TEXTRESET}] OpenVPN configuration complete."
-    log "OpenVPN configuration complete."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN firewall rules applied successfully!"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}OpenVPN Server Install successfull${TEXTRESET}"
+    sleep 4
 }
-
 install_net_services() {
     INSTALLED_SERVICES[net_services]=1
     log "Installing BIND and ISC KEA..."
