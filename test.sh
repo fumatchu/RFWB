@@ -2347,25 +2347,24 @@ configure_fail2ban # Always configure not user optional
 
 
 # ========= MAIN =========
-#show_welcome_screen
-#network_interface_count
-#detect_active_interface
-#prompt_static_ip_if_dhcp
-#check_root_and_os
-#check_and_enable_selinux
-#check_internet_connectivity
-#validate_and_set_hostname
-#set_inside_interface
-#vlan_main
-#setup_outside_interface
-#config_fw_service
-#setup_nftables_inside
-#configure_nftables_threatlists
-#collect_service_choices
-#update_and_install_packages
-#vm_detection
-#install_speedtest_cli
+show_welcome_screen
+network_interface_count
+detect_active_interface
+prompt_static_ip_if_dhcp
+check_root_and_os
+check_and_enable_selinux
+check_internet_connectivity
+validate_and_set_hostname
+set_inside_interface
+vlan_main
+setup_outside_interface
+config_fw_service
+setup_nftables_inside
+configure_nftables_threatlists
 collect_service_choices
+update_and_install_packages
+vm_detection
+install_speedtest_cli
 install_selected_services
 drop_to_cli
 configure_services
