@@ -1,3 +1,4 @@
+#!/bin/bash
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
@@ -1001,16 +1002,23 @@ install_selected_services() {
     done
 }
 
+#=== Drop to CLI ===
+
+drop_to_cli(){
+dialog --title "Service Configuration" --msgbox "Dropping to CLI to configure services.\n\nUser interaction may be required." 8 60
+clear
+}
+
 #=== CONFIG TIME ===
 configure_time() {
     CHRONY_CONF="/etc/chrony.conf"
     TEMP_CONF="/tmp/chrony_temp.conf"
 
-    echo -e "${YELLOW}[INFO]${TEXTRESET} Configuring chrony for local time synchronization..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring chrony for local time synchronization..."
     log "Configuring chrony..."
 
     if [ ! -f "$CHRONY_CONF" ]; then
-        echo -e "${RED}[ERROR]${TEXTRESET} $CHRONY_CONF not found. Skipping chrony configuration."
+        echo -e "[${RED}ERROR${TEXTRESET}] $CHRONY_CONF not found. Skipping chrony configuration."
         log "chrony.conf not found. Skipping configuration."
         return 1
     fi
@@ -1030,7 +1038,7 @@ configure_time() {
 
     find_ip_scheme() {
         local interface="$1"
-        nmcli -t -f IP4.ADDRESS dev show "$interface" | grep -oP '\d+\.\d+\.\d+\.\d+/\d+'
+        nmcli -t -f IP4.ADDRESS dev show "$interface" | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+/\\d+'
     }
 
     # === Get all inside interfaces and VLANs ===
@@ -1045,7 +1053,7 @@ configure_time() {
     declare -A NETWORK_PREFIXES
     for iface in "${INSIDE_INTERFACES[@]}"; do
         IP_SCHEME=$(find_ip_scheme "$iface")
-        if [[ $IP_SCHEME =~ ([0-9]+\.[0-9]+)\.[0-9]+\.[0-9]+/[0-9]+ ]]; then
+        if [[ $IP_SCHEME =~ ([0-9]+\\.[0-9]+)\\.[0-9]+\\.[0-9]+/\\d+ ]]; then
             NETWORK_PREFIXES["${BASH_REMATCH[1]}"]=1
         fi
     done
@@ -1061,7 +1069,7 @@ configure_time() {
 
     # === Check for existing NTP server/pool lines ===
     if grep -qE '^\s*(server|pool)\s+' "$CHRONY_CONF"; then
-        echo -e "${YELLOW}[INFO]${TEXTRESET} Found existing 'server' or 'pool' entries in $CHRONY_CONF. Replacing with standard pool directive."
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Found existing 'server' or 'pool' entries in $CHRONY_CONF. Replacing with standard pool directive."
         log "Existing NTP servers found in chrony.conf – replacing with pool 2.rocky.pool.ntp.org iburst"
     fi
 
@@ -1099,7 +1107,7 @@ configure_time() {
     fi
 
     # === Wait for chrony to sync ===
-    echo -e "${YELLOW}[INFO]${TEXTRESET} Waiting for chrony to synchronize time..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Waiting for chrony to synchronize time..."
     while true; do
         CHRONYC_OUTPUT=$(chronyc tracking)
         if echo "$CHRONYC_OUTPUT" | grep -q "Leap status.*Not synchronised"; then
@@ -1108,7 +1116,7 @@ configure_time() {
             break
         fi
     done
-    echo -e "${GREEN}[SUCCESS]${TEXTRESET} Chrony is synchronized with NTP pool."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Chrony is synchronized with NTP pool."
     log "Chrony synchronized."
 
     # === Allow NTP traffic through nftables ===
@@ -1149,11 +1157,10 @@ configure_time() {
         systemctl start rfwb-portscan >> "$LOG_FILE" 2>&1
     fi
 
-    echo -e "${GREEN}[SUCCESS]${TEXTRESET} Chrony configuration completed."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Chrony configuration completed."
     log "Chrony configuration complete."
     sleep 2
 }
-
 #=== CONFIG FAIL2BAN ===
 configure_fail2ban() {
     echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Fail2Ban service..."
@@ -1908,6 +1915,8 @@ configure_suricata() {
 
     if [[ "$response" == "$expected" ]]; then
         echo -e "[${GREEN}SUCCESS${TEXTRESET}] Expected test NIDS response received."
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Checking fastlog for entry please wait..."
+        sleep 4
         last_log_line=$(grep 2100498 /var/log/suricata/fast.log | tail -n 1)
         echo "Log: $last_log_line"
         if echo "$last_log_line" | grep -q "\[Classification: Potentially Bad Traffic\]"; then
@@ -2338,23 +2347,25 @@ configure_fail2ban # Always configure not user optional
 
 
 # ========= MAIN =========
-show_welcome_screen
-network_interface_count
-detect_active_interface
-prompt_static_ip_if_dhcp
-check_root_and_os
-check_and_enable_selinux
-check_internet_connectivity
-validate_and_set_hostname
-set_inside_interface
-vlan_main
-setup_outside_interface
-config_fw_service
-setup_nftables_inside
-configure_nftables_threatlists
+#show_welcome_screen
+#network_interface_count
+#detect_active_interface
+#prompt_static_ip_if_dhcp
+#check_root_and_os
+#check_and_enable_selinux
+#check_internet_connectivity
+#validate_and_set_hostname
+#set_inside_interface
+#vlan_main
+#setup_outside_interface
+#config_fw_service
+#setup_nftables_inside
+#configure_nftables_threatlists
+#collect_service_choices
+#update_and_install_packages
+#vm_detection
+#install_speedtest_cli
 collect_service_choices
-update_and_install_packages
-vm_detection
-install_speedtest_cli
 install_selected_services
+drop_to_cli
 configure_services
