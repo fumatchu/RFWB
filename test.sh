@@ -2213,7 +2213,6 @@ webrtc_ports = 16384-32767
 mpeg_ts_port = 1234
 EOF
 
-    dialog --title "QoS Configuration" --msgbox "10% of your total bandwidth will be reserved for Voice services." 7 60
 
     cat << 'EOF' > "$SCRIPT_FILE"
 #!/bin/bash
@@ -2315,7 +2314,8 @@ EOF
     systemctl enable rfwb-qos.timer
     systemctl start rfwb-qos.timer
 
-    dialog --msgbox "RFWB QoS for Voice Installed with 10% reserved bandwidth." 7 60
+    dialog --title "QoS Installation" --infobox "RFWB QoS for Voice Installed with 10% reserved bandwidth." 5 60
+    sleep 3
     log "RFWB QoS for Voice installation complete."
 }
 
