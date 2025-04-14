@@ -1486,7 +1486,6 @@ install_ovpn() {
     log "OpenVPN installation complete."
 }
 
-configure_openvpn() {
     configure_ovpn() {
     LOG_FILE="/var/log/rfwb-openvpn-install.log"
     exec > >(tee -a "$LOG_FILE") 2>&1
