@@ -923,9 +923,9 @@ EOF
   BLOCKED_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
   dialog --title "Setup Complete" --infobox "Threat list applied successfully.\nBlocked IPs: $BLOCKED_COUNT" 7 60
   sleep 4
-  if dialog --title "View Log" --yesno "Would you like to view the threat list update log?" 7 50; then
-    dialog --textbox "$LOG_FILE" 20 80
-  fi
+  #if dialog --title "View Log" --yesno "Would you like to view the threat list update log?" 7 50; then
+  #  dialog --textbox "$LOG_FILE" 20 80
+  #fi
 
   nft list ruleset > /etc/sysconfig/nftables.conf
   systemctl enable --now nftables
