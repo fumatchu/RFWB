@@ -138,9 +138,57 @@ setup_kea_startup_script() {
     sleep 3
     exec 3>&-
 }
+manage_inside_gw() {
+    exec 3>&1
+
+    # Initial notification
+    dialog --title "Gateway Cleanup" \
+           --infobox "Removing all default gateway entries from 'inside' interfaces..." 6 70
+    sleep 3
+
+    # Detect main -inside interface
+    main_interface=$(nmcli device status | awk '/-inside/ {print $1}' | head -n 1)
+    if [ -z "$main_interface" ]; then
+        dialog --title "Error" \
+               --msgbox "No interface ending with '-inside' found." 6 50
+        exit 1
+    fi
+
+    dialog --title "Interface Found" \
+           --infobox "Main inside interface found:\n$main_interface" 6 50
+    sleep 3
+
+    # Get all associated connections for the interface
+    connection_names=$(nmcli -g NAME,DEVICE connection show | awk -F: -v main_intf="$main_interface" '$2 ~ main_intf {print $1}')
+    if [ -z "$connection_names" ]; then
+        dialog --title "Error" \
+               --msgbox "No connections found for interface: $main_interface and its sub-interfaces." 7 60
+        exit 1
+    fi
+
+    # Remove gateway from each connection
+    for connection_name in $connection_names; do
+        dialog --title "Processing" \
+               --infobox "Removing gateway for connection:\n$connection_name" 6 50
+        sleep 3
+
+        nmcli connection modify "$connection_name" ipv4.gateway ""
+
+        dialog --title "Success" \
+               --infobox "Gateway removed for:\n$connection_name" 6 50
+        sleep 3
+    done
+
+    dialog --title "Done" \
+           --infobox "All default gateways have been removed from connections on $main_interface." 6 70
+           sleep 3
+    exec 3>&-
+}
+
 
 
 # Run the function
 update_login_console
 manage_inside_dns
 setup_kea_startup_script
+manage_inside_gw
