@@ -64,7 +64,7 @@ spinner() {
 }
 
 # Run dnf in the background
-dnf -y install wget git dialog >/dev/null 2>&1 &
+dnf -y install wget git ipcalc dialog >/dev/null 2>&1 &
 
 # Get the PID of the last background process
 dnf_pid=$!
