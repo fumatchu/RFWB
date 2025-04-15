@@ -1,4 +1,18 @@
 #!/bin/bash
+update_login_console() {
+    # Notify user with dialog
+    dialog --title "Login Banner Update" \
+           --infobox "Updating login console with server information (issue).\n" 6 60
+    sleep 3
+
+    # Update /etc/issue with dynamic login info
+    sudo bash -c 'cat <<EOF >/etc/issue
+\S
+Kernel \r on an \m
+Hostname: \n
+IP Address: \4
+EOF'
+}
 
 # Function to manage inside interfaces and update DNS settings using dialog
 manage_inside_dns() {
@@ -51,5 +65,6 @@ manage_inside_dns() {
 }
 
 # Run the function
+update_login_console
 manage_inside_dns
 
