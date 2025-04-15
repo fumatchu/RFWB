@@ -93,7 +93,7 @@ manage_inside_dns() {
 
     # Initial notice
     dialog --title "DNS Update in Progress" \
-           --infobox "Updating DNS entries for all 'inside' interfaces on the firewall...\nPlease wait." 6 80
+           --infobox "Updating DNS entries for all 'inside' interfaces on the firewall..." 6 80
     sleep 3
 
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}' | head -n 1)
