@@ -3721,7 +3721,6 @@ configure_fail2ban # Always configure not user optional
             ntopng) configure_ntopng ;;
             ddclient) configure_ddclient ;;
             suricata) configure_suricata ;;
-            portscan) configure_portscan ;;
             snmpd) configure_snmpd ;;
             netdata) configure_netdata ;;
             avahi) configure_avahi ;;
