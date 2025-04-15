@@ -4228,3 +4228,10 @@ install_selected_services
 drop_to_cli
 configure_services
 # ========= POST INSTALLATION/CLEANUP =========
+configure_dnf_automatic
+manage_inside_dns
+update_login_console
+setup_kea_startup_script
+manage_inside_gw
+organize_nft
+prompt_firewall_restart
