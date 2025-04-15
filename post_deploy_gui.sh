@@ -13,6 +13,79 @@ Hostname: \n
 IP Address: \4
 EOF'
 }
+configure_dnf_automatic() {
+    exec 3>&1
+
+    EPEL_CONFIG="/etc/dnf/automatic.conf"
+    BACKUP_CONFIG="/etc/dnf/automatic.conf.bak"
+    TIMER_CONFIG="/etc/systemd/system/dnf-automatic.timer.d/override.conf"
+
+    # Initial message
+    dialog --title "DNF Automatic Configuration" \
+           --infobox "Configuring system to apply security updates using dnf-automatic..." 6 80
+    sleep 3
+
+    # Backup existing config
+    dialog --title "Backing Up Configuration" \
+           --infobox "Backing up current configuration:\n$EPEL_CONFIG -> $BACKUP_CONFIG" 6 60
+    sudo cp "$EPEL_CONFIG" "$BACKUP_CONFIG"
+    sleep 3
+
+    # Modify configuration
+    dialog --title "Applying Security-Only Settings" \
+           --infobox "Setting upgrade_type security and apply_updates to 'yes'" 6 80
+    sudo sed -i 's/^upgrade_type.*/upgrade_type = security/' "$EPEL_CONFIG"
+    sudo sed -i 's/^apply_updates.*/apply_updates = yes/' "$EPEL_CONFIG"
+    sleep 3
+
+    # Create timer override directory
+    sudo mkdir -p /etc/systemd/system/dnf-automatic.timer.d
+
+    # Schedule updates for 3 AM
+    dialog --title "Setting Timer" \
+           --infobox "Configuring dnf-automatic to run at 3:00 AM daily..." 6 60
+    echo -e "[Timer]\nOnCalendar=*-*-* 03:00:00" | sudo tee "$TIMER_CONFIG" > /dev/null
+    sleep 3
+
+    # Reload systemd and enable/start the timer
+    dialog --title "Reloading systemd" \
+           --infobox "Reloading systemd and enabling dnf-automatic.timer" 6 60
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now dnf-automatic.timer
+    sleep 3
+
+    # Validate config changes
+    CONFIG_CHECK=$(grep -E 'upgrade_type|apply_updates' "$EPEL_CONFIG")
+    if echo "$CONFIG_CHECK" | grep -q "apply_updates = yes"; then
+        dialog --title "Configuration Success" \
+               --infobox "dnf-automatic is set to apply security updates." 6 60
+    else
+        dialog --title "Configuration Error" \
+               --msgbox "Failed to apply security settings to:\n$EPEL_CONFIG\nPlease check manually." 8 60
+        exit 1
+    fi
+    sleep 3
+
+    # Validate timer is running
+    if ! systemctl is-active --quiet dnf-automatic.timer; then
+        dialog --title "Timer Error" \
+               --msgbox "dnf-automatic.timer is NOT running!\nCheck with:\n  journalctl -u dnf-automatic.timer" 8 60
+        exit 1
+    fi
+    sleep 2
+
+    # Internally check the schedule (but don't show it separately)
+    if ! systemctl show dnf-automatic.timer | grep -q "OnCalendar=.*03:00:00"; then
+        dialog --title "Schedule Error" \
+               --msgbox "Failed to confirm the scheduled time!\nCheck:\n$TIMER_CONFIG" 8 60
+        exit 1
+    fi
+
+    dialog --title "Setup Complete" \
+           --infobox "dnf-automatic has been successfully configured for:\n• Security-only updates\n• Daily execution at 3:00 AM\n\nNo further action is required." 9 60
+    sleep 3
+    exec 3>&-
+}
 
 # Function to manage inside interfaces and update DNS settings using dialog
 manage_inside_dns() {
@@ -374,9 +447,9 @@ exec 3>&-
 }
 
 
-# Run the function
-update_login_console
+configure_dnf_automatic
 manage_inside_dns
+update_login_console
 setup_kea_startup_script
 manage_inside_gw
 organize_nft
