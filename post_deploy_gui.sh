@@ -474,8 +474,33 @@ prompt_firewall_restart() {
 
     exec 3>&-
 }
+prompt_firewall_restart() {
+    exec 3>&1
 
+    dialog --title "Firewall Setup Complete" \
+           --yesno "The firewall setup is complete.\n\nDo you want to restart the system now?" 8 60
 
+    response=$?
+
+    case $response in
+        0)
+            dialog --title "Rebooting" \
+                   --infobox "Restarting the firewall now..." 5 50
+            sleep 2
+            sudo reboot
+            ;;
+        1)
+            dialog --title "Reboot Skipped" \
+                   --msgbox "The firewall will not be restarted now." 6 50
+            ;;
+        *)
+            dialog --title "Invalid Input" \
+                   --msgbox "No valid choice made. Please run the script again to restart the firewall." 6 60
+            ;;
+    esac
+
+    exec 3>&-
+}
 configure_dnf_automatic
 manage_inside_dns
 update_login_console
