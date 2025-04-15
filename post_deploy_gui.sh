@@ -184,7 +184,194 @@ manage_inside_gw() {
            sleep 3
     exec 3>&-
 }
+organize_nft () {
+NFTABLES_FILE="/etc/sysconfig/nftables.conf"
+TMP_FILE=$(mktemp)
+DEBUG_FILE="/tmp/nftables_debug.conf"
 
+exec 3>&1
+
+# Initial notification
+dialog --title "nftables Optimization" \
+       --infobox "Reorganizing nftables rules for optimization." 6 60
+sleep 3
+
+# Backup original config
+cp "$NFTABLES_FILE" "$NFTABLES_FILE.bak"
+dialog --title "Backup Created" \
+       --infobox "Original nftables config backed up to:\n$NFTABLES_FILE.bak" 6 60
+sleep 3
+
+# Check if a service is installed
+service_is_installed() {
+    systemctl list-unit-files | grep -q "^$1.service"
+}
+
+# Check if a service is running
+service_is_running() {
+    systemctl is-active --quiet "$1"
+}
+
+PORTSCAN_WAS_RUNNING=false
+
+# Stop rfwb-portscan if running
+if service_is_installed "rfwb-portscan"; then
+    if service_is_running "rfwb-portscan"; then
+        dialog --title "Stopping Service" --infobox "Stopping rfwb-portscan temporarily..." 5 50
+        systemctl stop rfwb-portscan
+        PORTSCAN_WAS_RUNNING=true
+        sleep 2
+    fi
+fi
+
+# Inform rule reorganization
+dialog --title "nftables Rule Cleanup" \
+       --infobox "Removing duplicate outbound block rules from output chain..." 6 70
+sleep 3
+
+# Remove old rules
+sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked:" drop/d;}' "$NFTABLES_FILE"
+sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked: " drop/d;}' "$NFTABLES_FILE"
+
+# Rewrite config with cleaned ruleset
+awk '
+  BEGIN {
+    in_input = 0;
+    in_output = 0;
+    in_portscan = 0;
+    input_header = "";
+    output_header = "";
+    input_rules = "";
+    output_rules = "";
+    input_policy = "    type filter hook input priority filter; policy drop;";
+    output_policy = "    type filter hook output priority filter; policy accept;";
+    threat_rule = "    ip saddr @threat_block drop";
+    log_rule = "    log prefix \"Blocked:\" drop";
+    threat_out_rule = "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop";
+    threat_out_seen = 0;
+  }
+
+  /table inet portscan/ {
+    in_portscan = 1;
+  }
+
+  /chain input/ && !in_portscan {
+    in_input = 1;
+    input_header = $0;
+    input_rules = "";
+    next;
+  }
+
+  /chain output/ {
+    in_output = 1;
+    output_header = $0;
+    output_rules = "";
+    next;
+  }
+
+  in_input && /}/ {
+    in_input = 0;
+    print input_header;
+    print input_policy;
+    print threat_rule;
+    print input_rules;
+    print log_rule;
+    print "}";
+    next;
+  }
+
+  in_input {
+    if ($0 ~ /ip saddr @threat_block drop/ || $0 ~ /log prefix "Blocked:/ || $0 ~ /type filter hook input priority filter; policy/) {
+      next;
+    } else {
+      input_rules = input_rules "\n" $0;
+    }
+    next;
+  }
+
+  in_output && /}/ {
+    in_output = 0;
+    print output_header;
+    print output_policy;
+    if (!threat_out_seen) {
+      print threat_out_rule;
+      threat_out_seen = 1;
+    }
+    print output_rules;
+    print "}";
+    next;
+  }
+
+  in_output {
+    if ($0 ~ /ip daddr @threat_block log prefix "Outbound Blocked: "/ || $0 ~ /type filter hook output priority filter; policy/) {
+      next;
+    } else {
+      output_rules = output_rules "\n" $0;
+    }
+    next;
+  }
+
+  { print }
+' "$NFTABLES_FILE" > "$TMP_FILE"
+
+cp "$TMP_FILE" "$DEBUG_FILE"
+dialog --title "Debug File Saved" \
+       --infobox "Modified nftables configuration saved to:\n$DEBUG_FILE" 6 60
+sleep 3
+
+mv "$TMP_FILE" "$NFTABLES_FILE"
+chown --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
+chmod --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
+restorecon -v "$NFTABLES_FILE" &>/dev/null
+
+# Validate nftables config
+if nft -c -f "$NFTABLES_FILE"; then
+    dialog --title "Validation" \
+           --infobox "nftables configuration is valid.\nReloading firewall..." 6 50
+    systemctl restart nftables
+    sleep 3
+else
+    dialog --title "ERROR" \
+           --msgbox "nftables configuration test failed!\nRestoring previous config..." 7 60
+    cp "$NFTABLES_FILE.bak" "$NFTABLES_FILE"
+    systemctl restart nftables
+    dialog --title "Recovery" \
+           --msgbox "Restored from backup.\nCheck debug output:\n$DEBUG_FILE" 7 60
+fi
+
+# Restart rfwb-portscan if it was previously running
+if [[ "$PORTSCAN_WAS_RUNNING" == true ]]; then
+    dialog --title "Restarting" \
+           --infobox "Restarting rfwb-portscan service..." 5 50
+    systemctl start rfwb-portscan
+    sleep 2
+fi
+
+# Final service status checks
+status_msg=""
+
+if service_is_installed "rfwb-portscan"; then
+    if service_is_running "rfwb-portscan"; then
+        status_msg+="rfwb-portscan is running.\n"
+    else
+        systemctl start rfwb-portscan
+        status_msg+="rfwb-portscan was restarted.\n"
+    fi
+fi
+
+if service_is_installed "rfwb-ps-mon"; then
+    if service_is_running "rfwb-ps-mon"; then
+        status_msg+="rfwb-ps-mon is running.\n"
+    else
+        systemctl start rfwb-ps-mon
+        status_msg+="rfwb-ps-mon was restarted.\n"
+    fi
+fi
+
+dialog --title "Final Status" --infobox "$status_msg" 10 60
+sleep 3
+exec 3>&-
+}
 
 
 # Run the function
@@ -192,3 +379,4 @@ update_login_console
 manage_inside_dns
 setup_kea_startup_script
 manage_inside_gw
+organize_nft
