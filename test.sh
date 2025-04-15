@@ -416,10 +416,10 @@ config_fw_service() {
 
   # Disable firewalld if running
   if systemctl is-active --quiet firewalld; then
-    echo "[INFO] firewalld is running, disabling it..." >> "$DEBUG_LOG"
+    echo "[INFO] Disabling firewalld" >> "$DEBUG_LOG"
     systemctl stop firewalld >> "$DEBUG_LOG" 2>&1
     systemctl disable firewalld >> "$DEBUG_LOG" 2>&1
-    FIREWALLD_STATUS="firewalld was running and has been disabled."
+    FIREWALLD_STATUS="Disabled firewalld"
   else
     echo "[INFO] firewalld is not running." >> "$DEBUG_LOG"
     FIREWALLD_STATUS="firewalld was already stopped."
@@ -427,10 +427,10 @@ config_fw_service() {
 
   # Enable nftables if not running
   if ! systemctl is-active --quiet nftables; then
-    echo "[INFO] nftables is not running, enabling it..." >> "$DEBUG_LOG"
+    echo "[INFO] Enabling nftables" >> "$DEBUG_LOG"
     systemctl start nftables >> "$DEBUG_LOG" 2>&1
     systemctl enable nftables >> "$DEBUG_LOG" 2>&1
-    NFTABLES_STATUS="nftables was not running and has been started."
+    NFTABLES_STATUS="Enabling nftables"
   else
     echo "[INFO] nftables is already running." >> "$DEBUG_LOG"
     NFTABLES_STATUS="nftables was already running."
