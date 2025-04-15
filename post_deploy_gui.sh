@@ -445,6 +445,35 @@ dialog --title "Final Status" --infobox "$status_msg" 10 60
 sleep 3
 exec 3>&-
 }
+#!/bin/bash
+
+prompt_firewall_restart() {
+    exec 3>&1
+
+    dialog --title "Firewall Setup Complete" \
+           --yesno "The firewall setup is complete.\n\nDo you want to restart the system now?" 8 60
+
+    response=$?
+
+    case $response in
+        0)
+            dialog --title "Rebooting" \
+                   --infobox "Restarting the firewall now..." 5 50
+            sleep 2
+            sudo reboot
+            ;;
+        1)
+            dialog --title "Reboot Skipped" \
+                   --msgbox "The firewall will not be restarted now." 6 50
+            ;;
+        *)
+            dialog --title "Invalid Input" \
+                   --msgbox "No valid choice made. Please run the script again to restart the firewall." 6 60
+            ;;
+    esac
+
+    exec 3>&-
+}
 
 
 configure_dnf_automatic
@@ -453,3 +482,4 @@ update_login_console
 setup_kea_startup_script
 manage_inside_gw
 organize_nft
+prompt_firewall_restart
