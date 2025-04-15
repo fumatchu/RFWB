@@ -3178,7 +3178,6 @@ else
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] $KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
 
     # Loop to repeatedly ask the user if they want to add another subnet
-    clear
     while true; do
         read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
         if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
