@@ -63,8 +63,84 @@ manage_inside_dns() {
     dialog --title "Done" --msgbox "DNS settings have been updated for all matching connections." 7 50
     exec 3>&-
 }
+# Function to configure rc.local with KEA startup script using dialog
+setup_kea_startup_script() {
+    exec 3>&1
+
+    SRC_SCRIPT="/root/RFWB/kea_delay_start.sh"
+    DEST_SCRIPT="/usr/local/bin/kea_delay_start.sh"
+    RC_LOCAL="/etc/rc.d/rc.local"
+
+    # Initial message
+    dialog --title "KEA Startup Setup" \
+           --infobox "Installing KEA startup script using rc.local..." 6 60
+    sleep 3
+
+    # Check if source script exists
+    if [ ! -f "$SRC_SCRIPT" ]; then
+        dialog --title "Error" \
+               --msgbox "KEA startup script not found:\n$SRC_SCRIPT\n\nExiting." 8 60
+        exit 1
+    fi
+
+    # Copy script to /usr/local/bin
+    dialog --title "Copying Script" \
+           --infobox "Copying KEA startup script to:\n$DEST_SCRIPT" 6 60
+    sleep 3
+
+    sudo cp "$SRC_SCRIPT" "$DEST_SCRIPT"
+    sudo chmod +x "$DEST_SCRIPT"
+
+    dialog --title "Success" \
+           --infobox "KEA startup script copied and made executable." 5 50
+    sleep 3
+
+    # Ensure rc.local exists
+    if [ ! -f "$RC_LOCAL" ]; then
+        dialog --title "rc.local" \
+               --infobox "Creating rc.local file..." 5 50
+        sudo touch "$RC_LOCAL"
+        sleep 3
+    fi
+
+    sudo chmod +x "$RC_LOCAL"
+    dialog --title "rc.local" \
+           --infobox "rc.local is now executable." 5 50
+    sleep 3
+
+    # Add to rc.local if not already added
+    if ! grep -q "$DEST_SCRIPT" "$RC_LOCAL"; then
+        echo "$DEST_SCRIPT" | sudo tee -a "$RC_LOCAL" >/dev/null
+        dialog --title "rc.local" \
+               --infobox "Added $DEST_SCRIPT to rc.local." 5 60
+        sleep 3
+    fi
+
+    # Enable rc-local service if not enabled
+    if ! systemctl is-enabled rc-local.service &>/dev/null; then
+        dialog --title "rc-local Service" \
+               --infobox "Enabling rc-local service..." 5 50
+        sudo ln -sf "$RC_LOCAL" /etc/rc.local
+        sudo systemctl enable rc-local
+        sleep 3
+    fi
+
+    # Start rc-local service if not running
+    if ! systemctl is-active rc-local.service &>/dev/null; then
+        dialog --title "rc-local Service" \
+               --infobox "Starting rc-local service..." 5 50
+        sudo systemctl start rc-local
+        sleep 3
+    fi
+
+    dialog --title "Setup Complete" \
+           --infobox "KEA startup script has been successfully configured to run at boot:\n$DEST_SCRIPT" 7 80
+    sleep 3
+    exec 3>&-
+}
+
 
 # Run the function
 update_login_console
 manage_inside_dns
-
+setup_kea_startup_script
