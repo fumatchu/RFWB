@@ -3517,7 +3517,198 @@ fi
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
     sleep 4
 }
+configure_evebox () {
+mkdir -p /etc/evebox/
+    # Define configuration file path
+    CONFIG_FILE="/etc/evebox/evebox.yaml"
 
+    # Backup existing configuration file if it exists
+    if [ -f "$CONFIG_FILE" ]; then
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Backing up existing configuration file..."
+        cp "$CONFIG_FILE" "$CONFIG_FILE.bak"
+    fi
+
+    # Write new configuration to evebox.yaml including all remarks
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Writing new configuration to ${GREEN}$CONFIG_FILE...${TEXTRESET}"
+    cat <<EOL > $CONFIG_FILE
+# This is a minimal evebox.yaml for Elasticsearch and SQLite.
+
+http:
+  ## By default, EveBox binds to localhost. Uncomment this line to open
+  ## it up.
+  host: "0.0.0.0"
+
+  tls:
+    # By default TLS is enabled and a self-signed certificate will
+    # be created. Uncomment and set this to false to disable TLS.
+    enabled: false
+
+# By default authentication is enabled, uncomment this line to disable
+# authentication.
+#authentication: false
+
+data-directory: /var/lib/evebox
+
+database:
+  type: sqlite
+
+  #elasticsearch:
+   # url: http://127.0.0.1:9200
+
+    ## If using the Filebeat Suricata module, you'll probably want to
+    ## change the index to "filebeat".
+    #index: logstash
+
+    # If using the Filebeat Suricata module this needs to be true.
+    #ecs: false
+
+    ## If your Elasticsearch is using a self-signed certificate,
+    ## you'll likely need to set this to true.
+    #disable-certificate-check: false
+
+    ## If your Elasticsearch requires a username and password, provide
+    ## them here.
+    #username:
+    #password:
+
+  retention:
+    # Only keep events for the past 7 days.
+    # - SQLite only
+    # - Default 7 days
+    # - Set to 0 to disable
+    days: 7
+
+    # Maximum database size.
+    # - SQLite only
+    # - No default
+    size: "20 GB"
+
+# The server can process events itself when using SQLite or a classic
+# Logstash style Elasticsearch template.
+input:
+  enabled: true
+
+  # Suricata EVE file patterns to look for and read.
+  paths:
+    - "/var/log/suricata/eve.json"
+    - "/var/log/suricata/eve.*.json"
+EOL
+
+    # Create evebox-agent systemd service
+    echo "Creating evebox-agent systemd service..."
+    cat <<EOF > /etc/systemd/system/evebox-agent.service
+[Unit]
+Description=EveBox Agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/evebox agent --server http://127.0.0.1:5636 /var/log/suricata/eve.json
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Reload systemd to recognize the new service
+    systemctl daemon-reload
+    # Add group permissions to eve and suricata
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting Group permissions with Suricata"
+    sudo usermod -aG suricata evebox
+    sudo usermod -aG evebox suricata
+    #Make sure logrotate is happy
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting Log permissions for Logs files"
+    sudo chown -R suricata:suricata /var/log/suricata
+    sudo chmod 750 /var/log/suricata
+    sudo find /var/log/suricata -type f -exec chmod 640 {} \;
+    #restart suricata
+    systemctl restart suricata
+    sleep 2
+    # Enable and start the EveBox and evebox-agent services
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting the EveBox and evebox-agent services..."
+    systemctl enable evebox
+    systemctl start evebox
+    systemctl enable evebox-agent
+    systemctl start evebox-agent
+
+    # Check if services are running
+    if systemctl is-active --quiet evebox && systemctl is-active --quiet evebox-agent; then
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] EveBox and EveBox Agent services are running."
+    else
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start EveBox or EveBox Agent services. Please check the logs for more details."
+        exit 1
+    fi
+
+    # Function to add a rule to nftables for port 5636
+    configure_nftables() {
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring nftables..."
+
+        # Find interfaces ending with '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
+
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with '-inside' profile found. Exiting..."
+            exit 1
+        fi
+
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
+
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 5636 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 5636 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow TCP on port 5636 for interface ${GREEN}$iface${TEXTRESET}"
+            else
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow TCP on port 5636 for interface ${GREEN}$iface${TEXTRESET}"
+            fi
+        done
+
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+
+        sudo systemctl restart nftables
+
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+    }
+
+    # Configure nftables to allow TCP traffic on port 5636
+    configure_nftables
+
+   # Capture administrator credentials from /var/log/messages
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] Capturing administrator credentials from /var/log/messages..."
+sleep 5
+# Remove ANSI color codes and extract the latest matching log entry
+credentials=$(tail -n 500 /var/log/messages | sed 's/\x1B\[[0-9;]*m//g' | grep "Created administrator username and password" | tail -n 1)
+if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
+    admin_user="${BASH_REMATCH[1]}"
+    admin_pass="${BASH_REMATCH[2]}"
+    echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
+    echo -e "Your username is: $admin_user and your password is: $admin_pass"
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
+fi
+
+
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+}
 
 
 
