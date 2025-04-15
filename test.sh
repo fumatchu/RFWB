@@ -3455,7 +3455,69 @@ else
     echo -e "[${RED}ERROR${TEXTRESET}] Named service failed to start after KEA subnet Cleanup."
     exit 1
 fi
+# Function to locate the inside interfaces
+    find_inside_interfaces() {
+        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+        if [ -z "$main_interface" ]; then
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTREST} profile found. Exiting..."
+            exit 1
+        fi
+
+        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
+        inside_interfaces="$main_interface $sub_interfaces"
+
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}]  Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
+    }
+
+    # Function to set up nftables rules for DHCP on the inside interfaces
+    setup_nftables_for_dhcp() {
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
+            else
+                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
+            fi
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
+            else
+                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
+            fi
+        done
+
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+        sudo systemctl restart nftables
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_dhcp
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
+    sleep 4
 }
+
 
 
 
