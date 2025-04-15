@@ -2480,7 +2480,258 @@ EOF
     log "RFWB QoS for Voice installation complete."
 }
 
+configure_bind_and_kea () {
+#Configure BIND
+# Define file paths and directories
+NAMED_CONF="/etc/named.conf"
+KEYS_FILE="/etc/named/keys.conf"
+ZONE_DIR="/var/named/"
 
+generate_tsig_key() {
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Generating TSIG key using rndc-confgen..."
+
+    # Generate an rndc key using rndc-confgen
+    sudo rndc-confgen -a
+
+    # The key will be generated and stored in /etc/rndc.key by default
+    key_file="/etc/rndc.key"
+
+    # Extract the key secret
+    key_secret=$(grep secret $key_file | awk '{print $2}' | tr -d '";')
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Key generated: ${GREEN}$key_secret${TEXTRESET}"
+
+    # Append the key to keys.conf
+    sudo bash -c "cat > $KEYS_FILE" <<EOF
+key "Kea-DDNS" {
+    algorithm hmac-sha256;
+    secret "$key_secret";
+};
+EOF
+}
+
+configure_bind() {
+
+    # Extract domain and hostname
+    full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
+
+    if [[ ! "$full_hostname" == *.* ]]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] Hostname does not contain a domain part.${TEXTRESET}"
+        return 1
+    fi
+
+    hostname="${full_hostname%%.*}"
+    domain="${full_hostname#*.}"
+
+    # Get the server's IP address (IPv4 assumed here)
+    ip_address=$(hostname -I | awk '{print $1}')
+
+    if [[ -z "$ip_address" ]]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] Unable to determine IP address."
+        return 1
+    fi
+
+    reverse_zone=$(echo $ip_address | awk -F. '{print $3"."$2"."$1}')
+    reverse_ip=$(echo $ip_address | awk -F. '{print $4}')
+
+    # Check if variables are set correctly
+    if [[ -z "$domain" || -z "$reverse_zone" || -z "$reverse_ip" ]]; then
+        echo -e "[${RED}ERROR${TEXTRESET}] Domain or reverse zone information is missing."
+        return 1
+    fi
+
+    # Create forward and reverse zone files
+    forward_zone_file="${ZONE_DIR}db.${domain}"
+    reverse_zone_file="${ZONE_DIR}db.${reverse_zone}"
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring BIND with forward and reverse zones..."
+
+    # Insert forwarders configuration right after the crypto policy include line
+    sudo sed -i '/include "\/etc\/crypto-policies\/back-ends\/bind.config";/a \
+forwarders {\n\
+    208.67.222.222;\n\
+    208.67.220.220;\n\
+};\n\
+forward only;' $NAMED_CONF
+
+    # Append zone configurations at the bottom of named.conf
+    sudo bash -c "cat >> $NAMED_CONF" <<EOF
+
+include "$KEYS_FILE";
+
+zone "$domain" {
+    type master;
+    file "$forward_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+
+zone "${reverse_zone}.in-addr.arpa" {
+    type master;
+    file "$reverse_zone_file";
+    allow-update { key "Kea-DDNS"; };
+};
+EOF
+
+    # Modify existing configuration in named.conf
+    sudo sed -i '/listen-on port 53 {/s/{ 127.0.0.1; }/{ 127.0.0.1; any; }/' $NAMED_CONF
+    sudo sed -i 's/allow-query[[:space:]]*{[[:space:]]*localhost;[[:space:]]*};/allow-query { localhost; any; };/' $NAMED_CONF
+
+    # Create forward zone file
+    sudo bash -c "cat > $forward_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$hostname IN  A     $ip_address
+EOF
+
+    # Create reverse zone file
+    sudo bash -c "cat > $reverse_zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   $full_hostname. admin.$domain. (
+    2023100501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    $full_hostname.
+$reverse_ip  IN  PTR   $full_hostname.
+EOF
+
+    # Set file permissions
+    sudo chown root:named $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    sudo chmod 640 $NAMED_CONF $forward_zone_file $reverse_zone_file $KEYS_FILE
+    semanage boolean -m --on named_write_master_zones
+    chown named:named $forward_zone_file $reverse_zone_file
+    chmod g+w /var/named
+    # Define the file path
+    RNDC_KEY_FILE="/etc/rndc.key"
+
+    # Check if the file exists
+    if [[ -f "$RNDC_KEY_FILE" ]]; then
+        # Change the ownership to 'named' user and group
+        chown named:named "$RNDC_KEY_FILE"
+
+        # Set the permissions to 600
+        chmod 600 "$RNDC_KEY_FILE"
+
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Permissions and ownership for ${GREEN}$RNDC_KEY_FILE${TEXTRESET} have been set."
+    else
+        echo -e "[${RED}ERROR${TEXTRESET}] $RNDC_KEY_FILE does not exist."
+        exit 1
+    fi
+
+    # Check SELinux status and provide guidance
+    SELINUX_STATUS=$(getenforce)
+    if [[ "$SELINUX_STATUS" != "Enforcing" ]]; then
+        echo "SELinux is currently set to $SELINUX_STATUS."
+    else
+        echo " "
+    fi
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] BIND configuration complete."
+    sleep 3
+}
+
+start_and_enable_service() {
+    local service_name="$1"
+
+    echo -e "[${YELLOW}INFO${TEXTRESET}]Enabling and starting the ${GREEN}$service_name${TEXTRESET} service..."
+
+    sudo systemctl enable "$service_name"
+    sudo systemctl start "$service_name"
+
+    # Check if the service is running
+    if sudo systemctl status "$service_name" | grep -q "running"; then
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}$service_name${TEXTRESET} service is running."
+    else
+        echo -e "[${RED}ERROR${TEXTRESET}] Failed to start ${GREEN}$service_name${TEXTRESET} service."
+        exit 1
+    fi
+    sleep 2
+}
+
+# Main execution block
+     clear
+     echo -e "${GREEN}Configuring BIND${TEXTRESET}"
+     sleep 2
+if [ -f "$NAMED_CONF" ]; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $NAMED_CONF found. Proceeding with configuration..."
+    generate_tsig_key
+    configure_bind
+    start_and_enable_service "named"
+else
+    echo -e "[${YELLOW}INFO${TEXTRESET}] $NAMED_CONF not found. Skipping BIND configuration.${TEXTRESET}"
+fi
+
+ # Function to locate the inside interface and its sub-interfaces
+    find_inside_interfaces() {
+        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
+
+        if [ -z "$main_interface" ]; then
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
+            exit 1
+        fi
+
+        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
+        inside_interfaces="$main_interface $sub_interfaces"
+
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
+    }
+
+    # Function to set up nftables rules for DNS on the inside interfaces
+    setup_nftables_for_dns() {
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
+
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
+
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" udp dport 53 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DNS (UDP) on interface ${GREEN}$iface${TEXTRESET}"
+            else
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DNS (UDP) on interface ${GREEN}$iface${TEXTRESET}"
+            fi
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 53 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 53 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DNS (TCP) on interface ${GREEN}$iface${TEXTRESET}"
+            else
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DNS (TCP) on interface ${GREEN}$iface${TEXTRESET}"
+            fi
+        done
+
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+        sudo systemctl restart nftables
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_dns
+
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}BIND Install Complete...${TEXTRESET}"
+    sleep 4
+    }
 
 
 
