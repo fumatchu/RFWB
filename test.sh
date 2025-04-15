@@ -2997,7 +2997,7 @@ EOF
 #}
 if [ -f "$KEA_CONF" ]; then
     echo -e "[${YELLOW}INFO${TEXTRESET}] $KEA_CONF found. Proceeding with configuration..."
-    configure_kea
+    
 else
     echo -e "[${RED}ERROR${TEXTRESET}] $KEA_CONF not found. Skipping KEA-DHCP configuration."
 fi
