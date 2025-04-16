@@ -1399,7 +1399,7 @@ configure_cockpit () {
     systemctl start cockpit.socket
 
     # Continue with the rest of the script
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Cockpit Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
     
@@ -3896,8 +3896,8 @@ if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
     admin_user="${BASH_REMATCH[1]}"
     admin_pass="${BASH_REMATCH[2]}"
     echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to /root/evebox_credentials.${TEXTRESET}"
-    echo -e "Your username is: $admin_user and your password is: $admin_pass"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to ${GREEN}/root/evebox_credentials.${TEXTRESET}"
+    echo -e "Your username is: ${GREEN}$admin_user${TEXTRESET} and your password is: ${GREEN}$admin_pass"${TEXTRESET
 else
     echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
 fi
