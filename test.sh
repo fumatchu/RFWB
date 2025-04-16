@@ -1450,7 +1450,7 @@ allow-interfaces=$INTERFACES
 enable-reflector=yes
 EOF
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi configuration updated for interfaces: $INTERFACES"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi configuration updated for interfaces: ${GREEN}$INTERFACES${TEXTRESET}"
     log "Avahi configuration updated with interfaces: $INTERFACES"
 
     # Enable and start Avahi
@@ -1488,7 +1488,8 @@ EOF
         log "rfwb-portscan restarted after nftables update."
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi has been configured and is now reflecting mDNS on: $INTERFACES"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi has been configured and is now reflecting mDNS on: ${GREEN}$INTERFACES${TEXTRESET}"
+     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi Configured Successfully!"
     log "Avahi configuration complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
