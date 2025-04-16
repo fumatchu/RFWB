@@ -2306,7 +2306,7 @@ install_netdata() {
     log "Netdata installation complete."
 }
 configure_netdata() {
-    echo -e "${CYAN}==>Configuring netdata...${TEXTRESET}"
+    echo -e "${CYAN}==>Configuring NETDATA...${TEXTRESET}"
     
     rm -f /tmp/netdata-kickstart.sh
 
@@ -2351,7 +2351,7 @@ configure_netdata() {
         systemctl start rfwb-portscan
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}netdata Configured Successfully...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}NETDATA Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
 }
