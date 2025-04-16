@@ -4351,7 +4351,7 @@ if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
         echo -e "[${RED}ERROR${TEXTRESET}] EPEL repository update failed. Please check $EPEL_REPO manually."
         exit 1
     else
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}] EPEL repository updated successfully! Cisco mirror removed."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EPEL repository updated successfully!${TEXTRESET}"
     fi
 else
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
