@@ -2854,7 +2854,6 @@ start_and_enable_service() {
 }
 
 # Main execution block
-     clear
      echo -e "${CYAN}==>Configuring BIND...${TEXTRESET}"
 if [ -f "$NAMED_CONF" ]; then
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] $NAMED_CONF found. Proceeding with configuration..."
