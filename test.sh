@@ -1489,7 +1489,7 @@ EOF
     fi
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi has been configured and is now reflecting mDNS on: ${GREEN}$INTERFACES${TEXTRESET}"
-     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi Configured Successfully!"
+     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Avahi Configured Successfully!${TEXTRESET}"
     log "Avahi configuration complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
