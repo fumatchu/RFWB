@@ -4103,7 +4103,7 @@ sleep 3
 
 
 manage_inside_gw() {
-    echo -e "${CYAN}==>Removeing Default Gateway Entries on 'inside' interfaces${TEXTRESET}"
+    echo -e "${CYAN}==>Removing Default Gateway Entries on 'inside' interfaces${TEXTRESET}"
     sleep 4
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
     if [ -z "$main_interface" ]; then
