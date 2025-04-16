@@ -1328,7 +1328,7 @@ install_cockpit() {
 }
 # === CONFIGURE COCKPIT ===
 
-configur_cockpit () {
+configure_cockpit () {
     find_inside_interfaces() {
         # Find all active interfaces with a name ending in '-inside'
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
