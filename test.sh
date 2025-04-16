@@ -2674,7 +2674,7 @@ EOF
         echo -e "[${RED}ERROR${TEXTRESET}] Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
     fi
     # Continue with the rest of the script
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}SNMP Daemon Configured Successfully...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}SNMP Daemon Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
 }
