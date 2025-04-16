@@ -2678,7 +2678,6 @@ EOF
     sleep 3
 }
 configure_bind_and_kea () {
-echo -e "${CYAN}==>Configuring bind...${TEXTRESET}"
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
