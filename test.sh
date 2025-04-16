@@ -2855,8 +2855,7 @@ start_and_enable_service() {
 
 # Main execution block
      clear
-     echo -e "${GREEN}Configuring BIND${TEXTRESET}"
-     sleep 2
+     echo -e "${CYAN}==>Configuring BIND...${TEXTRESET}"
 if [ -f "$NAMED_CONF" ]; then
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] $NAMED_CONF found. Proceeding with configuration..."
     generate_tsig_key
