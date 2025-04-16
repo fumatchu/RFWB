@@ -3897,7 +3897,7 @@ if [[ $credentials =~ username=([a-zA-Z0-9]+),\ password=([a-zA-Z0-9]+) ]]; then
     admin_pass="${BASH_REMATCH[2]}"
     echo "username=$admin_user, password=$admin_pass" > /root/evebox_credentials
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Credentials captured and saved to ${GREEN}/root/evebox_credentials.${TEXTRESET}"
-    echo -e "Your username is: ${GREEN}$admin_user${TEXTRESET} and your password is: ${GREEN}$admin_pass"${TEXTRESET
+    echo -e "Your username is: ${GREEN}$admin_user${TEXTRESET} and your password is: ${GREEN}$admin_pass${TEXTRESET}"
 else
     echo -e "[${RED}ERROR${TEXTRESET}] Failed to capture administrator credentials from logs.${TEXTRESET}"
 fi
