@@ -1198,7 +1198,7 @@ configure_time() {
         systemctl start rfwb-portscan >> "$LOG_FILE" 2>&1
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Time Synchronization completed."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Time Synchronization Completed Successfully!${TEXTRESET}"
     log "Chrony configuration complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
