@@ -1,8 +1,4 @@
-#!/bin/bash
-GREEN="\033[0;32m"
-RED="\033[0;31m"
-YELLOW="\033[1;33m"
-TEXTRESET="\033[0m"
+x
 
 # ========= VALIDATION HELPERS =========
 validate_cidr() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$ ]]; }
@@ -3909,314 +3905,248 @@ configure_fail2ban # Always configure not user optional
 }
 
 #========POST INSTALLATION AND CLEANUP
-update_login_console() {
-    # Notify user with dialog
-    dialog --title "Login Banner Update" \
-           --infobox "Updating login console with server information (issue).\n" 6 60
-    sleep 3
+configure_dnf_automatic () {
+# Install and configure dnf-automatic for security updates only
+echo -e "${CYAN}==>Configuring system for security updates only...${TEXTRESET}"
 
-    # Update /etc/issue with dynamic login info
-    sudo bash -c 'cat <<EOF >/etc/issue
+EPEL_CONFIG="/etc/dnf/automatic.conf"
+BACKUP_CONFIG="/etc/dnf/automatic.conf.bak"
+TIMER_CONFIG="/etc/systemd/system/dnf-automatic.timer.d/override.conf"
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] Backing up the current dnf-automatic configuration..."
+sudo cp "$EPEL_CONFIG" "$BACKUP_CONFIG"
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring dnf-automatic for security updates..."
+sudo sed -i 's/^upgrade_type.*/upgrade_type = security/' "$EPEL_CONFIG"
+sudo sed -i 's/^apply_updates.*/apply_updates = yes/' "$EPEL_CONFIG"
+
+# Ensure the override directory exists
+sudo mkdir -p /etc/systemd/system/dnf-automatic.timer.d
+
+# Set the update time to 3 AM
+echo -e "[${YELLOW}INFO${TEXTRESET}] Setting dnf-automatic to run at 3:00 AM..."
+echo -e "[Timer]\nOnCalendar=*-*-* 03:00:00" | sudo tee "$TIMER_CONFIG" > /dev/null
+
+# Reload systemd and restart the timer
+echo -e "[${YELLOW}INFO${TEXTRESET}] Reloading systemd and restarting dnf-automatic.timer..."
+sudo systemctl daemon-reload
+sudo systemctl enable --now dnf-automatic.timer
+
+# Validate the configuration
+echo -e "[${YELLOW}INFO${TEXTRESET}] Validating configuration..."
+CONFIG_CHECK=$(grep -E 'upgrade_type|apply_updates' "$EPEL_CONFIG")
+
+if echo "$CONFIG_CHECK" | grep -q "apply_updates = yes"; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] dnf-automatic is correctly configured to apply security updates."
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] Configuration failed! Check $EPEL_CONFIG manually."
+    exit 1
+fi
+
+# Validate the timer status
+echo -e "[${YELLOW}INFO${TEXTRESET}] Checking dnf-automatic.timer status..."
+if systemctl is-active --quiet dnf-automatic.timer; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] dnf-automatic.timer is running."
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] dnf-automatic.timer is NOT running! Check logs: journalctl -u dnf-automatic.timer"
+    exit 1
+fi
+
+# Validate the new update time
+echo -e "[${YELLOW}INFO${TEXTRESET}] Checking the scheduled update time..."
+if systemctl show dnf-automatic.timer | grep -q "OnCalendar=.*03:00:00"; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] dnf-automatic is scheduled to run at 3:00 AM."
+else
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to set the update time! Check $TIMER_CONFIG."
+    exit 1
+fi
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] dnf-automatic setup is complete."
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
+}
+
+update_login_console () {
+# Update /etc/issue for login information
+echo -e "${CYAN}==>Updating Login Console with Hostname and IP address${TEXTRESET}"
+sudo bash -c 'cat <<EOF >/etc/issue
 \S
 Kernel \r on an \m
 Hostname: \n
 IP Address: \4
 EOF'
-}
-configure_dnf_automatic() {
-    exec 3>&1
-
-    EPEL_CONFIG="/etc/dnf/automatic.conf"
-    BACKUP_CONFIG="/etc/dnf/automatic.conf.bak"
-    TIMER_CONFIG="/etc/systemd/system/dnf-automatic.timer.d/override.conf"
-
-    # Initial message
-    dialog --title "DNF Automatic Configuration" \
-           --infobox "Configuring system to apply security updates using dnf-automatic..." 6 80
-    sleep 3
-
-    # Backup existing config
-    dialog --title "Backing Up Configuration" \
-           --infobox "Backing up current configuration:\n$EPEL_CONFIG -> $BACKUP_CONFIG" 6 60
-    sudo cp "$EPEL_CONFIG" "$BACKUP_CONFIG"
-    sleep 3
-
-    # Modify configuration
-    dialog --title "Applying Security-Only Settings" \
-           --infobox "Setting upgrade_type security and apply_updates to 'yes'" 6 80
-    sudo sed -i 's/^upgrade_type.*/upgrade_type = security/' "$EPEL_CONFIG"
-    sudo sed -i 's/^apply_updates.*/apply_updates = yes/' "$EPEL_CONFIG"
-    sleep 3
-
-    # Create timer override directory
-    sudo mkdir -p /etc/systemd/system/dnf-automatic.timer.d
-
-    # Schedule updates for 3 AM
-    dialog --title "Setting Timer" \
-           --infobox "Configuring dnf-automatic to run at 3:00 AM daily..." 6 60
-    echo -e "[Timer]\nOnCalendar=*-*-* 03:00:00" | sudo tee "$TIMER_CONFIG" > /dev/null
-    sleep 3
-
-    # Reload systemd and enable/start the timer
-    dialog --title "Reloading systemd" \
-           --infobox "Reloading systemd and enabling dnf-automatic.timer" 6 60
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now dnf-automatic.timer
-    sleep 3
-
-    # Validate config changes
-    CONFIG_CHECK=$(grep -E 'upgrade_type|apply_updates' "$EPEL_CONFIG")
-    if echo "$CONFIG_CHECK" | grep -q "apply_updates = yes"; then
-        dialog --title "Configuration Success" \
-               --infobox "dnf-automatic is set to apply security updates." 6 60
-    else
-        dialog --title "Configuration Error" \
-               --msgbox "Failed to apply security settings to:\n$EPEL_CONFIG\nPlease check manually." 8 60
-        exit 1
-    fi
-    sleep 3
-
-    # Validate timer is running
-    if ! systemctl is-active --quiet dnf-automatic.timer; then
-        dialog --title "Timer Error" \
-               --msgbox "dnf-automatic.timer is NOT running!\nCheck with:\n  journalctl -u dnf-automatic.timer" 8 60
-        exit 1
-    fi
-    sleep 2
-
-    # Internally check the schedule (but don't show it separately)
-    if ! systemctl show dnf-automatic.timer | grep -q "OnCalendar=.*03:00:00"; then
-        dialog --title "Schedule Error" \
-               --msgbox "Failed to confirm the scheduled time!\nCheck:\n$TIMER_CONFIG" 8 60
-        exit 1
-    fi
-
-    dialog --title "Setup Complete" \
-           --infobox "dnf-automatic has been successfully configured for:\n• Security-only updates\n• Daily execution at 3:00 AM\n\nNo further action is required." 9 60
-    sleep 3
-    exec 3>&-
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
 }
 
-# Function to manage inside interfaces and update DNS settings using dialog
+
+
+# Function to manage inside interfaces and update DNS settings
 manage_inside_dns() {
-    exec 3>&1
-
-    # Initial notice
-    dialog --title "DNS Update in Progress" \
-           --infobox "Updating DNS entries for all 'inside' interfaces on the firewall..." 6 80
-    sleep 3
-
-    main_interface=$(nmcli device status | awk '/-inside/ {print $1}' | head -n 1)
+    echo -e "${CYAN}==>Configuring Inside interfaces with updated DNS entries${TEXTRESET}"
+    main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
     if [ -z "$main_interface" ]; then
-        dialog --title "Error" --msgbox "No interface ending with '-inside' found." 7 50
+        echo -e "[${RED}ERROR${TEXTRESET}] No interface ending with '-inside' found."
         exit 1
     fi
-
-    dialog --title "Inside Interface Found" --infobox "Main inside interface: $main_interface" 5 50
-    sleep 3
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Main inside interface found: $main_interface"
 
     connection_names=$(nmcli -g NAME,DEVICE connection show | awk -F: -v main_intf="$main_interface" '$2 ~ main_intf {print $1}')
     if [ -z "$connection_names" ]; then
-        dialog --title "Error" --msgbox "No connections found for interface: $main_interface and its sub-interfaces." 7 60
+        echo -e "[${RED}ERROR${TEXTRESET}] No connections found for interface: $main_interface and its sub-interfaces."
         exit 1
     fi
 
     if systemctl is-active --quiet named; then
         dns_servers="127.0.0.1 208.67.222.222 208.67.220.220"
-        dialog --title "DNS Configuration" --infobox "Using DNS servers:\n$dns_servers\n(named is active)" 7 50
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Using DNS servers: $dns_servers [${YELLOW}named is active${TEXTRESET}]"
     else
         dns_servers="208.67.222.222 208.67.220.220"
-        dialog --title "DNS Configuration" --infobox "Using DNS servers:\n$dns_servers\n(named is NOT active)" 7 50
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Using DNS servers: $dns_servers [${YELLOW}named is not active${TEXTRESET}]"
     fi
-    sleep 3
+    sleep 2
 
     for connection_name in $connection_names; do
-        dialog --title "Modifying DNS" --infobox "Processing connection:\n$connection_name" 6 50
-        sleep 3
-
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Processing connection: ${GREEN}$connection_name${TEXTRESET}"
         nmcli connection modify "$connection_name" ipv4.dns ""
-        dialog --title "DNS Cleared" --infobox "Cleared existing DNS for:\n$connection_name" 6 50
-        sleep 3
-
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Cleared existing DNS settings for connection: $connection_name"
         nmcli connection modify "$connection_name" ipv4.dns "$dns_servers"
-        dialog --title "DNS Set" --infobox "Set DNS for:\n$connection_name\n$dns_servers" 7 50
-        sleep 3
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Set new DNS servers for connection: $connection_name"
     done
-
-    dialog --title "Done" --msgbox "DNS settings have been updated for all matching connections." 7 50
-    exec 3>&-
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
-# Function to configure rc.local with KEA startup script using dialog
-setup_kea_startup_script() {
-    exec 3>&1
 
-    SRC_SCRIPT="/root/RFWB/kea_delay_start.sh"
-    DEST_SCRIPT="/usr/local/bin/kea_delay_start.sh"
-    RC_LOCAL="/etc/rc.d/rc.local"
 
-    # Initial message
-    dialog --title "KEA Startup Setup" \
-           --infobox "Installing KEA startup script using rc.local..." 6 60
-    sleep 3
+# ========= INSTALL KEA STARTUP SCRIPT =========
+setup_kea_startup_script () {
+echo -e "${CYAN}==>Installing KEA delay script for on boot (If needed)${TEXTRESET}"
+sleep 4
 
-    # Check if source script exists
-    if [ ! -f "$SRC_SCRIPT" ]; then
-        dialog --title "Error" \
-               --msgbox "KEA startup script not found:\n$SRC_SCRIPT\n\nExiting." 8 60
-        exit 1
-    fi
+SRC_SCRIPT="/root/RFWB/kea_delay_start.sh"
+DEST_SCRIPT="/usr/local/bin/kea_delay_start.sh"
+RC_LOCAL="/etc/rc.d/rc.local"
 
-    # Copy script to /usr/local/bin
-    dialog --title "Copying Script" \
-           --infobox "Copying KEA startup script to:\n$DEST_SCRIPT" 6 60
-    sleep 3
+# Check source script
+if [ ! -f "$SRC_SCRIPT" ]; then
+    echo -e "[${RED}ERROR${TEXTRESET}] KEA startup script not found: $SRC_SCRIPT"
+    exit 1
+fi
 
-    sudo cp "$SRC_SCRIPT" "$DEST_SCRIPT"
-    sudo chmod +x "$DEST_SCRIPT"
+# Copy to /usr/local/bin
+echo -e "[${YELLOW}INFO${TEXTRESET}] Copying KEA startup script to /usr/local/bin..."
+sudo cp "$SRC_SCRIPT" "$DEST_SCRIPT"
+sudo chmod +x "$DEST_SCRIPT"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Script copied and made executable: $DEST_SCRIPT"
 
-    dialog --title "Success" \
-           --infobox "KEA startup script copied and made executable." 5 50
-    sleep 3
+# Setup rc.local
+if [ ! -f "$RC_LOCAL" ]; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating rc.local file..."
+    sudo touch "$RC_LOCAL"
+fi
+sudo chmod +x "$RC_LOCAL"
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] rc.local is set up and executable."
 
-    # Ensure rc.local exists
-    if [ ! -f "$RC_LOCAL" ]; then
-        dialog --title "rc.local" \
-               --infobox "Creating rc.local file..." 5 50
-        sudo touch "$RC_LOCAL"
-        sleep 3
-    fi
+# Add the script to rc.local if not already added
+if ! grep -q "$DEST_SCRIPT" "$RC_LOCAL"; then
+    echo "$DEST_SCRIPT" | sudo tee -a "$RC_LOCAL" >/dev/null
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Added $DEST_SCRIPT to rc.local."
+fi
 
-    sudo chmod +x "$RC_LOCAL"
-    dialog --title "rc.local" \
-           --infobox "rc.local is now executable." 5 50
-    sleep 3
+# Enable and start rc-local service
+if ! systemctl is-enabled rc-local.service &>/dev/null; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling rc-local service..."
+    sudo ln -sf "$RC_LOCAL" /etc/rc.local
+    sudo systemctl enable rc-local
+fi
 
-    # Add to rc.local if not already added
-    if ! grep -q "$DEST_SCRIPT" "$RC_LOCAL"; then
-        echo "$DEST_SCRIPT" | sudo tee -a "$RC_LOCAL" >/dev/null
-        dialog --title "rc.local" \
-               --infobox "Added $DEST_SCRIPT to rc.local." 5 60
-        sleep 3
-    fi
+if ! systemctl is-active rc-local.service &>/dev/null; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Starting rc-local service..."
+    sudo systemctl start rc-local
+fi
 
-    # Enable rc-local service if not enabled
-    if ! systemctl is-enabled rc-local.service &>/dev/null; then
-        dialog --title "rc-local Service" \
-               --infobox "Enabling rc-local service..." 5 50
-        sudo ln -sf "$RC_LOCAL" /etc/rc.local
-        sudo systemctl enable rc-local
-        sleep 3
-    fi
-
-    # Start rc-local service if not running
-    if ! systemctl is-active rc-local.service &>/dev/null; then
-        dialog --title "rc-local Service" \
-               --infobox "Starting rc-local service..." 5 50
-        sudo systemctl start rc-local
-        sleep 3
-    fi
-
-    dialog --title "Setup Complete" \
-           --infobox "KEA startup script has been successfully configured to run at boot:\n$DEST_SCRIPT" 7 80
-    sleep 3
-    exec 3>&-
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Setup complete. The script $DEST_SCRIPT will run at startup."
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
 }
+
+
+# ========= REMOVE INSIDE GATEWAYS =========
+
+
 manage_inside_gw() {
-    exec 3>&1
-
-    # Initial notification
-    dialog --title "Gateway Cleanup" \
-           --infobox "Removing all default gateway entries from 'inside' interfaces..." 6 70
-    sleep 3
-
-    # Detect main -inside interface
-    main_interface=$(nmcli device status | awk '/-inside/ {print $1}' | head -n 1)
+    echo -e "${CYAN}==>Removeing Default Gateway Entries on 'inside' interfaces${TEXTRESET}"
+    sleep 4
+    main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
     if [ -z "$main_interface" ]; then
-        dialog --title "Error" \
-               --msgbox "No interface ending with '-inside' found." 6 50
+        echo -e "[${RED}ERROR${TEXTRESET}] No interface ending with '-inside' found."
         exit 1
     fi
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Main inside interface found: $main_interface"
 
-    dialog --title "Interface Found" \
-           --infobox "Main inside interface found:\n$main_interface" 6 50
-    sleep 3
-
-    # Get all associated connections for the interface
     connection_names=$(nmcli -g NAME,DEVICE connection show | awk -F: -v main_intf="$main_interface" '$2 ~ main_intf {print $1}')
     if [ -z "$connection_names" ]; then
-        dialog --title "Error" \
-               --msgbox "No connections found for interface: $main_interface and its sub-interfaces." 7 60
+        echo -e "[${RED}ERROR${TEXTRESET}] No connections found for interface: $main_interface and its sub-interfaces."
         exit 1
     fi
 
-    # Remove gateway from each connection
     for connection_name in $connection_names; do
-        dialog --title "Processing" \
-               --infobox "Removing gateway for connection:\n$connection_name" 6 50
-        sleep 3
-
+        echo -e "[${YELLOW}INFO${TEXTRESET}] Processing connection: ${GREEN}$connection_name${TEXTRESET}"
         nmcli connection modify "$connection_name" ipv4.gateway ""
-
-        dialog --title "Success" \
-               --infobox "Gateway removed for:\n$connection_name" 6 50
-        sleep 3
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Removed gateway for connection: $connection_name"
     done
-
-    dialog --title "Done" \
-           --infobox "All default gateways have been removed from connections on $main_interface." 6 70
-           sleep 3
-    exec 3>&-
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
+
+
 organize_nft () {
+echo -e "${CYAN}==>Organizing nftables for efficiency and security${TEXTRESET}"
 NFTABLES_FILE="/etc/sysconfig/nftables.conf"
 TMP_FILE=$(mktemp)
 DEBUG_FILE="/tmp/nftables_debug.conf"
 
-exec 3>&1
-
-# Initial notification
-dialog --title "nftables Optimization" \
-       --infobox "Reorganizing nftables rules for optimization." 6 60
-sleep 3
-
-# Backup original config
+# Backup original nftables configuration
 cp "$NFTABLES_FILE" "$NFTABLES_FILE.bak"
-dialog --title "Backup Created" \
-       --infobox "Original nftables config backed up to:\n$NFTABLES_FILE.bak" 6 60
-sleep 3
+echo -e  "[${YELLOW}INFO${TEXTRESET}] Backed up original file to: ${GREEN}$NFTABLES_FILE.bak${TEXTRESET}"
 
-# Check if a service is installed
+# Function to check if a service is installed
 service_is_installed() {
     systemctl list-unit-files | grep -q "^$1.service"
 }
 
-# Check if a service is running
+# Function to check if a service is running
 service_is_running() {
     systemctl is-active --quiet "$1"
 }
 
+# Track if rfwb-portscan was running before stopping it
 PORTSCAN_WAS_RUNNING=false
 
-# Stop rfwb-portscan if running
+# Step 1: Check if rfwb-portscan is installed
 if service_is_installed "rfwb-portscan"; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-portscan is installed."
+
+    # Step 2: Check if rfwb-portscan is running
     if service_is_running "rfwb-portscan"; then
-        dialog --title "Stopping Service" --infobox "Stopping rfwb-portscan temporarily..." 5 50
+        echo "Stopping rfwb-portscan..."
         systemctl stop rfwb-portscan
         PORTSCAN_WAS_RUNNING=true
-        sleep 2
+        sleep 2  # Allow time for rfwb-ps-mon to stop automatically
+    else
+        echo ""
     fi
+else
+    echo ""
 fi
 
-# Inform rule reorganization
-dialog --title "nftables Rule Cleanup" \
-       --infobox "Removing duplicate outbound block rules from output chain..." 6 70
-sleep 3
 
-# Remove old rules
+echo -e "[${YELLOW}INFO${TEXTRESET}] Reorganizing nftables rules for efficiency..."
+# Step 1: Remove all instances of the outbound block rule from the chain output
 sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked:" drop/d;}' "$NFTABLES_FILE"
 sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked: " drop/d;}' "$NFTABLES_FILE"
 
-# Rewrite config with cleaned ruleset
+# Step 2: Process the nftables configuration with awk
 awk '
   BEGIN {
     in_input = 0;
@@ -4228,9 +4158,9 @@ awk '
     output_rules = "";
     input_policy = "    type filter hook input priority filter; policy drop;";
     output_policy = "    type filter hook output priority filter; policy accept;";
-    threat_rule = "    ip saddr @threat_block drop";
-    log_rule = "    log prefix \"Blocked:\" drop";
-    threat_out_rule = "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop";
+    threat_rule = "    ip saddr @threat_block drop";  # Always at the top of input chain
+    log_rule = "    log prefix \"Blocked:\" drop";  # Always at the bottom of input chain
+    threat_out_rule = "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop";  # Ensure correct format
     threat_out_seen = 0;
   }
 
@@ -4244,7 +4174,7 @@ awk '
     input_rules = "";
     next;
   }
-
+  
   /chain output/ {
     in_output = 1;
     output_header = $0;
@@ -4297,91 +4227,123 @@ awk '
   { print }
 ' "$NFTABLES_FILE" > "$TMP_FILE"
 
+# Save debug file before applying changes
 cp "$TMP_FILE" "$DEBUG_FILE"
-dialog --title "Debug File Saved" \
-       --infobox "Modified nftables configuration saved to:\n$DEBUG_FILE" 6 60
-sleep 3
+echo "Modified nftables configuration saved to: $DEBUG_FILE"
 
+# Replace original file with updated rules
 mv "$TMP_FILE" "$NFTABLES_FILE"
+
+# Restore original ownership and permissions
 chown --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
 chmod --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
-restorecon -v "$NFTABLES_FILE" &>/dev/null
 
-# Validate nftables config
+# Fix SELinux context
+restorecon -v "$NFTABLES_FILE"
+
+# Validate configuration
 if nft -c -f "$NFTABLES_FILE"; then
-    dialog --title "Validation" \
-           --infobox "nftables configuration is valid.\nReloading firewall..." 6 50
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables configuration is valid. Reloading..."
     systemctl restart nftables
-    sleep 3
 else
-    dialog --title "ERROR" \
-           --msgbox "nftables configuration test failed!\nRestoring previous config..." 7 60
+    echo -e "[${RED}ERROR${TEXTRESET}] nftables configuration test failed! Restoring previous config."
     cp "$NFTABLES_FILE.bak" "$NFTABLES_FILE"
     systemctl restart nftables
-    dialog --title "Recovery" \
-           --msgbox "Restored from backup.\nCheck debug output:\n$DEBUG_FILE" 7 60
+    echo "Check debug output in: $DEBUG_FILE"
 fi
 
-# Restart rfwb-portscan if it was previously running
+
+# Step 3: Restart services if rfwb-portscan was stopped
 if [[ "$PORTSCAN_WAS_RUNNING" == true ]]; then
-    dialog --title "Restarting" \
-           --infobox "Restarting rfwb-portscan service..." 5 50
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting rfwb-portscan..."
     systemctl start rfwb-portscan
     sleep 2
 fi
 
-# Final service status checks
-status_msg=""
+# Ensure both services are running at the end
+
+# Start rfwb-portscan if installed and not running
+if service_is_installed "rfwb-portscan" && ! service_is_running "rfwb-portscan"; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-portscan was not running. Attempting to start..."
+    systemctl start rfwb-portscan
+fi
+
+# Start rfwb-ps-mon if installed and not running
+if service_is_installed "rfwb-ps-mon" && ! service_is_running "rfwb-ps-mon"; then
+    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-ps-mon was not running. Attempting to start..."
+    systemctl start rfwb-ps-mon
+fi
+
+# Final verification
+echo "Verifying service status..."
 
 if service_is_installed "rfwb-portscan"; then
     if service_is_running "rfwb-portscan"; then
-        status_msg+="rfwb-portscan is running.\n"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] rfwb-portscan is running."
     else
-        systemctl start rfwb-portscan
-        status_msg+="rfwb-portscan was restarted.\n"
+        echo -e "[${RED}ERROR${TEXTRESET}] rfwb-portscan is NOT running!"
     fi
 fi
 
 if service_is_installed "rfwb-ps-mon"; then
     if service_is_running "rfwb-ps-mon"; then
-        status_msg+="rfwb-ps-mon is running.\n"
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] rfwb-ps-mon is running."
     else
-        systemctl start rfwb-ps-mon
-        status_msg+="rfwb-ps-mon was restarted.\n"
+        echo -e "[${RED}ERROR${TEXTRESET}] rfwb-ps-mon is NOT running!"
     fi
 fi
-
-dialog --title "Final Status" --infobox "$status_msg" 10 60
+echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
-exec 3>&-
 }
 
-prompt_firewall_restart() {
-    exec 3>&1
+remove_rtp () {
+#Make sure rtp-linux is not in the dnf makecache
+echo -e "${CYAN}==>Cleaning DNF (If needed)${TEXTRESET}"
+EPEL_REPO="/etc/yum.repos.d/epel.repo"
 
-    dialog --title "Firewall Setup Complete" \
-           --yesno "The firewall setup is complete.\n\nDo you want to restart the system now?" 8 60
+echo -e "[${YELLOW}INFO${TEXTRESET}] Checking for 'rtp-linux.cisco.com' in the EPEL repository configuration..."
 
-    response=$?
+# Check if rtp-linux.cisco.com is still referenced
+if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
+    echo -e "[${RED}WARNING${TEXTRESET}] Custom Cisco EPEL mirror detected! Updating repository settings..."
 
-    case $response in
-        0)
-            dialog --title "Rebooting" \
-                   --infobox "Restarting the firewall now..." 5 50
-            sleep 2
-            sudo reboot
-            ;;
-        1)
-            dialog --title "Reboot Skipped" \
-                   --msgbox "The firewall will not be restarted now." 6 50
-            ;;
-        *)
-            dialog --title "Invalid Input" \
-                   --msgbox "No valid choice made. Please run the script again to restart the firewall." 6 60
-            ;;
-    esac
+    # Force override to the official Fedora EPEL mirror
+    sudo dnf config-manager --setopt=epel.baseurl=https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/ --save
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Updated EPEL repository to use Fedora mirrors."
 
-    exec 3>&-
+    # Clean and rebuild DNF cache
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Cleaning DNF cache..."
+    sudo dnf clean all
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Rebuilding DNF cache..."
+    sudo dnf makecache
+
+    # Validate the change
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Validating EPEL repository update..."
+    if dnf repoinfo epel | grep -q "rtp-linux.cisco.com"; then
+        echo -e "[${RED}ERROR${TEXTRESET}] EPEL repository update failed. Please check $EPEL_REPO manually."
+        exit 1
+    else
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] EPEL repository updated successfully! Cisco mirror removed."
+    fi
+else
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] No reference to 'rtp-linux.cisco.com' found in EPEL. No changes needed."
+fi
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
+}
+
+prompt_firewall_restart () {
+# Notify and handle firewall restart
+echo "Firewall setup complete."
+read -p "Do you want to restart the firewall now? (yes/no): " user_choice
+if [[ "$user_choice" == "yes" ]]; then
+    echo "Restarting the firewall..."
+    sudo reboot
+elif [[ "$user_choice" == "no" ]]; then
+    echo "The firewall will not be restarted now."
+else
+    echo "Invalid choice. Please run the script again and select either 'yes' or 'no'."
+fi
 }
 
 
@@ -4414,4 +4376,5 @@ update_login_console
 setup_kea_startup_script
 manage_inside_gw
 organize_nft
+remove_rtp
 prompt_firewall_restart
