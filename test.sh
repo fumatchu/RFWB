@@ -1700,7 +1700,7 @@ install_ovpn() {
     nft list ruleset > /etc/sysconfig/nftables.conf
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN firewall rules applied successfully!"
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}OpenVPN Server Install successfull${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}OpenVPN Server Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
 }
