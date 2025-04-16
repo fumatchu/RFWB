@@ -1288,7 +1288,7 @@ EOL
         log "SSHD jail may not be working correctly."
     fi
 
-    echo -e "[${GREEN}DONE${TEXTRESET}] Fail2Ban configuration complete."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Fail2Ban Configured Successfully!."
     log "Fail2Ban configuration complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
