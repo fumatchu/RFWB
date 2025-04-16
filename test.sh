@@ -1048,7 +1048,7 @@ configure_time() {
     CHRONY_CONF="/etc/chrony.conf"
     TEMP_CONF="/tmp/chrony_temp.conf"
 
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring chrony for local time synchronization..."
+    echo -e "${CYAN}==>Configuring time synchronization${TEXTRESET}"
     log "Configuring chrony..."
 
     if [ ! -f "$CHRONY_CONF" ]; then
@@ -1191,13 +1191,14 @@ configure_time() {
         systemctl start rfwb-portscan >> "$LOG_FILE" 2>&1
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Chrony configuration completed."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Time Synchronization completed."
     log "Chrony configuration complete."
-    sleep 2
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 #=== CONFIG FAIL2BAN ===
 configure_fail2ban() {
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Fail2Ban service..."
+    echo -e "${CYAN}==>Configuring Fail2Ban Service...${TEXTRESET}"
     log "Configuring Fail2Ban service..."
 
     ORIGINAL_FILE="/etc/fail2ban/jail.conf"
@@ -1282,7 +1283,8 @@ EOL
 
     echo -e "[${GREEN}DONE${TEXTRESET}] Fail2Ban configuration complete."
     log "Fail2Ban configuration complete."
-    sleep 2
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 
@@ -1302,8 +1304,11 @@ install_ddclient() {
 }
 
 configure_ddclient() {
+    echo -e "${CYAN}==>Configuring ddclient...${TEXTRESET}"
     echo -e "[${YELLOW}NOTICE${TEXTRESET}] ddclient has been installed but requires manual configuration before the service can be started."
     log "ddclient installed – manual configuration is required."
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 # === INSTALL AND CONFIG COCKPIT ===
@@ -1325,6 +1330,7 @@ install_cockpit() {
 # === CONFIGURE COCKPIT ===
 
 configure_cockpit () {
+    echo -e "${CYAN}==>Configuring Cockpit${TEXTRESET}"
     find_inside_interfaces() {
         # Find all active interfaces with a name ending in '-inside'
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
@@ -1387,7 +1393,9 @@ configure_cockpit () {
 
     # Continue with the rest of the script
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Cockpit Install Complete...${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
+    
 }
 # === INSTALL AND CONFIG AVAHI ===
 
@@ -1406,7 +1414,7 @@ install_avahi() {
 
 configure_avahi() {
     log "Configuring Avahi for mDNS reflection on inside interfaces..."
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting up Avahi on inside interfaces..."
+    echo -e "${CYAN}==>Configuring Avahi mDNS on 'inside' interfaces...${TEXTRESET}"
 
     # Get inside interface and sub-interfaces
     INSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1; exit}')
@@ -1473,9 +1481,10 @@ EOF
         log "rfwb-portscan restarted after nftables update."
     fi
 
-    echo -e "[${GREEN}DONE${TEXTRESET}] Avahi has been configured and is now reflecting mDNS on: $INTERFACES"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Avahi has been configured and is now reflecting mDNS on: $INTERFACES"
     log "Avahi configuration complete."
-    sleep 1
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 # === INSTALL AND CONFIG EVE ===
@@ -1512,6 +1521,7 @@ install_ovpn() {
 }
 
     configure_ovpn() {
+    echo -e "${CYAN}==>Configuring OpenVPN Server...${TEXTRESET}"
     LOG_FILE="/var/log/rfwb-openvpn-install.log"
     exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -1684,7 +1694,8 @@ install_ovpn() {
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] OpenVPN firewall rules applied successfully!"
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}OpenVPN Server Install successfull${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 install_net_services() {
     INSTALLED_SERVICES[net_services]=1
@@ -1730,7 +1741,7 @@ install_ntopng() {
 configure_ntopng() {
     CONFIG_FILE="/etc/ntopng/ntopng.conf"
 
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring ntopng..."
+    echo -e "${CYAN}==>Configuring ntopng...${TEXTRESET}"
     log "Starting ntopng configuration..."
 
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -1805,7 +1816,9 @@ configure_ntopng() {
 
     echo -e "[${GREEN}DONE${TEXTRESET}] ntopng configuration complete."
     log "ntopng configuration complete."
-    sleep 2
+    echo -e "[${GREEN}ntopng Configured Successfully${TEXTRESET}]"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 install_suricata() {
@@ -1842,7 +1855,7 @@ install_suricata() {
     log "Suricata installation complete."
 }
 configure_suricata() {
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Suricata..."
+    echo -e "${CYAN}==>Configuring Suricata...${TEXTRESET}"
     log "Configuring Suricata..."
 
     sudo cp /etc/suricata/suricata.yaml /etc/suricata/suricata.yaml.bak
@@ -2029,7 +2042,8 @@ configure_suricata() {
 
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata installation and configuration complete."
     log "Suricata installation complete."
-    sleep 4
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 install_portscan() {
@@ -2284,8 +2298,8 @@ install_netdata() {
     log "Netdata installation complete."
 }
 configure_netdata() {
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Configuring Netdata..."
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Cleaning up temporary files..."
+    echo -e "${CYAN}==>Configuring netdata...${TEXTRESET}"
+    
     rm -f /tmp/netdata-kickstart.sh
 
     inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
@@ -2329,8 +2343,9 @@ configure_netdata() {
         systemctl start rfwb-portscan
     fi
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Netdata Install Complete...${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}netdata Configured Successfully...${TEXTRESET}"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 install_qos() {
@@ -2468,7 +2483,7 @@ EOF
 }
 #Function to configure snmpd
 configure_snmpd() {
-    echo -e "${GREEN}Installing and configuring SNMP Daemon...${TEXTRESET}"
+    echo -e "${CYAN}==>Configuring SNMP daemon...${TEXTRESET}"
     sleep 4
     # Function to validate IP address or network
     function validate_ip_or_network() {
@@ -2651,11 +2666,12 @@ EOF
         echo -e "[${RED}ERROR${TEXTRESET}] Failed to start SNMP service. Please check the configuration.${TEXTRESET}"
     fi
     # Continue with the rest of the script
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}SNMP Daemon Install Complete...${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}SNMP Daemon Configured Successfully...${TEXTRESET}"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 configure_bind_and_kea () {
-#Configure BIND
+echo -e "${CYAN}==>Configuring bind...${TEXTRESET}"
 # Define file paths and directories
 NAMED_CONF="/etc/named.conf"
 KEYS_FILE="/etc/named/keys.conf"
@@ -2903,10 +2919,12 @@ fi
     find_inside_interfaces
     setup_nftables_for_dns
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}BIND Install Complete...${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}bind Configuration Ceomplete...${TEXTRESET}"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
     
 #Configure KEA 
+echo -e "${CYAN}==>Configuring ISC-kea...${TEXTRESET}"
 KEA_CONF="/etc/kea/kea-dhcp4.conf"
 # Function to find the network interface
 find_interface() {
@@ -2937,7 +2955,6 @@ find_private_ip() {
     echo "$ip"
 }
 
-echo -e "${GREEN}Configuring Kea DHCP server...${TEXTRESET}"
 
     # Get the network interface and its private IP
     interface=$(find_interface)
@@ -3687,10 +3704,12 @@ fi
     find_inside_interfaces
     setup_nftables_for_dhcp
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-KEA Install Complete...${TEXTRESET}"
-    sleep 4
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-kea Configured Successfully...${TEXTRESET}"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 configure_evebox () {
+echo -e "${CYAN}==>Configuring evebox...${TEXTRESET}"
 mkdir -p /etc/evebox/
     # Define configuration file path
     CONFIG_FILE="/etc/evebox/evebox.yaml"
@@ -3880,7 +3899,10 @@ fi
 
 
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}EveBox and evebox-agent service setup complete.${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}evebox and evebox-agent Configured Successfully${TEXTRESET}"
+    echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
+    
 }
 
 
@@ -3905,6 +3927,7 @@ configure_fail2ban # Always configure not user optional
 }
 
 #========POST INSTALLATION AND CLEANUP
+echo -e "${CYAN}==>STARTING POST INSTALL CLEANUP${TEXTRESET}"
 configure_dnf_automatic () {
 # Install and configure dnf-automatic for security updates only
 echo -e "${CYAN}==>Configuring system for security updates only...${TEXTRESET}"
