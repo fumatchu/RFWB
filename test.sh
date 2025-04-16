@@ -1311,56 +1311,6 @@ configure_ddclient() {
 }
 
 # === INSTALL AND CONFIG COCKPIT ===
-# === SUPPORTING FUNCTIONS FOR COCKPIT CONFIG ===
-
-# Detect interfaces with "-inside" in their connection name
-find_inside_interfaces() {
-    inside_interfaces=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1}')
-    log "Detected inside interfaces: $inside_interfaces"
-}
-
-# Set up nftables rule to allow Cockpit (port 9090) on inside interfaces
-setup_nftables_for_cockpit() {
-    log "Setting up nftables rules for Cockpit..."
-
-    systemctl enable --now nftables >> "$LOG_FILE" 2>&1
-
-    # Ensure table and chain exist
-    if ! nft list tables | grep -q 'inet filter'; then
-        nft add table inet filter
-    fi
-    if ! nft list chain inet filter input &>/dev/null; then
-        nft add chain inet filter input { type filter hook input priority 0 \; }
-    fi
-
-    # Add rule per interface
-    for iface in $inside_interfaces; do
-        if ! nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
-            nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
-            log "Rule added: Allow Cockpit on port 9090 for $iface"
-        else
-            log "Rule already exists: Cockpit 9090 for $iface"
-        fi
-    done
-
-    # If rfwb-portscan is running, stop it temporarily
-    if systemctl is-active --quiet rfwb-portscan; then
-        systemctl stop rfwb-portscan
-        restart_rfwb_portscan=true
-        log "Temporarily stopped rfwb-portscan for nftables reload"
-    fi
-
-    # Save and reload nftables
-    nft list ruleset > /etc/sysconfig/nftables.conf
-    systemctl restart nftables
-
-    # Restart portscan service if it was stopped
-    if [[ "$restart_rfwb_portscan" == true ]]; then
-        systemctl start rfwb-portscan
-        log "Restarted rfwb-portscan after nftables update"
-    fi
-}
-
 
 install_cockpit() {
     INSTALLED_SERVICES[cockpit]=1
@@ -1378,30 +1328,71 @@ install_cockpit() {
 }
 # === CONFIGURE COCKPIT ===
 
-configure_cockpit() {
-    log "Configuring Cockpit..."
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Enabling and starting Cockpit service..."
+configur_cockpit () {
+    find_inside_interfaces() {
+        # Find all active interfaces with a name ending in '-inside'
+        inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
 
-    systemctl enable --now cockpit.socket >> "$LOG_FILE" 2>&1
-    systemctl start cockpit >> "$LOG_FILE" 2>&1
+        if [ -z "$inside_interfaces" ]; then
+            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTRESET} profile found. Exiting..."
+            exit 1
+        fi
 
-    if systemctl is-active --quiet cockpit; then
-        log "Cockpit is running."
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Cockpit is running."
+        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
+    }
 
-        # Find the inside interface and IP
-        inside_iface=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-inside/ {print $1; exit}')
-        inside_ip=$(ip -4 addr show "$inside_iface" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+    # Function to set up nftables rules for Cockpit on the inside interfaces
+    setup_nftables_for_cockpit() {
+        # Ensure the nftables service is enabled and started
+        sudo systemctl enable nftables
+        sudo systemctl start nftables
 
-        echo -e "[${YELLOW}INFO${TEXTRESET}] You can access Cockpit at: https://${inside_ip}:9090"
-    else
-        log "Cockpit failed to start."
-        echo -e "[${RED}ERROR${TEXTRESET}] Cockpit failed to start. Please check the service status."
-    fi
+        # Create a filter table if it doesn't exist
+        if ! sudo nft list tables | grep -q 'inet filter'; then
+            sudo nft add table inet filter
+        fi
 
-    sleep 1
+        # Create an input chain if it doesn't exist
+        if ! sudo nft list chain inet filter input &>/dev/null; then
+            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+        fi
+
+        # Add rules to allow Cockpit on the inside interfaces using port 9090
+        for iface in $inside_interfaces; do
+            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
+                sudo nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+            else
+                echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Cockpit on port 9090 for interface $iface"
+            fi
+        done
+        # Check and handle rfwb-portscan service
+        rfwb_status=$(systemctl is-active rfwb-portscan)
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl stop rfwb-portscan
+        fi
+        # Save the current nftables configuration
+        sudo nft list ruleset >/etc/sysconfig/nftables.conf
+        # Restart the nftables service to apply changes
+        sudo systemctl restart nftables
+        # Restart rfwb-portscan service if it was active
+        if [ "$rfwb_status" == "active" ]; then
+            systemctl start rfwb-portscan
+        fi
+    }
+
+    # Execute functions
+    find_inside_interfaces
+    setup_nftables_for_cockpit
+
+    # Enable and start cockpit.socket
+    systemctl enable --now cockpit.socket
+    systemctl start cockpit.socket
+
+    # Continue with the rest of the script
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}Cockpit Install Complete...${TEXTRESET}"
+    sleep 4
 }
-
 # === INSTALL AND CONFIG AVAHI ===
 
 install_avahi() {
