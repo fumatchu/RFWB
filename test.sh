@@ -1824,7 +1824,7 @@ configure_ntopng() {
 
     echo -e "[${GREEN}DONE${TEXTRESET}] ntopng configuration complete."
     log "ntopng configuration complete."
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}]${GREEN}ntopng Configured Successfully!${TEXTRESET}]"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}]${GREEN}ntopng Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
 }
