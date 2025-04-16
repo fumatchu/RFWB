@@ -3,12 +3,7 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
-prepare_dialog_environment() {
-    clear
-    reset
-    sleep 1
-    export TERM=xterm-256color
-}
+
 # ========= VALIDATION HELPERS =========
 validate_cidr() { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$ ]]; }
 validate_ip()   { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
@@ -4392,7 +4387,6 @@ prompt_firewall_restart() {
 
 # ========= MAIN =========
 show_welcome_screen
-prepare_dialog_environment
 network_interface_count
 detect_active_interface
 prompt_static_ip_if_dhcp
@@ -4414,7 +4408,6 @@ install_selected_services
 drop_to_cli
 configure_services
 # ========= POST INSTALLATION/CLEANUP =========
-prepare_dialog_environment
 configure_dnf_automatic
 manage_inside_dns
 update_login_console
