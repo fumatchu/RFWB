@@ -2924,7 +2924,7 @@ fi
     find_inside_interfaces
     setup_nftables_for_dns
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}bind Configuration Ceomplete...${TEXTRESET}"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}BIND Configured Successfully!...${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
     
