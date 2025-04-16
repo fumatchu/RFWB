@@ -2663,7 +2663,6 @@ disk / 10000000  # Ensure at least 10GB of space
 EOF
 
     # Start and enable SNMP service
-    echo -e "${GREEN}Starting SNMP service...${TEXTRESET}"
     systemctl start snmpd
     systemctl enable snmpd
 
