@@ -4292,7 +4292,7 @@ if [[ "$PS_MON_WAS_RUNNING" == true ]]; then
   sleep 2
 fi
 
-echo -e "${GREEN}DONE${RESET} nftables reorganized."
+echo -e "[${GREEN}DONE${RESET}] nftables reorganized."
 sleep 3
 }
 
