@@ -5,6 +5,30 @@ YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 CYAN="\e[36m"
 RESET="\e[0m"
+USER=$(whoami)
+MAJOROS=$(cat /etc/redhat-release | grep -Eo "[0-9]" | sed '$d')
+clear
+echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rocky FirewallBuilder Bootstrap"
+# Checking for user permissions
+if [ "$USER" = "root" ]; then
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Running as root user."
+  sleep 2
+else
+  echo -e "[${RED}ERROR${TEXTRESET}] This program must be run as root."
+  echo "Exiting..."
+  exit 1
+fi
+
+# Checking for version information
+if [ "$MAJOROS" -ge 9 ]; then
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Detected compatible OS version: Rocky 9.x or greater"
+  sleep 2
+else
+  echo -e "[${RED}ERROR${TEXTRESET}] Sorry, but this installer only works on Rocky 9.X or greater"
+  echo -e "Please upgrade to ${GREEN}Rocky 9.x${TEXTRESET} or later"
+  echo "Exiting the installer..."
+  exit 1
+fi
 
 
 # ========= VALIDATION HELPERS =========
