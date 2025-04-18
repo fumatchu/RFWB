@@ -5,7 +5,7 @@ RED="\033[0;31m"
 YELLOW="\033[1;33m"
 TEXTRESET="\033[0m"
 CYAN="\e[36m"
-TEXTRESET="\e[0m"
+RESET="\e[0m"
 
 
 # ========= VALIDATION HELPERS =========
