@@ -1,9 +1,11 @@
 #!/bin/bash
 #Bootstrap to GIT REPO
-TEXTRESET=$(tput sgr0)
-RED=$(tput setaf 1)
-YELLOW=$(tput setaf 3)
-GREEN=$(tput setaf 2)
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+YELLOW="\033[1;33m"
+TEXTRESET="\033[0m"
+CYAN="\e[36m"
+RESET="\e[0m"
 USER=$(whoami)
 MAJOROS=$(cat /etc/redhat-release | grep -Eo "[0-9]" | sed '$d')
 clear
