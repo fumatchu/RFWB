@@ -190,7 +190,7 @@ elif [[ "$IP_METHOD" == "auto" ]]; then
         nmcli con mod "$CONNECTION" ipv4.dns "$DNSSERVER"
         nmcli con mod "$CONNECTION" ipv4.dns-search "$DNSSEARCH"
         hostnamectl set-hostname "$HOSTNAME"
-        echo "/root/RFWB/rfwb_install.sh" >> /root/.bash_profile
+        
 
         dialog --clear --no-shadow --no-ok --title "Reboot Required" --aspect 9 --msgbox "Network stack set. The System will reboot. Reconnect at: ${IPADDR%%/*}" 5 95
         reboot
