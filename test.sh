@@ -4129,155 +4129,155 @@ manage_inside_gw() {
 
 organize_nft () {
 echo -e "${CYAN}==>Organizing nftables for efficiency and security${TEXTRESET}"
-NFTABLES_FILE="/etc/sysconfig/nftables.conf"
-TMP_FILE=$(mktemp)
-DEBUG_FILE="/tmp/nftables_debug.conf"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Backup original nftables configuration
-cp "$NFTABLES_FILE" "$NFTABLES_FILE.bak"
-echo -e  "[${YELLOW}INFO${TEXTRESET}] Backed up original file to: ${GREEN}$NFTABLES_FILE.bak${TEXTRESET}"
+# ─── Color codes ──────────────────────────────────────────────────────────────
+CYAN='\e[36m'; YELLOW='\e[33m'; GREEN='\e[32m'; RED='\e[31m'; RESET='\e[0m'
 
-# Function to check if a service is installed
-service_is_installed() {
-    systemctl list-unit-files | grep -q "^$1.service"
-}
+# ─── Paths & Temps ────────────────────────────────────────────────────────────
+NFT_FILE="/etc/sysconfig/nftables.conf"
+BACKUP="${NFT_FILE}.bak.$(date +%Y%m%d%H%M%S)"
+TMP="$(mktemp)"
+DEBUG="/tmp/nftables_debug.conf"
 
-# Function to check if a service is running
-service_is_running() {
-    systemctl is-active --quiet "$1"
-}
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+die(){ echo -e "${RED}ERROR${RESET} $*" >&2; exit 1; }
+service_is_installed(){ systemctl list-unit-files | grep -q "^$1.service"; }
+service_is_running(){ systemctl is-active --quiet "$1"; }
 
-# Track if rfwb-portscan was running before stopping it
-PORTSCAN_WAS_RUNNING=false
+# ─── Backup & pause portscan ─────────────────────────────────────────────────
+echo -e "${CYAN}==> Backing up nftables config${RESET}"
+cp "$NFT_FILE" "$BACKUP"
+echo -e "[${YELLOW}INFO${RESET}] Backup saved to ${GREEN}$BACKUP${RESET}"
 
-# Step 1: Check if rfwb-portscan is installed
-if service_is_installed "rfwb-portscan"; then
-    echo -e "[${YELLOW}INFO${TEXTRESET}] rfwb-portscan is installed."
-
-    # Step 2: Check if rfwb-portscan is running
-    if service_is_running "rfwb-portscan"; then
-        echo "Stopping rfwb-portscan..."
-        systemctl stop rfwb-portscan
-        PORTSCAN_WAS_RUNNING=true
-        sleep 2  # Allow time for rfwb-ps-mon to stop automatically
-    else
-        echo ""
-    fi
-else
-    echo ""
+if service_is_installed rfwb-portscan && service_is_running rfwb-portscan; then
+  echo -e "[${YELLOW}INFO${RESET}] Stopping rfwb-portscan…"
+  systemctl stop rfwb-portscan
+  sleep 2
 fi
 
+# ─── Strip old outbound-block from OUTPUT ────────────────────────────────────
+echo -e "[${YELLOW}INFO${RESET}] Removing old outbound-block rules"
+sed -i '/chain output {/,/}/ { /ip daddr @threat_block log prefix "Outbound Blocked:/d }' \
+  "$NFT_FILE"
 
-echo -e "[${YELLOW}INFO${TEXTRESET}] Reorganizing nftables rules for efficiency..."
-# Step 1: Remove all instances of the outbound block rule from the chain output
-sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked:" drop/d;}' "$NFTABLES_FILE"
-sed -i '/chain output {/,/}/ {/ip daddr @threat_block log prefix "Outbound Blocked: " drop/d;}' "$NFTABLES_FILE"
+# ─── Reorder INPUT, FORWARD & OUTPUT chains ───────────────────────────────────
+echo -e "[${YELLOW}INFO${RESET}] Reordering nftables chains…"
 
-# Step 2: Process the nftables configuration with awk
 awk '
   BEGIN {
-    in_input = 0;
-    in_output = 0;
-    in_portscan = 0;
-    input_header = "";
-    output_header = "";
-    input_rules = "";
-    output_rules = "";
-    input_policy = "    type filter hook input priority filter; policy drop;";
-    output_policy = "    type filter hook output priority filter; policy accept;";
-    threat_rule = "    ip saddr @threat_block drop";  # Always at the top of input chain
-    log_rule = "    log prefix \"Blocked:\" drop";  # Always at the bottom of input chain
-    threat_out_rule = "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop";  # Ensure correct format
-    threat_out_seen = 0;
+    in_input = in_forward = in_output = in_portscan = 0
+    cnt_in = cnt_fw = cnt_out = 0
   }
+  # Pass through portscan table
+  /^[ \t]*table inet portscan/ { in_portscan=1 }
+  in_portscan && /^[ \t]*}/    { print; in_portscan=0; next }
+  in_portscan                   { print; next }
 
-  /table inet portscan/ {
-    in_portscan = 1;
+  # ── INPUT chain ─────────────────────────────────────────────────────────────
+  /^[ \t]*chain input/ {
+    in_input=1
+    indent=substr($0,1,match($0,/chain input/)-1)
+    print $0
+    print indent "    type filter hook input priority filter; policy drop;"
+    print indent "    ip saddr @threat_block drop"
+    print indent "    iifname \"lo\" accept"
+    print indent "    ct state established,related accept"
+    next
   }
-
-  /chain input/ && !in_portscan {
-    in_input = 1;
-    input_header = $0;
-    input_rules = "";
-    next;
+  in_input && /^[ \t]*}/ {
+    for(i=1;i<=cnt_in;i++) print extra_in[i]
+    print indent "    log prefix \"Blocked:\" drop"
+    print $0
+    in_input=0; cnt_in=0
+    next
   }
-  
-  /chain output/ {
-    in_output = 1;
-    output_header = $0;
-    output_rules = "";
-    next;
-  }
-
-  in_input && /}/ {
-    in_input = 0;
-    print input_header;
-    print input_policy;
-    print threat_rule;
-    print input_rules;
-    print log_rule;
-    print "}";
-    next;
-  }
-
   in_input {
-    if ($0 ~ /ip saddr @threat_block drop/ || $0 ~ /log prefix "Blocked:/ || $0 ~ /type filter hook input priority filter; policy/) {
-      next;
-    } else {
-      input_rules = input_rules "\n" $0;
+    if ($0 ~ /^[ \t]*iifname/ && $0 !~ /iifname "lo"/) {
+      extra_in[++cnt_in] = $0
     }
-    next;
+    next
   }
 
-  in_output && /}/ {
-    in_output = 0;
-    print output_header;
-    print output_policy;
-    if (!threat_out_seen) {
-      print threat_out_rule;
-      threat_out_seen = 1;
-    }
-    print output_rules;
-    print "}";
-    next;
+  # ── FORWARD chain ───────────────────────────────────────────────────────────
+  /^[ \t]*chain forward/ {
+    in_forward=1
+    indent_f=substr($0,1,match($0,/chain forward/)-1)
+    print $0
+    print indent_f "    type filter hook forward priority filter; policy drop;"
+    print indent_f "    ct state established,related accept"
+    next
+  }
+  in_forward && /^[ \t]*}/ {
+    for(j=1;j<=cnt_fw;j++) print extra_fw[j]
+    print $0
+    in_forward=0; cnt_fw=0
+    next
+  }
+  in_forward {
+    # collect everything except the policy and established line
+    if ($0 ~ /^[ \t]*type filter hook forward/ ||
+        $0 ~ /^[ \t]*ct state established,related accept/) next
+    extra_fw[++cnt_fw]=$0
+    next
   }
 
+  # ── OUTPUT chain ────────────────────────────────────────────────────────────
+  /^[ \t]*chain output/ {
+    in_output=1
+    indent_o=substr($0,1,match($0,/chain output/)-1)
+    print $0
+    print indent_o "    type filter hook output priority filter; policy accept;"
+    print indent_o "    ip daddr @threat_block log prefix \"Outbound Blocked:\" drop"
+    next
+  }
+  in_output && /^[ \t]*}/ {
+    for(k=1;k<=cnt_out;k++) print extra_out[k]
+    print $0
+    in_output=0; cnt_out=0
+    next
+  }
   in_output {
-    if ($0 ~ /ip daddr @threat_block log prefix "Outbound Blocked: "/ || $0 ~ /type filter hook output priority filter; policy/) {
-      next;
-    } else {
-      output_rules = output_rules "\n" $0;
-    }
-    next;
+    if ($0 ~ /^[ \t]*type filter hook output/ ||
+        $0 ~ /^[ \t]*ip daddr @threat_block/) next
+    extra_out[++cnt_out]=$0
+    next
   }
 
+  # ── All other lines ─────────────────────────────────────────────────────────
   { print }
-' "$NFTABLES_FILE" > "$TMP_FILE"
+' "$NFT_FILE" > "$TMP"
 
-# Save debug file before applying changes
-cp "$TMP_FILE" "$DEBUG_FILE"
-echo "Modified nftables configuration saved to: $DEBUG_FILE"
+# ─── Save debug & deploy ─────────────────────────────────────────────────────
+cp "$TMP" "$DEBUG"
+echo -e "[${YELLOW}DEBUG${RESET}] Modified config saved to ${GREEN}$DEBUG${RESET}"
 
-# Replace original file with updated rules
-mv "$TMP_FILE" "$NFTABLES_FILE"
+mv "$TMP" "$NFT_FILE"
+restorecon -v "$NFT_FILE"
 
-# Restore original ownership and permissions
-chown --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
-chmod --reference="$NFTABLES_FILE.bak" "$NFTABLES_FILE"
-
-# Fix SELinux context
-restorecon -v "$NFTABLES_FILE"
-
-# Validate configuration
-if nft -c -f "$NFTABLES_FILE"; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] nftables configuration is valid. Reloading..."
-    systemctl restart nftables
+# ─── Validate & reload ──────────────────────────────────────────────────────
+echo -e "[${YELLOW}INFO${RESET}] Validating new configuration…"
+if nft -c -f "$NFT_FILE"; then
+  echo -e "[${GREEN}SUCCESS${RESET}] Configuration valid, reloading…"
+  nft flush ruleset
+  nft -f "$NFT_FILE"
+  echo -e "[${GREEN}SUCCESS${RESET}] nftables reloaded successfully."
 else
-    echo -e "[${RED}ERROR${TEXTRESET}] nftables configuration test failed! Restoring previous config."
-    cp "$NFTABLES_FILE.bak" "$NFTABLES_FILE"
-    systemctl restart nftables
-    echo "Check debug output in: $DEBUG_FILE"
+  echo -e "[${RED}ERROR${RESET}] Validation failed, restoring backup."
+  cp "$BACKUP" "$NFT_FILE"
+  nft -f "$NFT_FILE"
+  exit 1
 fi
+
+# ─── Resume portscan ─────────────────────────────────────────────────────────
+if service_is_installed rfwb-portscan && ! service_is_running rfwb-portscan; then
+  echo -e "[${YELLOW}INFO${RESET}] Starting rfwb-portscan…"
+  systemctl start rfwb-portscan
+  sleep 2
+fi
+
+echo -e "${GREEN}DONE${RESET} nftables reorganized."
 
 
 # Step 3: Restart services if rfwb-portscan was stopped
