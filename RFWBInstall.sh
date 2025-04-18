@@ -106,10 +106,11 @@ ${RESET}"
 
   sleep 2
 
-cat <<EOF
-Make sure you have at least ${YELLOW}two physical interfaces${TEXTRESET} (inside-outside) before proceeding
-Install time is about 20 min 
-EOF
+echo " "
+echo -e "Make sure you have at least ${YELLOW}two physical interfaces${TEXTRESET} (inside-outside) before proceeding
+Also make sure you only have ONE interface connected all other interfaces should be disconnected
+Install time is about 20 min"
+
 
 read -p "Press Any Key to Continue"
 #!/bin/bash
