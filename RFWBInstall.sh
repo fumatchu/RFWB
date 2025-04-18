@@ -112,7 +112,7 @@ dnf -y remove git >/dev/null 2>&1
                               /((((((((((((((((((((((.
                                 ,((((((((((((((,
 ${RESET}"
-  echo -e "                         ${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${RESET}"
+  echo -e "                         ${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${TEXTRESET}"
 
   sleep 2
 
