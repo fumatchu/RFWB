@@ -764,7 +764,7 @@ setup_outside_interface() {
   dialog --title "Connected Interfaces" --infobox "Currently connected interfaces:\n\n$existing_connections" 10 50
   sleep 4
 
-  dialog --clear --title "WAN Auto‑Detect Setup" --msgbox "The next screen will auto‑detect your WAN interface.\n\nPlease make sure that interface is unplugged before you proceed." 8 60
+  dialog --clear --title "WAN Auto‑Detect Setup" --msgbox "The next screen will auto‑detect your WAN interface.\n\nPlease make sure that interface is unplugged before you proceed." 8 70
 
   dialog --title "WAN Setup" --infobox "Please plug in your Internet (WAN) connection.\n\nWaiting for a new interface to come up..." 7 60
   sleep 3
