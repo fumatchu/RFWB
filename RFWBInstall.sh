@@ -119,7 +119,7 @@ grep -qxF '## Run RFWB installer on login ##' /root/.bash_profile || cat << 'EOF
 
 ## Run RFWB installer on every interactive login ##
 if [[ \$- == *i* ]]; then
-  /root/RFWB/RFWB-Main-install.sh
+  /root/RFWB/RFWB-main-install.sh
 fi
 EOF
 /root/RFWB/RFWB-main-install.sh
