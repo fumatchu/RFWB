@@ -4355,6 +4355,9 @@ fi
 echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
+clear_bash_profile () {
+sed -i '/## Run RFWB installer on every interactive login ##/,/^fi$/d' /root/.bash_profile
+}
 
 prompt_firewall_restart () {
 # Notify and handle firewall restart
@@ -4401,4 +4404,5 @@ setup_kea_startup_script
 manage_inside_gw
 organize_nft
 remove_rtp
+clear_bash_profile
 prompt_firewall_restart
