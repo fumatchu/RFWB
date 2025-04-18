@@ -89,31 +89,36 @@ chmod 700 /root/RFWB/*
 echo -e "[${YELLOW}INFO${TEXTRESET}] Removing Git"
 dnf -y remove git >/dev/null 2>&1
 
-clear
+ clear
+  echo -e "${GREEN}
+                               .*((((((((((((((((*
+                         .(((((((((((((((((((((((((((/
+                      ,((((((((((((((((((((((((((((((((((.
+                    (((((((((((((((((((((((((((((((((((((((/
+                  (((((((((((((((((((((((((((((((((((((((((((/
+                .(((((((((((((((((((((((((((((((((((((((((((((
+               ,((((((((((((((((((((((((((((((((((((((((((((((((.
+               ((((((((((((((((((((((((((((((/   ,(((((((((((((((
+              /((((((((((((((((((((((((((((.        /((((((((((((*
+              ((((((((((((((((((((((((((/              ((((((((((
+              ((((((((((((((((((((((((                   *((((((/
+              /((((((((((((((((((((*                        (((((*
+               ((((((((((((((((((             (((*            ,((
+               .((((((((((((((.            /(((((((
+                 ((((((((((/             (((((((((((((/
+                  *((((((.            /((((((((((((((((((.
+                    *(*)            ,(((((((((((((((((((((((,
+                                 (((((((((((((((((((((((/
+                              /((((((((((((((((((((((.
+                                ,((((((((((((((,
+${RESET}"
+  echo -e "                         ${GREEN}Rocky Linux${RESET} ${RED}Firewall${RESET} ${YELLOW}Builder${RESET}"
+
+  sleep 2
+
 cat <<EOF
- *********************************************
-
- This script was created for ${GREEN}Rocky 9.x${TEXTRESET}
- This will install 
- 1. The Rocky Firewall Builder based on nftables
- 
- What this script does:
- 1. Validates and upgrades the system
- 2. Sets internal Interfaces with zones and (vlans)
- 3. Configures and locks down external interface with user preferences
- 4. Provides a set of applications that can be installed:
-     -Bind
-     -ISC-KEA
-     -Webmin
-     -Cockpit
-     -DDNS Client 
-     -Suricata (Standalone)
-     -Suricata with Elastic/Kibana/Filebeat for events and alerts
-     -ntop-ng
-
- *********************************************
- 
-
+Make sure you have at least two interfaces (inside-outside) before proceeding
+Install time is about 20 min 
 EOF
 
 read -p "Press Any Key to Continue"
