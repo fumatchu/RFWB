@@ -38,15 +38,7 @@ else
   exit 1
 fi
 
-cat <<EOF
-
-${GREEN}**************************${TEXTRESET}
-Please wait while we gather some files
-${GREEN}**************************${TEXTRESET}
-
-EOF
-
-echo -e "[${YELLOW}INFO${TEXTRESET}] Installing wget and git..."
+echo -e "${CYAN}==>Retrieving requirements for the installer...${TEXTRESET}"
 
 # Function to show an animated spinner
 spinner() {
@@ -72,11 +64,7 @@ dnf_pid=$!
 # Start the spinner while waiting for dnf to complete
 spinner $dnf_pid
 
-cat <<EOF
-${YELLOW}*****************************${TEXTRESET}
-Retrieving Files from GitHub
-${YELLOW}*****************************${TEXTRESET}
-EOF
+echo -e "${CYAN}==>Retrieving files from Github...${TEXTRESET}"
 
 sleep 1
 #Clone RFWB
@@ -131,4 +119,4 @@ if [[ \$- == *i* ]]; then
   /root/RFWB/RFWB-Main-install.sh
 fi
 EOF
-/root/RFWB/RFWB-Main-install.sh
+/root/RFWB/RFWB-main-install.sh
