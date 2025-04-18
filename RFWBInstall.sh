@@ -117,7 +117,7 @@ ${RESET}"
   sleep 2
 
 cat <<EOF
-Make sure you have at least two interfaces (inside-outside) before proceeding
+Make sure you have at least ${YELLOW}two physical interfaces${TEXTRESET} (inside-outside) before proceeding
 Install time is about 20 min 
 EOF
 
