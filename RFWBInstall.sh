@@ -122,4 +122,13 @@ Install time is about 20 min
 EOF
 
 read -p "Press Any Key to Continue"
+#!/bin/bash
+# As root, run this once to append the block if it’s not already there:
+grep -qxF '## Run RFWB installer on login ##' /root/.bash_profile || cat << 'EOF' >> /root/.bash_profile
+
+## Run RFWB installer on every interactive login ##
+if [[ \$- == *i* ]]; then
+  /root/RFWB/RFWB-Main-install.sh
+fi
+EOF
 /root/RFWB/RFWB-Main-install.sh
