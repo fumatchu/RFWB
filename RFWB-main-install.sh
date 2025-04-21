@@ -4581,10 +4581,10 @@ for item in "$DIR"/*; do
 done
 
 if $good; then
-  echo "$SUCCESS All items have correct permissions (700)."
+  echo -e "[${GREEN}$SUCCESS${TEXTRESET}] All items have correct permissions ${GREEN}(700)${TEXTRESET}."
   return 0
 else
-  echo "$INFO You can correct permissions with: chmod 700 $DIR/*"
+  echo -e "[${YELLOW}$INFO${TEXTRESET}] You can correct permissions with: ${CYAN}chmod 700 $DIR/*${TEXTRESET}"
   return 1
 fi
 
