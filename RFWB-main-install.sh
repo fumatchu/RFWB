@@ -2212,7 +2212,6 @@ echo "       Per‑user rate: ${mb_per_user} MB/day"
 echo "       Retention:     $retain_days days"
 echo
 
-return 0
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata installation and configuration complete."
     log "Suricata installation complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
