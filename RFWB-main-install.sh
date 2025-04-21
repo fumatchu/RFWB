@@ -4600,10 +4600,6 @@ fi
 
 
 }
-
-# ————————  main script  ————————
-bootstrap_rfwb_admin || exit 1
-
 echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
