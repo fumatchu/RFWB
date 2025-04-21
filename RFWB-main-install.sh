@@ -2073,7 +2073,146 @@ configure_suricata() {
         echo -e "[${RED}ERROR${TEXTRESET}] Test request failed or unexpected response."
         exit 1
     fi
+#Configure_logs
+#
+# Detects disk space, deployment type, traffic profile and user count,
+# then writes a logrotate config for Suricata with an appropriate retention.
+#
+# Usage: sudo bash suricata-logrotate-setup.sh
+#
 
+set -euo pipefail
+echo -e "${CYAN}==>Configuring Suricata Logging...${TEXTRESET}"
+
+LOG_DIR="/var/log/suricata"
+ROTATE_CONF="/etc/logrotate.d/suricata"
+PID_FILE="/var/run/suricata.pid"
+
+# -- 1) Ensure the log directory exists
+if [[ ! -d "$LOG_DIR" ]]; then
+  echo "[ERROR] Suricata log directory $LOG_DIR not found!"
+  exit 1
+fi
+
+# -- 2) Get available space (in KB) on that filesystem
+avail_kb=$(df -P "$LOG_DIR" | tail -1 | awk '{print $4}')
+avail_mb=$(( avail_kb / 1024 ))
+
+# -- 3) Numbered menu for deployment type
+while true; do
+  cat <<EOF
+
+Select deployment type:
+  1) Home    – residential/home usage
+  2) SOHO    – small office/home office usage
+
+EOF
+  read -rp "Enter choice [1-2]: " dep_choice
+  case "$dep_choice" in
+    1) deployment="home"; break ;;
+    2) deployment="soho"; break ;;
+    *) echo "  → Invalid choice; please enter 1 or 2." ;;
+  esac
+done
+
+# -- 4) Explain profiles and numbered menu for traffic profile
+cat <<EOF
+
+Traffic profile definitions:
+  1) Light    – Basic web/email and occasional updates
+                (~20 MB/user/day in home; ~5 MB/user/day in SOHO).
+  2) Moderate – Mixed usage: web, email + some streaming/downloads
+                (~50 MB/user/day in home; ~15 MB/user/day in SOHO).
+  3) Heavy    – High‑intensity: constant streaming or large transfers
+                (~100 MB/user/day in home; ~30 MB/user/day in SOHO).
+
+EOF
+
+while true; do
+  cat <<EOF
+Select traffic profile:
+  1) Light
+  2) Moderate
+  3) Heavy
+
+EOF
+  read -rp "Enter choice [1-3]: " prof_choice
+  case "$prof_choice" in
+    1) profile="light"; break ;;
+    2) profile="moderate"; break ;;
+    3) profile="heavy"; break ;;
+    *) echo "  → Invalid choice; please enter 1, 2, or 3." ;;
+  esac
+done
+
+# -- 5) Ask number of clients/users
+while true; do
+  read -rp "Approximate number of clients/users: " user_count
+  [[ "$user_count" =~ ^[0-9]+$ ]] && (( user_count > 0 )) && break
+  echo "  → Please enter a positive integer."
+done
+
+# -- 6) Map to per‑user daily log volume (MB)
+declare mb_per_user
+if [[ $deployment == "soho" ]]; then
+  case $profile in
+    heavy)    mb_per_user=30  ;;
+    moderate) mb_per_user=15  ;;
+    light)    mb_per_user=5   ;;
+  esac
+else  # home
+  case $profile in
+    heavy)    mb_per_user=100 ;;
+    moderate) mb_per_user=50  ;;
+    light)    mb_per_user=20  ;;
+  esac
+fi
+
+# -- 7) Compute total daily log volume and retention days
+daily_mb=$(( user_count * mb_per_user ))
+raw_retention=$(( avail_mb / daily_mb ))
+if (( raw_retention > 30 )); then
+  retain_days=30
+elif (( raw_retention < 7 )); then
+  retain_days=7
+else
+  retain_days=$raw_retention
+fi
+
+# -- 8) Write logrotate config with SIGHUP in postrotate
+cat <<EOF | sudo tee "$ROTATE_CONF" >/dev/null
+$LOG_DIR/*.log $LOG_DIR/*.json {
+    daily
+    rotate $retain_days
+    compress
+    missingok
+    notifempty
+    create 0640 root root
+    sharedscripts
+    postrotate
+        # Tell Suricata to close & reopen logs on SIGHUP
+        if [[ -f "$PID_FILE" ]]; then
+          /bin/kill -HUP \$(cat "$PID_FILE") 2>/dev/null || true
+        else
+          /bin/kill -HUP \$(pidof suricata) 2>/dev/null || true
+        fi
+    endscript
+}
+EOF
+
+# -- 9) Show summary
+echo
+echo "[INFO] Suricata logrotate configured:"
+echo "       Log dir:       $LOG_DIR"
+echo "       Free space:    ${avail_mb} MB"
+echo "       Deployment:    ${deployment^}"
+echo "       Traffic:       ${profile^}"
+echo "       Clients:       $user_count"
+echo "       Per‑user rate: ${mb_per_user} MB/day"
+echo "       Retention:     $retain_days days"
+echo
+
+return 0
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] Suricata installation and configuration complete."
     log "Suricata installation complete."
     echo -e "[${GREEN}DONE${TEXTRESET}]"
