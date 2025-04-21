@@ -4434,7 +4434,7 @@ organize_nft () {
     nft -f "$NFT_FILE"
     exit 1
   fi
-echo -e "[${GREEN}DONE${TEXTRESET}]"
+echo -e "[${GREEN}DONE${TEXTRESET}] nftables reorganized"
 sleep 3
 }
 
@@ -4454,7 +4454,8 @@ if [[ "$PS_MON_WAS_RUNNING" == true ]]; then
   sleep 2
 fi
 
-echo -e "[${GREEN}DONE${RESET}] nftables reorganized."
+echo -e "[${GREEN}DONE${RESET}] nftables, and RFWB Processes restarted."
+echo -e "[${GREEN}DONE${RESET}]"
 sleep 3
 }
 
