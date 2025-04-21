@@ -4563,7 +4563,7 @@ FAIL="[FAIL]"
 # Ensure the directory exists
 if [[ ! -d "$DIR" ]]; then
   echo "$FAIL Directory not found: $DIR" >&2
-  exit 1
+  return 1
 fi
 
 echo "$INFO Checking permissions under $DIR (should be 700)..."
@@ -4582,10 +4582,10 @@ done
 
 if $good; then
   echo "$SUCCESS All items have correct permissions (700)."
-  exit 0
+  return 0
 else
   echo "$INFO You can correct permissions with: chmod 700 $DIR/*"
-  exit 1
+  return 1
 fi
 
 
