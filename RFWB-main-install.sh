@@ -4512,14 +4512,13 @@ spinner() {
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Done."
 }
 
-install_rfwb_admin() {
   # 1) must be root
   if [[ $EUID -ne 0 ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] This installer must be run as root."
     return 1
   fi
 
-  
+
   if [[ ! -f /etc/redhat-release ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /etc/redhat-release not found. Cannot detect OS."
     return 1
@@ -4531,7 +4530,7 @@ install_rfwb_admin() {
     return 1
   fi
 
-  
+
   if [[ -d /root/.rfwb-admin ]]; then
     echo -e "[${RED}WARN${TEXTRESET}] /root/.rfwb-admin already exists. Removing old directory."
     rm -rf /root/.rfwb-admin
@@ -4539,12 +4538,12 @@ install_rfwb_admin() {
   echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /root/.rfwb-admin…"
   mkdir -p /root/.rfwb-admin
 
-  
+
   echo -e "[${YELLOW}INFO${TEXTRESET}] Installing git & wget…"
   dnf install -y git wget &>/dev/null &
   spinner $!
 
-  
+
   echo -e "[${YELLOW}INFO${TEXTRESET}] Cloning RFWB-SM.git into /root/.rfwb-admin…"
   if ! git clone https://github.com/fumatchu/RFWB-SM.git /root/.rfwb-admin &>/dev/null; then
     echo -e "[${RED}ERROR${TEXTRESET}] Git clone failed."
@@ -4590,7 +4589,7 @@ else
 fi
 
 
-  
+
   if [[ ! -d /root/.rfwb-admin/.git ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /root/.rfwb-admin doesn’t look like a Git repo."
     return 1
@@ -4599,7 +4598,7 @@ fi
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Repository bootstrapped in /root/.rfwb-admin."
   return 0
 
-  
+
 }
 
 # ————————  main script  ————————
