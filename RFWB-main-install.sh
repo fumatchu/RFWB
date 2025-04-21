@@ -4494,6 +4494,81 @@ fi
 echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
+install_rfwb_admin () {
+echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
+
+spinner() {
+  # $1 = PID of background process
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  printf " "
+  while ps -p "$pid" &>/dev/null; do
+    for (( i=0; i<${#spinstr}; i++ )); do
+      printf "\b${spinstr:i:1}"
+      sleep $delay
+    done
+  done
+  printf "\b"  # clear spinner
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Done."
+}
+
+bootstrap_rfwb_admin() {
+  # 1) must be root
+  if [[ $EUID -ne 0 ]]; then
+    echo -e "[${RED}ERROR${TEXTRESET}] This installer must be run as root."
+    return 1
+  fi
+
+  # 2) check OS version
+  if [[ ! -f /etc/redhat-release ]]; then
+    echo -e "[${RED}ERROR${TEXTRESET}] /etc/redhat-release not found. Cannot detect OS."
+    return 1
+  fi
+  local major
+  major=$(grep -oP '\d+' /etc/redhat-release | head -1)
+  if (( major < 9 )); then
+    echo -e "[${RED}ERROR${TEXTRESET}] Rocky 9.x or later is required (found $major)."
+    return 1
+  fi
+
+  # 3) prepare target directory
+  if [[ -d /root/.rfwb-admin ]]; then
+    echo -e "[${RED}WARN${TEXTRESET}] /root/.rfwb-admin already exists. Removing old directory."
+    rm -rf /root/.rfwb-admin
+  fi
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /root/.rfwb-admin…"
+  mkdir -p /root/.rfwb-admin
+
+  # 4) ensure git & wget installed
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Installing git & wget…"
+  dnf install -y git wget &>/dev/null &
+  spinner $!
+
+  # 5) clone the repo
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Cloning RFWB-SM.git into /root/.rfwb-admin…"
+  if ! git clone https://github.com/fumatchu/RFWB-SM.git /root/.rfwb-admin &>/dev/null; then
+    echo -e "[${RED}ERROR${TEXTRESET}] Git clone failed."
+    return 1
+  fi
+
+  # 6) validate clone
+  if [[ ! -d /root/.rfwb-admin/.git ]]; then
+    echo -e "[${RED}ERROR${TEXTRESET}] /root/.rfwb-admin doesn’t look like a Git repo."
+    return 1
+  fi
+
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Repository bootstrapped in /root/.rfwb-admin."
+  return 0
+}
+
+# ————————  main script  ————————
+bootstrap_rfwb_admin || exit 1
+
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
+}
+
 clear_bash_profile () {
 sed -i '/## Run RFWB installer on every interactive login ##/,/^fi$/d' /root/.bash_profile
 }
@@ -4543,5 +4618,6 @@ setup_kea_startup_script
 manage_inside_gw
 organize_nft
 remove_rtp
+install_rfwb_admin
 clear_bash_profile
 prompt_firewall_restart
