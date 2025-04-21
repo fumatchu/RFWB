@@ -1396,7 +1396,7 @@ configure_cockpit () {
         for iface in $inside_interfaces; do
             if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" tcp dport 9090 accept"; then
                 sudo nft add rule inet filter input iifname "$iface" tcp dport 9090 accept
-                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Cockpit on port 9090 for interface $iface${TEXTRESET}"
+                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow Cockpit on port 9090 for interface ${GREEN}$iface${TEXTRESET}"
             else
                 echo -e "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow Cockpit on port 9090 for interface $iface"
             fi
