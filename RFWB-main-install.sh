@@ -4616,7 +4616,7 @@ manage_inside_dns
 update_login_console
 setup_kea_startup_script
 manage_inside_gw
-organize_nft
+#organize_nft
 remove_rtp
 install_rfwb_admin
 clear_bash_profile
