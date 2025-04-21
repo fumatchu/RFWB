@@ -4598,8 +4598,6 @@ fi
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Repository bootstrapped in /root/.rfwb-admin."
   return 0
 
-
-}
 echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
