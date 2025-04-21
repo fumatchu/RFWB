@@ -4512,14 +4512,14 @@ spinner() {
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Done."
 }
 
-bootstrap_rfwb_admin() {
+install_rfwb_admin() {
   # 1) must be root
   if [[ $EUID -ne 0 ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] This installer must be run as root."
     return 1
   fi
 
-  # 2) check OS version
+  
   if [[ ! -f /etc/redhat-release ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /etc/redhat-release not found. Cannot detect OS."
     return 1
@@ -4531,7 +4531,7 @@ bootstrap_rfwb_admin() {
     return 1
   fi
 
-  # 3) prepare target directory
+  
   if [[ -d /root/.rfwb-admin ]]; then
     echo -e "[${RED}WARN${TEXTRESET}] /root/.rfwb-admin already exists. Removing old directory."
     rm -rf /root/.rfwb-admin
@@ -4539,19 +4539,58 @@ bootstrap_rfwb_admin() {
   echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /root/.rfwb-admin…"
   mkdir -p /root/.rfwb-admin
 
-  # 4) ensure git & wget installed
+  
   echo -e "[${YELLOW}INFO${TEXTRESET}] Installing git & wget…"
   dnf install -y git wget &>/dev/null &
   spinner $!
 
-  # 5) clone the repo
+  
   echo -e "[${YELLOW}INFO${TEXTRESET}] Cloning RFWB-SM.git into /root/.rfwb-admin…"
   if ! git clone https://github.com/fumatchu/RFWB-SM.git /root/.rfwb-admin &>/dev/null; then
     echo -e "[${RED}ERROR${TEXTRESET}] Git clone failed."
     return 1
   fi
 
-  # 6) validate clone
+  chmod 700 /root/.rfwb-admin/*
+
+  # Directory to check
+DIR="/root/.rfwb-admin"
+
+# Colored prefixes (optional)
+INFO="[INFO]"
+SUCCESS="[SUCCESS]"
+FAIL="[FAIL]"
+
+# Ensure the directory exists
+if [[ ! -d "$DIR" ]]; then
+  echo "$FAIL Directory not found: $DIR" >&2
+  exit 1
+fi
+
+echo "$INFO Checking permissions under $DIR (should be 700)..."
+
+good=true
+shopt -s nullglob
+for item in "$DIR"/*; do
+  mode=$(stat -c '%a' "$item")
+  if [[ "$mode" != "700" ]]; then
+    echo "$FAIL $item has permissions $mode"
+    good=false
+  else
+    echo "$SUCCESS $item has correct permissions ($mode)"
+  fi
+done
+
+if $good; then
+  echo "$SUCCESS All items have correct permissions (700)."
+  exit 0
+else
+  echo "$INFO You can correct permissions with: chmod 700 $DIR/*"
+  exit 1
+fi
+
+
+  
   if [[ ! -d /root/.rfwb-admin/.git ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /root/.rfwb-admin doesn’t look like a Git repo."
     return 1
@@ -4559,6 +4598,8 @@ bootstrap_rfwb_admin() {
 
   echo -e "[${GREEN}SUCCESS${TEXTRESET}] Repository bootstrapped in /root/.rfwb-admin."
   return 0
+
+  
 }
 
 # ————————  main script  ————————
