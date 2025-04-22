@@ -4556,9 +4556,9 @@ spinner() {
 DIR="/root/.rfwb-admin"
 
 # Colored prefixes (optional)
-INFO="[INFO]"
-SUCCESS="[SUCCESS]"
-FAIL="[FAIL]"
+INFO="INFO"
+SUCCESS="SUCCESS"
+FAIL="FAIL"
 
 # Ensure the directory exists
 if [[ ! -d "$DIR" ]]; then
@@ -4566,7 +4566,7 @@ if [[ ! -d "$DIR" ]]; then
   return 1
 fi
 
-echo "$INFO Checking permissions under $DIR (should be 700)..."
+echo "[${YELLOW}$INFO${TEXTRESET}] Checking permissions under $DIR (should be 700)..."
 
 good=true
 shopt -s nullglob
@@ -4576,7 +4576,7 @@ for item in "$DIR"/*; do
     echo "$FAIL $item has permissions $mode"
     good=false
   else
-    echo "$SUCCESS $item has correct permissions ($mode)"
+    echo "[${GREEN}$SUCCESS${TEXTRESET}] $item has correct permissions ($mode)"
   fi
 done
 
