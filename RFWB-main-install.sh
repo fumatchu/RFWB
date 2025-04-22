@@ -3253,8 +3253,8 @@ find_private_ip() {
         "ddns-replace-client-name": "always",
         "authoritative": true,
         "subnet4": [
-            ##BEGINSUBNET-$description
             {
+                "comment": "$description",
                 "id": 1,
                 "subnet": "$network_scheme",
                 "pools": [
@@ -3283,7 +3283,6 @@ find_private_ip() {
                         "name": "domain-name",
                         "data": "$domain"
                     }
-                 ##ENDSUBNET-$description
                 ]
             }
         ]
@@ -3464,7 +3463,7 @@ add_subnet() {
         ]
     },
     {
-        ##BEGINSUBNET-$description
+        "comment": "$description",
         "id": $new_id,
         "subnet": "$network_scheme",
         "pools": [
@@ -3493,7 +3492,6 @@ add_subnet() {
                 "name": "domain-name",
                 "data": "$domain"
             }
-         ##ENDSUBNET-$description
                 ]
             }
         ]
