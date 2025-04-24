@@ -1095,7 +1095,7 @@ configure_time() {
     CHRONY_CONF="/etc/chrony.conf"
     TEMP_CONF="/tmp/chrony_temp.conf"
 
-    echo -e "${CYAN}==>Configuring time synchronization${TEXTRESET}"
+    echo -e "${CYAN}==>Configuring time synchronization...${TEXTRESET}"
     log "Configuring chrony..."
 
     if [ ! -f "$CHRONY_CONF" ]; then
@@ -1377,7 +1377,7 @@ install_cockpit() {
 # === CONFIGURE COCKPIT ===
 
 configure_cockpit () {
-    echo -e "${CYAN}==>Configuring Cockpit${TEXTRESET}"
+    echo -e "${CYAN}==>Configuring Cockpit...${TEXTRESET}"
     find_inside_interfaces() {
         # Find all active interfaces with a name ending in '-inside'
         inside_interfaces=$(nmcli -t -f NAME,DEVICE connection show --active | awk -F: '$1 ~ /-inside$/ {print $2}')
@@ -3889,7 +3889,7 @@ fi
     sleep 3
 }
 configure_evebox () {
-echo -e "${CYAN}==>Configuring evebox...${TEXTRESET}"
+echo -e "${CYAN}==>Configuring EVEBOX...${TEXTRESET}"
 mkdir -p /etc/evebox/
     # Define configuration file path
     CONFIG_FILE="/etc/evebox/evebox.yaml"
@@ -4171,7 +4171,7 @@ sleep 3
 
 update_login_console () {
 # Update /etc/issue for login information
-echo -e "${CYAN}==>Updating Login Console with Hostname and IP address${TEXTRESET}"
+echo -e "${CYAN}==>Updating Login Console with Hostname and IP address...${TEXTRESET}"
 sudo bash -c 'cat <<EOF >/etc/issue
 \S
 Kernel \r on an \m
@@ -4186,7 +4186,7 @@ sleep 3
 
 # Function to manage inside interfaces and update DNS settings
 manage_inside_dns() {
-    echo -e "${CYAN}==>Configuring Inside interfaces with updated DNS entries${TEXTRESET}"
+    echo -e "${CYAN}==>Configuring Inside interfaces with updated DNS entries...${TEXTRESET}"
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
     if [ -z "$main_interface" ]; then
         echo -e "[${RED}ERROR${TEXTRESET}] No interface ending with '-inside' found."
@@ -4223,7 +4223,7 @@ manage_inside_dns() {
 
 # ========= INSTALL KEA STARTUP SCRIPT =========
 setup_kea_startup_script () {
-echo -e "${CYAN}==>Installing KEA delay script for on boot (If needed)${TEXTRESET}"
+echo -e "${CYAN}==>Installing KEA delay script for on boot...${TEXTRESET}"
 sleep 4
 
 SRC_SCRIPT="/root/RFWB/kea_delay_start.sh"
@@ -4278,7 +4278,7 @@ sleep 3
 
 
 manage_inside_gw() {
-    echo -e "${CYAN}==>Removing Default Gateway Entries on 'inside' interfaces${TEXTRESET}"
+    echo -e "${CYAN}==>Removing Default Gateway Entries on 'inside' interfaces...${TEXTRESET}"
     sleep 4
     main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
     if [ -z "$main_interface" ]; then
@@ -4336,7 +4336,7 @@ fi
 
 # ─── Main re‑ordering function ───────────────────────────────────────────────
 organize_nft () {
-  echo -e "${CYAN}==> Backing up nftables config${RESET}"
+  echo -e "${CYAN}==> Backing up nftables config...${RESET}"
   cp "$NFT_FILE" "$BACKUP"
   echo -e "[${YELLOW}INFO${RESET}] Backup saved to ${GREEN}$BACKUP${RESET}"
 
@@ -4472,7 +4472,7 @@ sleep 3
 
 remove_rtp () {
 #Make sure rtp-linux is not in the dnf makecache
-echo -e "${CYAN}==>Cleaning DNF (If needed)${TEXTRESET}"
+echo -e "${CYAN}==>Cleaning DNF...${TEXTRESET}"
 EPEL_REPO="/etc/yum.repos.d/epel.repo"
 
 echo -e "[${YELLOW}INFO${TEXTRESET}] Checking for 'rtp-linux.cisco.com' in the EPEL repository configuration..."
