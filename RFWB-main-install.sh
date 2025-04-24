@@ -2443,7 +2443,7 @@ EOF
     systemctl enable rfwb-ps-mon.service
     systemctl start rfwb-ps-mon.service
 
-    dialog --infobox "RFWB Portscan and Monitoring Services Installed and Activated." 5 60
+    dialog --infobox "RFWB Portscan and Monitoring Services Installed and Activated." 5 70
     sleep 3
 
 
