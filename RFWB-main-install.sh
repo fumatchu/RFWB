@@ -4578,7 +4578,7 @@ if [[ ! -d "$DIR" ]]; then
   return 1
 fi
 
-echo "[${YELLOW}$INFO${TEXTRESET}] Checking permissions under $DIR (should be 700)..."
+echo -e "[${YELLOW}$INFO${TEXTRESET}] Checking permissions under $DIR (should be 700)..."
 
 good=true
 shopt -s nullglob
@@ -4588,12 +4588,12 @@ for item in "$DIR"/*; do
     echo "$FAIL $item has permissions $mode"
     good=false
   else
-    echo "[${GREEN}$SUCCESS${TEXTRESET}] $item has correct permissions ($mode)"
+    echo -e "[${GREEN}$SUCCESS${TEXTRESET}] $item has correct permissions (${GREEN}$mode${TEXTRESET})"
   fi
 done
 
 if $good; then
-  echo -e "[${GREEN}$SUCCESS${TEXTRESET}] All items have correct permissions ${GREEN}(700)${TEXTRESET}."
+  echo -e "[${GREEN}$SUCCESS${TEXTRESET}] All items have correct permissions (${GREEN}700${TEXTRESET})."
   return 0
 else
   echo -e "[${YELLOW}$INFO${TEXTRESET}] You can correct permissions with: ${CYAN}chmod 700 $DIR/*${TEXTRESET}"
