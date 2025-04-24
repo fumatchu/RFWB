@@ -668,8 +668,8 @@ Name: $friendly_name"
         nmcli connection modify "$vlan_conn" connection.id "$friendly_name" >> "$DEBUG_LOG" 2>&1
         nmcli connection up "$friendly_name" >> "$DEBUG_LOG" 2>&1
 
-        dialog --infobox "VLAN $vlan_id configured on $selected_interface as $friendly_name.\nContinuing..." 6 50
-        sleep 4
+        dialog --infobox "VLAN $vlan_id configured on $selected_interface as $friendly_name." 6 50
+        sleep 3
         ;;
 
       2)
