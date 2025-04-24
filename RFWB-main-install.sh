@@ -410,6 +410,20 @@ if [ "$HWVMWARE" = "VMware" ]; then
 fi
 }
 
+#=========== Install yq CLI ==============
+install_yq_cli() {
+  dialog --title "yq Install" --infobox "Downloading yq from GitHub..." 5 50
+  sleep 2
+  wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+
+  if [[ -f /usr/bin/yq ]]; then
+    chmod +x /usr/bin/yq
+    dialog --title "yq Installed" --infobox "yq installed successfully to /usr/bin/yq." 5 50
+    sleep 3
+  else
+    dialog --title "yq Install Error" --msgbox "Failed to download or install yq." 6 50
+  fi
+  
 #===========Install Speed test cli==============
 install_speedtest_cli() {
   dialog --title "Speedtest Install" --infobox "Adding Ookla Speedtest repository..." 5 50
@@ -4637,6 +4651,7 @@ configure_nftables_threatlists
 collect_service_choices
 update_and_install_packages
 vm_detection
+install_yq_cli
 install_speedtest_cli
 install_selected_services
 drop_to_cli
