@@ -280,8 +280,8 @@ validate_and_set_hostname() {
   else
     # Show a temporary info box with current hostname, no OK button
     dialog --title "Hostname Check" --infobox \
-      "Hostname is already set to: $current_hostname\nNo changes needed." 6 60
-    sleep 4
+      "Hostname set to: $current_hostname" 6 60
+    sleep 3
   fi
 }
 
