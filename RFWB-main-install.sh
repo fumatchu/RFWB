@@ -423,7 +423,7 @@ install_yq_cli() {
   else
     dialog --title "yq Install Error" --msgbox "Failed to download or install yq." 6 50
   fi
-  
+}
 #===========Install Speed test cli==============
 install_speedtest_cli() {
   dialog --title "Speedtest Install" --infobox "Adding Ookla Speedtest repository..." 5 50
