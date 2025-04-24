@@ -2663,7 +2663,7 @@ EOF
     systemctl enable rfwb-qos.timer
     systemctl start rfwb-qos.timer
 
-    dialog --title "QoS Installation" --infobox "RFWB QoS for Voice Installed with 10% reserved bandwidth." 5 60
+    dialog --title "QoS Installation" --infobox "RFWB QoS for Voice Installed with 10% reserved bandwidth." 5 70
     sleep 3
     log "RFWB QoS for Voice installation complete."
 }
