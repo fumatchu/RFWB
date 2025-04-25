@@ -3526,6 +3526,8 @@ if [ "$rfwb_status" == "active" ]; then
   echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting rfwb-portscan..."
   systemctl start rfwb-portscan
 fi
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+    sleep 3
 }
 
 
