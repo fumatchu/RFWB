@@ -3106,788 +3106,431 @@ fi
     sleep 3
     
 #Configure KEA 
-echo -e "${CYAN}==>Configuring ISC-kea...${TEXTRESET}"
-KEA_CONF="/etc/kea/kea-dhcp4.conf"
-# Function to find the network interface
-find_interface() {
-    # Find the interface with a connection ending in -inside
-    interface=$(nmcli device status | awk '/-inside/ {print $1}')
-
-    if [ -z "$interface" ]; then
-        echo -e "[${RED}ERROR${TEXTRESET}] No interface with a connection ending in ${YELLOW}'-inside'${TEXTRESET} found."
-        exit 1
-    fi
-
-    echo "$interface"
-}
-
-# Function to find the private IP address of the interface
-find_private_ip() {
-    # Find the interface ending with -inside
-    interface=$(find_interface)
-
-    # Extract the private IP address for the found interface
-    ip=$(nmcli -g IP4.ADDRESS device show "$interface" | awk -F/ '{print $1}')
-
-    if [ -z "$ip" ]; then
-        echo -e "[${RED}ERROR${TEXTRESET}] No IP address found for the interface ${GREEN}$interface${TEXTRESET}"
-        exit 1
-    fi
-
-    echo "$ip"
-}
-
-
-    # Get the network interface and its private IP
-    interface=$(find_interface)
-    dns_server_ip=$(find_private_ip)
-
-    # Function to validate CIDR notation
-    validate_cidr() {
-        local cidr=$1
-        local ip="${cidr%/*}"
-        local prefix="${cidr#*/}"
-        local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
-
-        # Check if IP and prefix are valid
-        [[ $ip =~ ^$n(\.$n){3}$ ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]
-    }
-    # Extract domain name from hostnamectl
-    domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
-    while true; do
-        # Prompt user for network scheme until valid input is provided
-        while true; do
-            read -p "Enter the Network Scope (e.g., 192.168.1.0/24): " network_scheme
-            if validate_cidr "$network_scheme"; then
-                break
-            else
-                echo -e "[${RED}ERROR${TEXTRESET}] Invalid Network Scope. Please enter a valid CIDR notation."
-            fi
-        done
-
-        # Extract network address and prefix length
-        IFS='/' read -r network_address prefix_length <<<"$network_scheme"
-
-        # Calculate default pool range and router address based on the network scheme
-        IFS='.' read -r net1 net2 net3 net4 <<<"$network_address"
-        default_pool_start="${net1}.${net2}.${net3}.10"
-        default_pool_end="${net1}.${net2}.${net3}.100"
-        default_router_address="${net1}.${net2}.${net3}.1"
-
-        # Prompt user for a friendly name for the subnet
-        read -p "Please provide a friendly name for this subnet: " description
-
-        # Prompt user to confirm or change the pool address range
-        echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
-        read -p "Is this range OK? (y/n): " confirm_pool
-        if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
-            read -p "Enter the desired pool start address: " pool_start
-            read -p "Enter the desired pool end address: " pool_end
-        else
-            pool_start="$default_pool_start"
-            pool_end="$default_pool_end"
-        fi
-
-        # Prompt user to confirm or change the router address
-        echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
-        read -p "Is this address OK? (y/n): " confirm_router
-        if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
-            read -p "Enter the desired router address: " router_address
-        else
-            router_address="$default_router_address"
-        fi
-
-        # Display the information for review
-        echo -e "\nReview settings:"
-        echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
-        echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
-        echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
-        echo -e "Router Address: ${GREEN}$router_address${TEXTRESET}"
-        echo -e "NTP Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-        echo -e "DNS Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-        echo -e "Client suffix: ${GREEN}$domain${TEXTRESET}"
-        echo -e "Client Search Domain: ${GREEN}$domain${TEXTRESET}"
-
-        # Ask if the settings are correct
-        read -p "Are these settings correct? (y/n): " confirm_settings
-        if [[ "$confirm_settings" =~ ^[Yy]$ ]]; then
-            # If settings are correct, proceed with the script
-            break
-        else
-            # If settings are not correct, loop and ask again
-            echo -e "\nConfigure Scope.\n"
-        fi
-    done
-
-    # Extract domain name from hostnamectl
-    domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
-
-    # Calculate reverse zone for PTR records
-    reverse_zone="$(echo "$network_address" | awk -F. '{print $3"."$2"."$1}')"
-
-    # Extract TSIG secret from keys.conf
-    tsig_secret=$(grep -oP 'secret\s+"\K[^"]+' /etc/named/keys.conf)
-
-    # Check if Kea configuration directory exists, if not, create it
-    if [ ! -d "/etc/kea" ]; then
-        echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /etc/kea directory..."
-        sudo mkdir /etc/kea
-    fi
-
-    # Configure Kea DHCP4 server
-    KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating initial Kea DHCPv4 configuration..."
-    sleep 1
-    sudo bash -c "cat > $KEA_DHCP4_CONF" <<EOF
-{
-    "Dhcp4": {
-        "interfaces-config": {
-            "interfaces": ["$interface"]
-        },
-        "lease-database": {
-            "type": "memfile",
-            "persist": true,
-            "name": "/var/lib/kea/kea-leases4.csv"
-        },
-        "dhcp-ddns": {
-            "enable-updates": true,
-            "server-ip": "127.0.0.1",
-            "server-port": 53001,
-            "sender-ip": "127.0.0.1",
-            "sender-port": 53000,
-            "max-queue-size": 1024,
-            "ncr-protocol": "UDP",
-            "ncr-format": "JSON"
-        },
-        "ddns-qualifying-suffix": "$domain",
-        "ddns-override-client-update": true,
-        "ddns-override-no-update": true,
-        "ddns-update-on-renew": true,
-        "ddns-generated-prefix": "dynamic",
-        "ddns-replace-client-name": "always",
-        "authoritative": true,
-        "subnet4": [
-            {
-                "comment": "$description",
-                "id": 1,
-                "subnet": "$network_scheme",
-                "pools": [
-                    {
-                        "pool": "$pool_start - $pool_end"
-                    }
-                ],
-                "option-data": [
-                    {
-                        "name": "routers",
-                        "data": "$router_address"
-                    },
-                    {
-                        "name": "domain-name-servers",
-                        "data": "$dns_server_ip"
-                    },
-                    {
-                        "name": "ntp-servers",
-                        "data": "$dns_server_ip"
-                    },
-                    {
-                        "name": "domain-search",
-                        "data": "$domain"
-                    },
-                    {
-                        "name": "domain-name",
-                        "data": "$domain"
-                    }
-                ]
-            }
-        ]
-    }
-}
-EOF
-
-    # Configure Kea DHCP DDNS server
-    KEA_DHCP_DDNS_CONF="/etc/kea/kea-dhcp-ddns.conf"
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Creating intial Kea DHCP DDNS configuration..."
-    sleep 1
-    sudo bash -c "cat > $KEA_DHCP_DDNS_CONF" <<EOF
-{
-    "DhcpDdns": {
-        "ip-address": "127.0.0.1",
-        "port": 53001,
-        "control-socket": {
-        "socket-type": "unix",
-        "socket-name": "/tmp/kea-ddns-ctrl-socket"
-          },
-        "dns-server-timeout": 500,
-        "ncr-format": "JSON",
-        "ncr-protocol": "UDP",
-        "forward-ddns": {
-            "ddns-domains": [
-                {
-                    "name": "$domain.",
-                    "key-name": "Kea-DDNS",
-                    "dns-servers": [
-                        {
-                        "ip-address": "127.0.0.1",
-                        "port": 53
-                        }
-                    ]
-                }
-            ]
-        },
-        "reverse-ddns": {
-            "ddns-domains": [
-                {
-                    "name": "$reverse_zone.in-addr.arpa.",
-                    "key-name": "Kea-DDNS",
-                    "dns-servers": [
-                        {
-                        "ip-address": "127.0.0.1",
-                        "port": 53
-                        }
-                    ]
-                }
-            ]
-        },
-        "tsig-keys": [
-            {
-                "name": "Kea-DDNS",
-                "algorithm": "HMAC-SHA256",
-                "secret": "$tsig_secret"
-            }
-        ]
-    }
-}
-EOF
-
-    # Set file permissions
-
-    sudo chown root:kea $KEA_DHCP4_CONF $KEA_DHCP_DDNS_CONF
-    sudo chmod 640 $KEA_DHCP4_CONF $KEA_DHCP_DDNS_CONF
-
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Kea DHCP server configuration complete."
-    sleep 2
-#}
-if [ -f "$KEA_CONF" ]; then
-    echo -e "[${YELLOW}INFO${TEXTRESET}] $KEA_CONF found. Proceeding with configuration..."
-    
-else
-    echo -e "[${RED}ERROR${TEXTRESET}] $KEA_CONF not found. Skipping KEA-DHCP configuration."
-fi
-#Add additional Scopes if needed
-# Path to the KEA DHCP4 configuration file
 KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
-
-# Function to validate CIDR notation
-validate_cidr() {
-    local cidr=$1
-    local ip="${cidr%/*}"
-    local prefix="${cidr#*/}"
-    local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
-
-    # Check if IP and prefix are valid
-    [[ $ip =~ ^$n(\.$n){3}$ ]] && [[ $prefix -ge 0 && $prefix -le 32 ]]
-}
-
-# Extract domain name from hostnamectl
-domain=$(hostnamectl | awk -F. '/Static hostname/ {print $2"."$3}')
-
-# Function to add a new subnet to the KEA DHCP4 configuration
-add_subnet() {
-    local description
-    local network_scheme
-    local pool_start
-    local pool_end
-    local router_address
-
-    while true; do
-        # Prompt user for network scheme until valid input is provided
-        while true; do
-            read -p "Enter the DHCP Scope you would like to create (e.g., 192.168.2.0/24): " network_scheme
-            if validate_cidr "$network_scheme"; then
-                break
-            else
-                echo -e "[${RED}ERROR${TEXTRESET}] Invalid network scheme. Please enter a valid CIDR notation."
-            fi
-        done
-
-        # Extract network address and prefix length
-        IFS='/' read -r network_address prefix_length <<<"$network_scheme"
-
-        # Calculate default pool range and router address based on the network scheme
-        IFS='.' read -r net1 net2 net3 net4 <<<"$network_address"
-        default_pool_start="${net1}.${net2}.${net3}.10"
-        default_pool_end="${net1}.${net2}.${net3}.100"
-        default_router_address="${net1}.${net2}.${net3}.1"
-
-        # Prompt user for a friendly name for the subnet
-        read -p "Please provide a friendly name for this subnet: " description
-
-        # Prompt user to confirm or change the pool address range
-        echo -e "Default IP pool range: ${GREEN}$default_pool_start - $default_pool_end${TEXTRESET}"
-        read -p "Is this range OK? (y/n): " confirm_pool
-        if [[ "$confirm_pool" =~ ^[Nn]$ ]]; then
-            read -p "Enter the desired pool start address: " pool_start
-            read -p "Enter the desired pool end address: " pool_end
-        else
-            pool_start="$default_pool_start"
-            pool_end="$default_pool_end"
-        fi
-
-        # Prompt user to confirm or change the router address
-        echo -e "Default router address: ${GREEN}$default_router_address${TEXTRESET}"
-        read -p "Is this address OK? (y/n): " confirm_router
-        if [[ "$confirm_router" =~ ^[Nn]$ ]]; then
-            read -p "Enter the desired router address: " router_address
-        else
-            router_address="$default_router_address"
-        fi
-
-        # Display the information for review
-        echo -e "\nReview settings:"
-        echo -e "Friendly Name: ${GREEN}$description${TEXTRESET}"
-        echo -e "Network Scheme: ${GREEN}$network_scheme${TEXTRESET}"
-        echo -e "IP Pool Range: ${GREEN}$pool_start - $pool_end${TEXTRESET}"
-        echo -e "Router Address: ${GREEN}$router_address${TEXTRESET}"
-        echo -e "NTP Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-        echo -e "DNS Server: ${GREEN}$dns_server_ip${TEXTRESET}"
-        echo -e "Client suffix: ${GREEN}$domain${TEXTRESET}"
-        echo -e "Client Search Domain: ${GREEN}$domain${TEXTRESET}"
-
-        # Ask if the settings are correct
-        read -p "Are these settings correct? (y/n): " confirm_settings
-        if [[ "$confirm_settings" =~ ^[Yy]$ ]]; then
-            # If settings are correct, proceed with the script
-            break
-        else
-            # If settings are not correct, loop and ask again
-            echo -e "\n[${RED}ERROR${TEXTRESET}] Configure Scope${TEXTRESET}\n"
-        fi
-    done
-
-    # Read the current configuration file into a variable
-    config_content=$(sudo cat /etc/kea/kea-dhcp4.conf)
-
-    # Extract the last ID used and increment for the new subnet
-    last_id=$(echo "$config_content" | grep '"id":' | tail -n 1 | grep -o '[0-9]\+')
-    new_id=$((last_id + 1))
-
-    # Format the new subnet entry
-    new_subnet_entry=$(
-        cat <<EOF
-        ]
-    },
-    {
-        "comment": "$description",
-        "id": $new_id,
-        "subnet": "$network_scheme",
-        "pools": [
-            {
-                "pool": "$pool_start - $pool_end"
-            }
-        ],
-        "option-data": [
-            {
-                "name": "routers",
-                "data": "$router_address"
-            },
-            {
-                "name": "domain-name-servers",
-                "data": "$dns_server_ip"
-            },
-            {
-                "name": "ntp-servers",
-                "data": "$dns_server_ip"
-            },
-            {
-                "name": "domain-search",
-                 "data": "$domain"
-            },
-            {
-                "name": "domain-name",
-                "data": "$domain"
-            }
-                ]
-            }
-        ]
-    }
-}
-EOF
-    )
-
-    # Create a temporary file to store the updated configuration
-    tmpfile=$(mktemp)
-
-    # Use awk to insert the new subnet entry after the last ##ENDSUBNET and delete lines below
-    awk -v new_subnet="$new_subnet_entry" '
-    {
-        if (/##ENDSUBNET/) last_endsubnet = NR
-        lines[NR] = $0
-    }
-    END {
-        for (i = 1; i <= last_endsubnet; i++) {
-            print lines[i]
-        }
-        print new_subnet
-    }' /etc/kea/kea-dhcp4.conf >"$tmpfile"
-
-    # Replace the original configuration file with the updated one
-    sudo mv "$tmpfile" /etc/kea/kea-dhcp4.conf
-
-    # Set file permissions
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Setting permissions for configuration files...${TEXTRESET}"
-    sudo chown root:kea /etc/kea/kea-dhcp4.conf
-    sudo chmod 640 /etc/kea/kea-dhcp4.conf
-
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] New subnet added to Kea DHCP server configuration.${TEXTRESET}"
-    sleep 1
-}
-
-# Check if the KEA_DHCP4_CONF file exists
-if [ ! -f "$KEA_DHCP4_CONF" ]; then
-    echo -e "[${RED}ERROR${TEXTRESET}] $KEA_DHCP4_CONF not found. Skipping subnet addition."
-else
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $KEA_DHCP4_CONF found. Proceeding with the script...${TEXTRESET}"
-
-    # Loop to repeatedly ask the user if they want to add another subnet
-    while true; do
-        read -p "Would you like to add another DHCP subnet? (y/n): " add_subnet_choice
-        if [[ "$add_subnet_choice" =~ ^[Yy]$ ]]; then
-            add_subnet
-        else
-            echo -e "[${YELLOW}INFO${TEXTRESET}] No more subnets will be added."
-            break
-        fi
-    done
-fi
-# Function to find interfaces based on connection name suffix
-find_interfaces() {
-    local suffix="$1"
-    nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-}
-
-# Find main and sub-interfaces
-INSIDE_INTERFACE=$(find_interfaces "-inside")
-SUB_INTERFACES=$(nmcli -t -f DEVICE device status | grep -E "${INSIDE_INTERFACE}\.[0-9]+")
-
-# Combine interfaces into an array
-INTERFACES=("$INSIDE_INTERFACE")
-INTERFACES+=($SUB_INTERFACES)
-
-# Check if kea-dhcp4.conf exists
-CONFIG_FILE="/etc/kea/kea-dhcp4.conf"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo -e "[${RED}ERROR${TEXTRESET}] Error: Configuration file ${GREEN}$CONFIG_FILE${TEXTRESET} not found."
-    exit 1
-fi
-
-# Count the number of subnets in the configuration file
-SUBNET_COUNT=$(grep -c '"subnet":' "$CONFIG_FILE")
-
-# Function to extract subnets
-extract_subnets() {
-    grep -A1 '"id":' "$CONFIG_FILE" | grep '"subnet":' | awk -F'"' '{print $4}'
-}
-
-# Function to update the configuration file
-update_config() {
-    if [ "$SUBNET_COUNT" -gt 1 ] && [ -z "$SUB_INTERFACES" ]; then
-        echo -e "[${YELLOW}INFO${TEXTRESET}] ${YELLOW}Warning:${TEXTRESET} More subnets than interfaces. Confirm if this setup is correct."
-        read -p "Do you want to proceed? (yes/no): " confirm
-        if [ "$confirm" != "yes" ]; then
-            echo "Aborting changes."
-            echo -e "${TEXTRESET}"
-            exit 0
-        fi
-    fi
-
-    if [ "$SUBNET_COUNT" -gt 1 ] && [ -n "$SUB_INTERFACES" ]; then
-        echo -e "[${YELLOW}INFO${TEXTRESET}] Multiple subnets and interfaces detected. Please select bindings:"
-
-        echo "Available interfaces:"
-        for i in "${!INTERFACES[@]}"; do
-            echo "$i) ${INTERFACES[$i]}"
-        done
-
-        echo "Subnets in configuration:"
-        subnets=($(extract_subnets))
-        for j in "${!subnets[@]}"; do
-            echo "${subnets[$j]}"
-        done
-
-        # Prompt for user input to map interfaces to subnets
-        read -p "Enter interface number for subnet ${subnets[0]}: " index1
-        read -p "Enter interface number for subnet ${subnets[1]}: " index2
-
-        iface1="${INTERFACES[$index1]}"
-        iface2="${INTERFACES[$index2]}"
-
-        # Use awk to update the configuration file
-        awk -v iface1="$iface1" -v iface2="$iface2" -v sub0="${subnets[0]}" -v sub1="${subnets[1]}" '
-        BEGIN { interface_inserted1 = 0; interface_inserted2 = 0 }
-        /"subnet":/ {
-            print
-            if ($0 ~ sub0 && !interface_inserted1) {
-                print "        \"interface\": \"" iface1 "\","
-                interface_inserted1 = 1
-            } else if ($0 ~ sub1 && !interface_inserted2) {
-                print "        \"interface\": \"" iface2 "\","
-                interface_inserted2 = 1
-            }
-            next
-        }
-        { print }
-        ' "$CONFIG_FILE" >"${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-
-        # Update the interfaces list in the configuration
-        current_interfaces=$(grep -oP '(?<=\[)[^]]*' "$CONFIG_FILE" | tr -d '"')
-        IFS=',' read -ra interface_array <<<"$current_interfaces"
-
-        if [[ ! " ${interface_array[@]} " =~ " $iface1 " ]]; then
-            interface_array+=("$iface1")
-        fi
-        if [[ ! " ${interface_array[@]} " =~ " $iface2 " ]]; then
-            interface_array+=("$iface2")
-        fi
-
-        new_interfaces=$(printf '"%s",' "${interface_array[@]}")
-        new_interfaces="[${new_interfaces%,}]"
-
-        sed -i "s/\"interfaces\": \[.*\]/\"interfaces\": $new_interfaces/" "$CONFIG_FILE"
-    fi
-
-    if [ "$SUBNET_COUNT" -eq 1 ] && [ -n "$INSIDE_INTERFACE" ]; then
-        echo -e "${GREEN}Updating configuration for single subnet and interface.${TEXTRESET}"
-        sed -i "s/\"interfaces\": \[\".*\"\]/\"interfaces\": [\"$INSIDE_INTERFACE\"]/" "$CONFIG_FILE"
-        awk -v iface="$INSIDE_INTERFACE" -v subnet="$(extract_subnets)" '
-        BEGIN { interface_inserted = 0 }
-        /"subnet":/ {
-            print
-            if ($0 ~ subnet && !interface_inserted) {
-                print "        \"interface\": \"" iface "\","
-                interface_inserted = 1
-            }
-            next
-        }
-        { print }
-        ' "$CONFIG_FILE" >"${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-    fi
-}
-
-# Execute the update
-update_config
-echo -e "[${GREEN}SUCCESS${TEXTRESET}] Configuration update completed."
-sleep 1
-
-#Start KEA Services
-start_and_enable_service() {
-    local service_name="$1"
-    local conf_file="$2"
-
-    # Check for the configuration file
-    if [ -f "$conf_file" ]; then
-        echo -e "[${YELLOW}INFO${TEXTRESET}] Configuration file ${GREEN}$conf_file${TEXTRESET} found. Enabling and starting the ${GREEN}$service_name${TEXTRESET} service..."
-
-        sudo systemctl enable "$service_name"
-        sudo systemctl start "$service_name"
-
-        # Check if the service is running
-        if sudo systemctl status "$service_name" | grep -q "running"; then
-            echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}$service_name${TEXTRESET} service is running."
-        else
-            echo -e "[${RED}ERROR${TEXTRESET}] Failed to start ${GREEN}$service_name${TEXTRESET} service."
-            exit 1
-        fi
-    else
-        echo -e "[${RED}ERROR${TEXTRESET}] Configuration file ${GREEN}$conf_file${TEXTRESET} not found. Cannot enable and start ${GREEN}$service_name${TEXTRESET} service."
-        exit 1
-    fi
-}
-
-# Start and enable the kea-dhcp4 service
-start_and_enable_service "kea-dhcp4" "/etc/kea/kea-dhcp4.conf"
-
-# Start and enable the kea-dhcp-ddns service
-start_and_enable_service "kea-dhcp-ddns" "/etc/kea/kea-dhcp-ddns.conf"
-
-#Cleanup-If using VLANS we need to make sure mulitple subents are accounted for in the named configuration
-echo -e "[${YELLOW}INFO${TEXTRESET}] Double Checking Subnet Mapping for named"
-# Define file paths and directories
-KEA_CONF="/etc/kea/kea-dhcp4.conf"
+KEA_DHCP_DDNS_CONF="/etc/kea/kea-dhcp-ddns.conf"
 NAMED_CONF="/etc/named.conf"
-ZONE_DIR="/var/named/"
-KEYS_FILE="/etc/named/keys.conf"
+ZONE_DIR="/var/named"
 
-# Extract domain and hostname
-full_hostname=$(hostnamectl status | awk '/Static hostname:/ {print $3}')
-
-if [[ ! "$full_hostname" == *.* ]]; then
-    echo -e "${RED}Error: Hostname does not contain a domain part.${TEXTRESET}"
-    exit 1
-fi
-
-hostname="${full_hostname%%.*}"
-domain="${full_hostname#*.}"
-
-# Function to reverse the IP portion of the subnet
-reverse_ip() {
-    local ip="$1"
-    echo "$ip" | awk -F '.' '{print $3"."$2"."$1}'
+# ========== Helpers ==========
+validate_ip() {
+  local ip=$1
+  local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
+  [[ $ip =~ ^$n(\.$n){3}$ ]]
 }
 
-# Get the server's IP addresses (IPv4)
-ip_addresses=($(hostname -I))
+validate_cidr() {
+  local cidr=$1
+  local ip="${cidr%/*}"
+  local prefix="${cidr#*/}"
+  validate_ip "$ip" && [[ $prefix -ge 0 && $prefix -le 32 ]]
+}
 
-# Extract subnets from the Kea configuration file
-subnets=$(grep '"subnet":' "$KEA_CONF" | awk -F '"' '{print $4}')
+reverse_ip() {
+  echo "$1" | awk -F. '{print $4"."$3"."$2"."$1}' | cut -d. -f2-
+}
 
-# Stop the named service
-echo -e "[${YELLOW}INFO${TEXTRESET}] Stopping named service..."
-sudo systemctl stop named
+get_hostname_parts() {
+  full_hostname=$(hostnamectl | awk '/Static hostname:/ {print $3}')
+  domain="${full_hostname#*.}"
+  hostname="${full_hostname%%.*}"
+}
 
-# Ensure KEA-DDNS key is included once
-if ! grep -q "include \"$KEYS_FILE\";" "$NAMED_CONF"; then
-    echo "include \"$KEYS_FILE\";" | sudo tee -a "$NAMED_CONF"
-fi
+# New: gather input interactively and store to globals
+gather_subnet_inputs() {
+  local id="$1"
+  echo -e "${CYAN}==>Gathering DHCP Scope Information${TEXTRESET}"
+  echo -n "Provide a Friendly name (description) for the subnet: "; read -r description
 
-# Check each subnet for a corresponding reverse DNS zone and create if missing
-for subnet in $subnets; do
-    # Extract the IP portion and reverse it
-    ip_portion=$(echo "$subnet" | cut -d'/' -f1)
-    reversed_ip=$(reverse_ip "$ip_portion")
-    reverse_zone="${reversed_ip}.in-addr.arpa"
-    reverse_zone_file="${ZONE_DIR}db.${reversed_ip}"
+  while true; do
+    echo -n "Enter CIDR (e.g., 192.168.10.0/24): "; read -r CIDR
+    validate_cidr "$CIDR" && break || echo "[ERROR] Invalid CIDR."
+  done
 
-    # Attempt to find a matching IP address for the subnet
-    closest_ip=""
-    for ip in "${ip_addresses[@]}"; do
-        # Check for match on third octet
-        if [[ "$ip" == "${ip_portion%.*}."* ]]; then
-            closest_ip="$ip"
-            break
-        # Check for match on second octet
-        elif [[ "$ip" == "${ip_portion%%.*}."* ]]; then
-            closest_ip="$ip"
-        fi
-    done
+  IFS='/' read -r subnet _ <<< "$CIDR"
+  IFS='.' read -r o1 o2 o3 _ <<< "$subnet"
+  default_start="$o1.$o2.$o3.10"
+  default_end="$o1.$o2.$o3.100"
+  default_router="$o1.$o2.$o3.1"
 
-    if [ -z "$closest_ip" ]; then
-        echo -e "[${RED}ERROR${TEXTRESET}] No close IP address match found for subnet ${GREEN}$subnet${TEXTRESET}"
+  echo -n "Start IP [$default_start]: "; read -r pool_start
+  pool_start=${pool_start:-$default_start}
+
+  echo -n "End IP [$default_end]: "; read -r pool_end
+  pool_end=${pool_end:-$default_end}
+
+  echo -n "Router IP [$default_router]: "; read -r router
+  router=${router:-$default_router}
+
+  interface=$(nmcli device status | awk '/-inside/ {print $1; exit}')
+  dns="$router"
+
+  get_hostname_parts
+  domain_suffix="$domain"
+
+  EXTRA_OPTIONS=()
+  echo -n "Add custom DHCP options? [y/N]: "; read -r add_opts
+  if [[ "$add_opts" =~ ^[Yy]$ ]]; then
+    while true; do
+      echo "1) Standard option"
+      echo "2) Advanced"
+      echo "? for help"
+      echo -n "#? "; read -r opt_type
+      [[ "$opt_type" == "?" ]] && {
+        echo "Example: name=tftp-server-name value=192.168.50.10"
+        echo "Advanced: code=150, space=dhcp4"
         continue
-    fi
+      }
+      case "$opt_type" in
+        1)
+          echo -n "Option name: "; read -r n
+          echo -n "Value: "; read -r v
+          EXTRA_OPTIONS+=("{\"name\": \"$n\", \"data\": \"$v\"}")
+          ;;
+        2)
+          echo -n "Code: "; read -r c
+          echo -n "Name: "; read -r n
+          echo -n "Data: "; read -r v
+          echo -n "Space (default: dhcp4): "; read -r s
+          s=${s:-dhcp4}
+          EXTRA_OPTIONS+=("{\"code\": $c, \"name\": \"$n\", \"space\": \"$s\", \"data\": \"$v\"}")
+          ;;
+      esac
+      echo -n "Do you want to add another DHCP option? [y/N]: "; read -r again
+      [[ ! "$again" =~ ^[Yy]$ ]] && break
+    done
+  fi
+}
 
-    # Use the closest matching IP address for the reverse zone
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Using IP address ${GREEN}$closest_ip${TEXTRESET} for subnet ${GREEN}$subnet${TEXTRESET}"
+# New: build JSON separately using gathered vars
+build_subnet_json() {
+  local id="$1"
+  EXTRA_JSON=$(IFS=,; echo "${EXTRA_OPTIONS[*]}")
+  POOL_RANGE="$pool_start - $pool_end"
 
-    # Check if the reverse zone exists in the named configuration
-    if ! grep -q "zone \"$reverse_zone\"" "$NAMED_CONF"; then
-        echo -e "[${YELLOW}INFO${TEXTRESET}] No matching reverse zone for subnet ${GREEN}$subnet:${TEXTRESET} creating ${GREEN}$reverse_zone${TEXTRESET}"
+  jq -n \
+    --arg cidr "$CIDR" \
+    --arg iface "$interface" \
+    --arg pool "$POOL_RANGE" \
+    --arg desc "$description" \
+    --arg router "$router" \
+    --arg dns "$dns" \
+    --arg dom "$domain_suffix" \
+    --argjson id "$id" \
+    --argjson extras "[${EXTRA_JSON:-}]" '
+{
+  comment: $desc,
+  id: $id,
+  subnet: $cidr,
+  interface: $iface,
+  pools: [ { pool: $pool } ],
+  "option-data": (
+    [
+      { name: "routers", data: $router },
+      { name: "domain-name-servers", data: $dns },
+      { name: "ntp-servers", data: $dns },
+      { name: "domain-search", data: $dom },
+      { name: "domain-name", data: $dom }
+    ] + $extras
+  )
+}'
+}
 
-        # Add reverse zone to named.conf
-        sudo bash -c "cat >> $NAMED_CONF" <<EOF
+# Phase 1
 
-zone "${reverse_zone}" {
-    type master;
-    file "$reverse_zone_file";
-    allow-update { key "Kea-DDNS"; };
-};
-EOF
-
-        # Create reverse zone file
-        sudo bash -c "cat > $reverse_zone_file" <<EOF
-\$TTL 86400
-@   IN  SOA   $full_hostname. admin.$domain. (
-    2023100501 ; serial
-    3600       ; refresh
-    1800       ; retry
-    604800     ; expire
-    86400      ; minimum
-)
-@   IN  NS    $full_hostname.
-${closest_ip##*.}  IN  PTR   $full_hostname.
-EOF
-
-        # Set file permissions
-        sudo chmod 640 $reverse_zone_file
-        sudo chown named:named $reverse_zone_file
-    else
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}] Match found for subnet ${GREEN}$subnet:${TEXTRESET} ${GREEN}$reverse_zone${TEXTRESET}"
-    fi
+id=1
+echo -e "${CYAN}==>Configuring ISC-kea...${TEXTRESET}"
+gather_subnet_inputs $id
+# Fix for hex value issue: escape IPs for advanced options requiring hex
+for i in "${!EXTRA_OPTIONS[@]}"; do
+  if [[ ${EXTRA_OPTIONS[$i]} == *\"code\":* ]]; then
+    hex_data=$(printf '%02x' $(echo "$router" | tr '.' ' '))
+    EXTRA_OPTIONS[$i]=$(echo "${EXTRA_OPTIONS[$i]}" | sed "s/\"data\": \"[^\"]*\"/\"data\": \"$hex_data\"/")
+  fi
 done
 
-# Start the named service
-echo -e "[${YELLOW}INFO${TEXTRESET}] Starting named service..."
-sudo systemctl start named
+build_subnet_json $id > /tmp/subnet${id}.json
+subnet_json=$(< /tmp/subnet${id}.json)
+echo "$subnet_json"
 
-# Validate that the named service is running
-if systemctl is-active --quiet named; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Named service is running successfully."
-else
-    echo -e "[${RED}ERROR${TEXTRESET}] Named service failed to start after KEA subnet Cleanup."
-    exit 1
+# Create DDNS file
+if [ -f "$KEA_DHCP_DDNS_CONF" ]; then
+  cp "$KEA_DHCP_DDNS_CONF" "$KEA_DHCP_DDNS_CONF.bak.$(date +%Y%m%d%H%M%S)"
 fi
-# Function to locate the inside interfaces
-    find_inside_interfaces() {
-        main_interface=$(nmcli device status | awk '/-inside/ {print $1}')
 
-        if [ -z "$main_interface" ]; then
-            echo -e "[${RED}ERROR${TEXTRESET}] No interface with ${YELLOW}'-inside'${TEXTREST} profile found. Exiting..."
-            exit 1
-        fi
+rev_zone=$(reverse_ip "${CIDR%/*}")
+ts_key=$(grep secret /etc/rndc.key | awk '{print $2}' | tr -d '";')
 
-        sub_interfaces=$(nmcli device status | awk -v main_intf="$main_interface" '$1 ~ main_intf "\\." {print $1}')
-        inside_interfaces="$main_interface $sub_interfaces"
+jq -n \
+  --arg domain "$domain_suffix." \
+  --arg reverse "$rev_zone.in-addr.arpa." \
+  --arg secret "$ts_key" '
+{
+  DhcpDdns: {
+    "ip-address": "127.0.0.1",
+    port: 53001,
+    "control-socket": {
+      "socket-type": "unix",
+      "socket-name": "/tmp/kea-ddns-ctrl-socket"
+    },
+    "dns-server-timeout": 500,
+    "ncr-format": "JSON",
+    "ncr-protocol": "UDP",
+    "forward-ddns": {
+      "ddns-domains": [
+        {
+          name: $domain,
+          "key-name": "Kea-DDNS",
+          "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ]
+        }
+      ]
+    },
+    "reverse-ddns": {
+      "ddns-domains": [
+        {
+          name: $reverse,
+          "key-name": "Kea-DDNS",
+          "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ]
+        }
+      ]
+    },
+    "tsig-keys": [
+      {
+        name: "Kea-DDNS",
+        algorithm: "HMAC-SHA256",
+        secret: $secret
+      }
+    ]
+  }
+}' > "$KEA_DHCP_DDNS_CONF"
 
-        echo -e "[${GREEN}SUCCESS${TEXTRESET}]  Inside interfaces found: ${GREEN}$inside_interfaces${TEXTRESET}"
-    }
+chmod 640 "$KEA_DHCP_DDNS_CONF"
+chown root:kea "$KEA_DHCP_DDNS_CONF"
+echo -e "[${YELLOW}INFO${TEXTRESET}] kea-dhcp-ddns.conf created."
 
-    # Function to set up nftables rules for DHCP on the inside interfaces
-    setup_nftables_for_dhcp() {
-        sudo systemctl enable nftables
-        sudo systemctl start nftables
+# Create base DHCP4 config
+if [ -f "$KEA_DHCP4_CONF" ]; then
+  cp "$KEA_DHCP4_CONF" "$KEA_DHCP4_CONF.bak.$(date +%Y%m%d%H%M%S)"
+fi
 
-        if ! sudo nft list tables | grep -q 'inet filter'; then
-            sudo nft add table inet filter
-        fi
+jq -n \
+  --argjson subnet "$subnet_json" \
+  --arg iface "$interface" \
+  --arg suffix "$domain_suffix" '
+{
+  Dhcp4: {
+    "interfaces-config": {
+      interfaces: [ $iface ]
+    },
+    "lease-database": {
+      type: "memfile",
+      persist: true,
+      name: "/var/lib/kea/kea-leases4.csv"
+    },
+    "dhcp-ddns": {
+      "enable-updates": true,
+      "server-ip": "127.0.0.1",
+      "server-port": 53001,
+      "sender-ip": "127.0.0.1",
+      "sender-port": 53000,
+      "max-queue-size": 1024,
+      "ncr-protocol": "UDP",
+      "ncr-format": "JSON"
+    },
+    "ddns-qualifying-suffix": $suffix,
+    "ddns-override-client-update": true,
+    "ddns-override-no-update": true,
+    "ddns-update-on-renew": true,
+    "ddns-generated-prefix": "dynamic",
+    "ddns-replace-client-name": "always",
+    authoritative: true,
+    subnet4: [ $subnet ]
+  }
+}' > "$KEA_DHCP4_CONF"
 
-        if ! sudo nft list chain inet filter input &>/dev/null; then
-            sudo nft add chain inet filter input { type filter hook input priority 0 \; }
-        fi
+chmod 640 "$KEA_DHCP4_CONF"
+chown root:kea "$KEA_DHCP4_CONF"
 
-        for iface in $inside_interfaces; do
-            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 67 accept"; then
-                sudo nft add rule inet filter input iifname "$iface" udp dport 67 accept
-                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
-            else
-                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv4) on interface ${GREEN}$iface${TEXTRESET}"
-            fi
-            if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" udp dport 547 accept"; then
-                sudo nft add rule inet filter input iifname "$iface" udp dport 547 accept
-                echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
-            else
-                echo "[${RED}ERROR${TEXTRESET}] Rule already exists: Allow DHCP (IPv6) on interface ${GREEN}$iface${TEXTRESET}"
-            fi
-        done
+if kea-dhcp4 -t "$KEA_DHCP4_CONF"; then
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] kea-dhcp4.conf validated successfully."
+else
+  echo -e "[${RED}ERROR${TEXTRESET}] Validation failed for kea-dhcp4.conf."
 
-        rfwb_status=$(systemctl is-active rfwb-portscan)
-        if [ "$rfwb_status" == "active" ]; then
-            systemctl stop rfwb-portscan
-        fi
+  exit 1
+fi
 
-        sudo nft list ruleset >/etc/sysconfig/nftables.conf
-        sudo systemctl restart nftables
-        if [ "$rfwb_status" == "active" ]; then
-            systemctl start rfwb-portscan
-        fi
-    }
+# Phase 2
 
-    # Execute functions
-    find_inside_interfaces
-    setup_nftables_for_dhcp
+while true; do
+  echo -n "Add another subnet? [y/N]: "; read -r more
+  [[ "$more" =~ ^[Yy]$ ]] || break
+  ((id++))
+  gather_subnet_inputs $id
 
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}ISC-kea Configured Successfully...${TEXTRESET}"
-    echo -e "[${GREEN}DONE${TEXTRESET}]"
-    sleep 3
+  # Fix for hex value issue: escape IPs for advanced options requiring hex
+  for i in "${!EXTRA_OPTIONS[@]}"; do
+    if [[ ${EXTRA_OPTIONS[$i]} == *\"code\":* ]]; then
+      hex_data=$(printf '%02x' $(echo "$router" | tr '.' ' '))
+      EXTRA_OPTIONS[$i]=$(echo "${EXTRA_OPTIONS[$i]}" | sed "s/\"data\": \"[^\"]*\"/\"data\": \"$hex_data\"/")
+    fi
+  done
+
+  build_subnet_json $id > /tmp/subnet${id}.json
+  subnet_json=$(< /tmp/subnet${id}.json)
+  echo "$subnet_json"
+
+  jq --argjson newsubnet "$subnet_json" '.Dhcp4.subnet4 += [$newsubnet]' "$KEA_DHCP4_CONF" > /tmp/kea.tmp && mv /tmp/kea.tmp "$KEA_DHCP4_CONF"
+
+  if kea-dhcp4 -t "$KEA_DHCP4_CONF"; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Config with new subnet validated."
+  else
+    echo -e "[${RED}ERROR${TEXTRESET}] Validation failed after adding subnet ID $id. Reverting."
+    exit 1
+  fi
+
+  # Add reverse zone to DDNS file if not present
+  rev_zone=$(reverse_ip "${CIDR%/*}")
+  existing=$(jq --arg zone "$rev_zone.in-addr.arpa." '.DhcpDdns["reverse-ddns"]["ddns-domains"][]? | select(.name == $zone)' "$KEA_DHCP_DDNS_CONF")
+  if [[ -z "$existing" ]]; then
+    jq --arg zone "$rev_zone.in-addr.arpa." '.DhcpDdns["reverse-ddns"]["ddns-domains"] += [{ "name": $zone, "key-name": "Kea-DDNS", "dns-servers": [ { "ip-address": "127.0.0.1", "port": 53 } ] }]' "$KEA_DHCP_DDNS_CONF" >/tmp/ddns.tmp && mv /tmp/ddns.tmp "$KEA_DHCP_DDNS_CONF"
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Added $rev_zone.in-addr.arpa. to kea-dhcp-ddns.conf"
+  else
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Reverse zone $rev_zone.in-addr.arpa. already exists in kea-dhcp-ddns.conf"
+  fi
+done
+
+# Gather interfaces ending in -inside and subinterfaces
+find_interfaces() {
+  local suffix="$1"
+  nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
 }
+
+INSIDE_INTERFACE=$(find_interfaces "-inside")
+SUB_INTERFACES=$(nmcli -t -f DEVICE device status | grep -E "${INSIDE_INTERFACE}\\.[0-9]+")
+INTERFACES=($INSIDE_INTERFACE $SUB_INTERFACES)
+
+CONFIG_FILE="${KEA_DHCP4_CONF:-/etc/kea/kea-dhcp4.conf}"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo -e "[${RED}ERROR${TEXTRESET}] Configuration file not found: $CONFIG_FILE"
+  exit 1
+fi
+
+# Extract subnet list from config
+mapfile -t SUBNETS < <(jq -r '.Dhcp4.subnet4[].subnet' "$CONFIG_FILE")
+
+if [ "${#SUBNETS[@]}" -eq 0 ]; then
+  echo -e "[${YELLOW}INFO${TEXTRESET}] No subnets found in configuration."
+  exit 0
+fi
+
+# Display interfaces with index
+echo -e "\n[${CYAN}INFO${TEXTRESET}] Available interfaces:"
+for i in "${!INTERFACES[@]}"; do
+  ip=$(nmcli -g IP4.ADDRESS device show "${INTERFACES[$i]}" | head -n1)
+  echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
+done
+
+# Map each subnet to selected interface
+ASSIGNED=()
+for j in "${!SUBNETS[@]}"; do
+  echo -e "\n[${CYAN}INFO${TEXTRESET}] Subnet ${SUBNETS[$j]}"
+  read -p "Select interface index to bind to this subnet: " sel
+  chosen_iface="${INTERFACES[$sel]}"
+  ASSIGNED+=("$chosen_iface")
+
+  jq --arg subnet "${SUBNETS[$j]}" --arg iface "$chosen_iface" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface.tmp && mv /tmp/kea_iface.tmp "$CONFIG_FILE"
+done
+
+# Check if any subnets remain unassigned (fallback to -inside interface)
+if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
+  ip_fallback=$(nmcli -g IP4.ADDRESS device show "$INSIDE_INTERFACE" | head -n1 | cut -d/ -f1)
+  echo -e "\n[${YELLOW}WARN${TEXTRESET}] Some subnets were not assigned. Assigning remaining to ${GREEN}$INSIDE_INTERFACE${TEXTRESET} (${CYAN}$ip_fallback${TEXTRESET})"
+  sleep 4
+  for j in "${!SUBNETS[@]}"; do
+    if ! grep -q "${SUBNETS[$j]}" <<< "${ASSIGNED[*]}"; then
+      jq --arg subnet "${SUBNETS[$j]}" --arg iface "$INSIDE_INTERFACE" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface_fallback.tmp && mv /tmp/kea_iface_fallback.tmp "$CONFIG_FILE"
+    fi
+  done
+fi
+
+# Print mapping summary
+echo -e "\n[${CYAN}SUMMARY${TEXTRESET}] Subnet to Interface Mapping:"
+for subnet in "${SUBNETS[@]}"; do
+  iface=$(jq -r --arg subnet "$subnet" '.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface' "$CONFIG_FILE")
+  echo -e "  ${GREEN}$subnet${TEXTRESET}  →  ${CYAN}$iface${TEXTRESET}"
+done
+read -p $'\nPress [Enter] to continue...' _
+
+# Update interfaces array at top-level if needed
+current_list=$(jq -r '.Dhcp4."interfaces-config".interfaces[]' "$CONFIG_FILE")
+for chosen in "${INTERFACES[@]}"; do
+  if ! grep -q "$chosen" <<< "$current_list"; then
+    current_list+=$'\n'"$chosen"
+  fi
+done
+
+updated_list=$(echo "$current_list" | sort -u | jq -R . | jq -s .)
+jq --argjson updated "$updated_list" '.Dhcp4."interfaces-config".interfaces = $updated' "$CONFIG_FILE" > /tmp/kea_final_iface.tmp && mv /tmp/kea_final_iface.tmp "$CONFIG_FILE"
+
+echo -e "\n[${GREEN}SUCCESS${TEXTRESET}] Interfaces successfully assigned to subnets."
+if kea-dhcp4 -t "$CONFIG_FILE"; then
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Final config validated."
+  # Start services and verify
+for svc in kea-dhcp-ddns kea-dhcp4; do
+  echo -e "[${CYAN}INFO${TEXTRESET}] Starting service: ${svc}"
+  if systemctl start "$svc" && systemctl is-active --quiet "$svc"; then
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Service ${svc} is active."
+  else
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to start or activate ${svc}."
+  fi
+done
+
+else
+  echo -e "[${RED}ERROR${TEXTRESET}] Final config validation failed."
+fi
+
+# === Allow DHCP traffic on assigned interfaces ===
+echo -e "\n[${CYAN}INFO${TEXTRESET}] Ensuring DHCP traffic is allowed on assigned interfaces..."
+
+sudo systemctl enable nftables >/dev/null 2>&1
+sudo systemctl start nftables >/dev/null 2>&1
+
+if ! sudo nft list tables | grep -q 'inet filter'; then
+  sudo nft add table inet filter
+fi
+
+if ! sudo nft list chain inet filter input &>/dev/null; then
+  sudo nft add chain inet filter input { type filter hook input priority 0 \; }
+fi
+
+rfwb_status=$(systemctl is-active rfwb-portscan)
+if [ "$rfwb_status" == "active" ]; then
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Temporarily stopping rfwb-portscan..."
+  systemctl stop rfwb-portscan
+fi
+
+for iface in "${INTERFACES[@]}"; do
+  for proto in udp tcp; do
+    if ! sudo nft list chain inet filter input | grep -q "iifname \"$iface\" $proto dport 67 accept"; then
+      sudo nft add rule inet filter input iifname "$iface" $proto dport 67 accept
+      echo -e "[${GREEN}SUCCESS${TEXTRESET}] Rule added: Allow DHCP (${proto^^}) on ${GREEN}$iface${TEXTRESET}"
+    else
+      echo -e "[${YELLOW}INFO${TEXTRESET}] Rule already exists: DHCP (${proto^^}) on ${GREEN}$iface${TEXTRESET}"
+    fi
+  done
+done
+
+sudo nft list ruleset > /etc/sysconfig/nftables.conf
+sudo systemctl restart nftables
+
+if [ "$rfwb_status" == "active" ]; then
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting rfwb-portscan..."
+  systemctl start rfwb-portscan
+fi
+}
+
+
+
+
 configure_evebox () {
 echo -e "${CYAN}==>Configuring EVEBOX...${TEXTRESET}"
 mkdir -p /etc/evebox/
