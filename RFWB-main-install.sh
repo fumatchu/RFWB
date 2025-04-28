@@ -3481,6 +3481,7 @@ while true; do
     echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
     cat > "$zone_file" <<EOF
 $TTL 86400
+$ORIGIN $rev_zone.in-addr.arpa.
 @   IN  SOA   ${hostname}.${domain}. admin.${domain}. (
     2024042501 ; serial
     3600       ; refresh
