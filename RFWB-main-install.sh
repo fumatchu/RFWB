@@ -3142,6 +3142,15 @@ get_hostname_parts() {
   domain="${full_hostname#*.}"
   hostname="${full_hostname%%.*}"
 }
+is_valid_standard_option() {
+  local opt="$1"
+  case "$opt" in
+    routers|domain-name-servers|domain-search|ntp-servers|boot-file-name|tftp-server-name|host-name|vendor-class-identifier|domain-name|nis-domain|netbios-name-servers|netbios-node-type)
+      return 0 ;;  # valid
+    *)
+      return 1 ;;  # invalid
+  esac
+}
 
 # ─── Gather Subnet Info ───────────────────────────────────────────
 gather_subnet_inputs() {
@@ -3218,19 +3227,43 @@ elif [[ "$opt_type" == "?" ]]; then
 fi
 
       case "$opt_type" in
-        1)
-          echo -n "Option name: "; read -r n
-          echo -n "Value: "; read -r v
-          EXTRA_OPTIONS+=("{\"name\": \"$n\", \"data\": \"$v\"}")
-          ;;
+           1)
+  echo -n "Option name: "; read -r n
+  if ! is_valid_standard_option "$n"; then
+    echo "[ERROR] Invalid standard option name: $n"
+    echo -e "\nSupported Standard (Common) Options:"
+    echo " - routers"
+    echo " - domain-name-servers"
+    echo " - domain-search"
+    echo " - ntp-servers"
+    echo " - boot-file-name"
+    echo " - tftp-server-name"
+    echo " - host-name"
+    echo " - vendor-class-identifier"
+    echo " - domain-name"
+    echo " - nis-domain"
+    echo " - netbios-name-servers"
+    echo " - netbios-node-type"
+    continue
+  fi
+  echo -n "Value: "; read -r v
+  EXTRA_OPTIONS+=("{\"name\": \"$n\", \"data\": \"$v\"}")
+  ;;
+
+
         2)
-          echo -n "Code: "; read -r c
-          echo -n "Name: "; read -r n
-          echo -n "Data: "; read -r v
-          echo -n "Space (default: dhcp4): "; read -r s
-          s=${s:-dhcp4}
-          EXTRA_OPTIONS+=("{\"code\": $c, \"name\": \"$n\", \"space\": \"$s\", \"data\": \"$v\"}")
-          ;;
+    echo -e "\n[INFO] You selected Advanced (Common) Option."
+    echo "Reminder: Use advanced options (e.g., codes 66, 67, 150) only if you know the required format."
+    echo "Incorrect advanced entries may cause KEA service validation to fail."
+    echo
+    echo -n "Code: "; read -r c
+    echo -n "Name: "; read -r n
+    echo -n "Data: "; read -r v
+    echo -n "Space (default: dhcp4): "; read -r s
+    s=${s:-dhcp4}
+    EXTRA_OPTIONS+=("{\"code\": $c, \"name\": \"$n\", \"space\": \"$s\", \"data\": \"$v\"}")
+    ;;
+
       esac
       echo -n "Do you want to add another DHCP option? [y/N]: "; read -r again
       [[ ! "$again" =~ ^[Yy]$ ]] && break
