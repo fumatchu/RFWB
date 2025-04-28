@@ -3188,8 +3188,32 @@ echo -n "#? "; read -r opt_type
 if [[ "$opt_type" == "0" ]]; then
   break
 elif [[ "$opt_type" == "?" ]]; then
-  echo "Example: Standard option → name=tftp-server-name value=192.168.50.10"
-  echo "Example: Advanced option → code=150, space=dhcp4, name=tftp-server, data=192.168.50.10"
+  echo ""
+  echo "Supported DHCP Options:"
+  echo ""
+  echo "Standard (Common) Options (by name):"
+  echo "  - routers"
+  echo "  - domain-name-servers"
+  echo "  - domain-search"
+  echo "  - ntp-servers"
+  echo "  - boot-file-name"
+  echo "  - tftp-server-name"
+  echo "  - host-name"
+  echo "  - vendor-class-identifier"
+  echo "  - domain-name"
+  echo "  - nis-domain"
+  echo "  - netbios-name-servers"
+  echo "  - netbios-node-type"
+  echo ""
+  echo "Advanced (Common) Options (by code):"
+  echo "  - code 66 → tftp-server-name"
+  echo "  - code 67 → boot-file-name"
+  echo "  - code 150 → tftp-server address for VoIP phones"
+  echo "  - code 43 → vendor-specific information"
+  echo ""
+  echo "[INFO] Use Standard (Common) for simple options (by name)."
+  echo "[INFO] Use Advanced (Common) for custom numeric codes (VoIP, PXE boot, etc)."
+  echo ""
   continue
 fi
 
