@@ -3539,8 +3539,14 @@ for i in "${!INTERFACES[@]}"; do
   echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
 done
 
-# ─── Interface Mapping with Confirmation and Validation ────────────────────────
+# ─── Interface Mapping with Confirmation, Validation, and Redisplay ──────────────
 while true; do
+  echo -e "\n[INFO] Available Interfaces:"
+  for i in "${!INTERFACES[@]}"; do
+    ip=$(nmcli -g IP4.ADDRESS device show "${INTERFACES[$i]}" | head -n1)
+    echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
+  done
+
   ASSIGNED=()
   for j in "${!SUBNETS[@]}"; do
     echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
@@ -3567,8 +3573,10 @@ while true; do
     break
   else
     echo -e "\n[INFO] Restarting interface selection..."
+    sleep 2
   fi
 done
+
 
 
 # ─── Apply Confirmed Interface Mapping ───────────────────────────
