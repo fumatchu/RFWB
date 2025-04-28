@@ -3629,13 +3629,25 @@ for svc in kea-dhcp-ddns kea-dhcp4; do
   fi
 done
 
-# Reload named (optional, if reverse zones were updated)
-echo -e "[INFO] Reloading named.service to pick up new zones"
-if systemctl reload named; then
-  echo -e "[SUCCESS] named.service reloaded."
+# Reload named (only if running and config valid)
+echo -e "[INFO] Checking named configuration before reload..."
+
+if named-checkconf; then
+  echo -e "[SUCCESS] named.conf validated."
+  if systemctl is-active --quiet named; then
+    echo -e "[INFO] Reloading named.service to pick up new zones..."
+    if systemctl reload named; then
+      echo -e "[SUCCESS] named.service reloaded."
+    else
+      echo -e "[ERROR] Failed to reload named.service. Manual check recommended."
+    fi
+  else
+    echo -e "[WARN] named.service not active. Skipping reload."
+  fi
 else
-  echo -e "[ERROR] Failed to reload named. Manual check recommended."
+  echo -e "[ERROR] named.conf validation failed. Please fix issues before starting/reloading named."
 fi
+
 # === Allow DHCP traffic on assigned interfaces ===
 echo -e "\n[${CYAN}INFO${TEXTRESET}] Ensuring DHCP traffic is allowed on assigned interfaces..."
 
