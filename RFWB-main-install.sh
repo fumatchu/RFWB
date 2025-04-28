@@ -3104,14 +3104,24 @@ fi
     echo -e "[${GREEN}SUCCESS${TEXTRESET}] ${GREEN}BIND Configured Successfully!${TEXTRESET}"
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
-    
-#Configure KEA 
+#Configure DHCP
+#!/usr/bin/env bash
+
+# ─────────────────────────────────────────────────────────────────
+# KEA DHCP4 + DDNS + Reverse DNS Zone Installer with PTR Record
+# ─────────────────────────────────────────────────────────────────
+# Phase 1: Configure first subnet + base configs
+# Phase 2: Loop additional subnets + DDNS zones
+# Phase 3: Map interfaces + final validation
+# ─────────────────────────────────────────────────────────────────
+
+# ─── Configuration ────────────────────────────────────────────────
 KEA_DHCP4_CONF="/etc/kea/kea-dhcp4.conf"
 KEA_DHCP_DDNS_CONF="/etc/kea/kea-dhcp-ddns.conf"
 NAMED_CONF="/etc/named.conf"
 ZONE_DIR="/var/named"
 
-# ========== Helpers ==========
+# ─── Helper Functions ─────────────────────────────────────────────
 validate_ip() {
   local ip=$1
   local n="(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
@@ -3135,15 +3145,15 @@ get_hostname_parts() {
   hostname="${full_hostname%%.*}"
 }
 
-# New: gather input interactively and store to globals
+# ─── Gather Subnet Info ───────────────────────────────────────────
 gather_subnet_inputs() {
   local id="$1"
-  echo -e "${CYAN}==>Gathering DHCP Scope Information${TEXTRESET}"
+  echo -e "\n==> Gathering DHCP Scope Information"
   echo -n "Provide a Friendly name (description) for the subnet: "; read -r description
 
   while true; do
     echo -n "Enter CIDR (e.g., 192.168.10.0/24): "; read -r CIDR
-    validate_cidr "$CIDR" && break || echo "[ERROR] Invalid CIDR."
+    validate_cidr "$CIDR" && break || echo "[ERROR] Invalid CIDR format."
   done
 
   IFS='/' read -r subnet _ <<< "$CIDR"
@@ -3171,15 +3181,20 @@ gather_subnet_inputs() {
   echo -n "Add custom DHCP options? [y/N]: "; read -r add_opts
   if [[ "$add_opts" =~ ^[Yy]$ ]]; then
     while true; do
-      echo "1) Standard option"
-      echo "2) Advanced"
-      echo "? for help"
-      echo -n "#? "; read -r opt_type
-      [[ "$opt_type" == "?" ]] && {
-        echo "Example: name=tftp-server-name value=192.168.50.10"
-        echo "Advanced: code=150, space=dhcp4"
-        continue
-      }
+      echo "0) Exit"
+echo "1) Standard option"
+echo "2) Advanced option"
+echo "? for help"
+echo -n "#? "; read -r opt_type
+
+if [[ "$opt_type" == "0" ]]; then
+  break
+elif [[ "$opt_type" == "?" ]]; then
+  echo "Example: Standard option → name=tftp-server-name value=192.168.50.10"
+  echo "Example: Advanced option → code=150, space=dhcp4, name=tftp-server, data=192.168.50.10"
+  continue
+fi
+
       case "$opt_type" in
         1)
           echo -n "Option name: "; read -r n
@@ -3201,7 +3216,7 @@ gather_subnet_inputs() {
   fi
 }
 
-# New: build JSON separately using gathered vars
+# ─── Build Subnet JSON ────────────────────────────────────────────
 build_subnet_json() {
   local id="$1"
   EXTRA_JSON=$(IFS=,; echo "${EXTRA_OPTIONS[*]}")
@@ -3235,12 +3250,12 @@ build_subnet_json() {
 }'
 }
 
-# Phase 1
-
+# ─── Phase 1: Initial Setup ────────────────────────────────────────
 id=1
-echo -e "${CYAN}==>Configuring ISC-kea...${TEXTRESET}"
+echo -e "\n==> Configuring ISC-KEA Phase 1"
 gather_subnet_inputs $id
-# Fix for hex value issue: escape IPs for advanced options requiring hex
+
+# After gathering EXTRA_OPTIONS, fix for hex value issue
 for i in "${!EXTRA_OPTIONS[@]}"; do
   if [[ ${EXTRA_OPTIONS[$i]} == *\"code\":* ]]; then
     hex_data=$(printf '%02x' $(echo "$router" | tr '.' ' '))
@@ -3250,19 +3265,13 @@ done
 
 build_subnet_json $id > /tmp/subnet${id}.json
 subnet_json=$(< /tmp/subnet${id}.json)
-echo "$subnet_json"
 
-# Create DDNS file
-if [ -f "$KEA_DHCP_DDNS_CONF" ]; then
-  cp "$KEA_DHCP_DDNS_CONF" "$KEA_DHCP_DDNS_CONF.bak.$(date +%Y%m%d%H%M%S)"
-fi
-
-rev_zone=$(reverse_ip "${CIDR%/*}")
+# Create DDNS Config
 ts_key=$(grep secret /etc/rndc.key | awk '{print $2}' | tr -d '";')
 
 jq -n \
   --arg domain "$domain_suffix." \
-  --arg reverse "$rev_zone.in-addr.arpa." \
+  --arg reverse "$(reverse_ip "${CIDR%/*}").in-addr.arpa." \
   --arg secret "$ts_key" '
 {
   DhcpDdns: {
@@ -3277,41 +3286,25 @@ jq -n \
     "ncr-protocol": "UDP",
     "forward-ddns": {
       "ddns-domains": [
-        {
-          name: $domain,
-          "key-name": "Kea-DDNS",
-          "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ]
-        }
+        { name: $domain, "key-name": "Kea-DDNS", "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ] }
       ]
     },
     "reverse-ddns": {
       "ddns-domains": [
-        {
-          name: $reverse,
-          "key-name": "Kea-DDNS",
-          "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ]
-        }
+        { name: $reverse, "key-name": "Kea-DDNS", "dns-servers": [ { "ip-address": "127.0.0.1", port: 53 } ] }
       ]
     },
     "tsig-keys": [
-      {
-        name: "Kea-DDNS",
-        algorithm: "HMAC-SHA256",
-        secret: $secret
-      }
+      { name: "Kea-DDNS", algorithm: "HMAC-SHA256", secret: $secret }
     ]
   }
 }' > "$KEA_DHCP_DDNS_CONF"
 
 chmod 640 "$KEA_DHCP_DDNS_CONF"
 chown root:kea "$KEA_DHCP_DDNS_CONF"
-echo -e "[${YELLOW}INFO${TEXTRESET}] kea-dhcp-ddns.conf created."
+restorecon "$KEA_DHCP_DDNS_CONF"
 
-# Create base DHCP4 config
-if [ -f "$KEA_DHCP4_CONF" ]; then
-  cp "$KEA_DHCP4_CONF" "$KEA_DHCP4_CONF.bak.$(date +%Y%m%d%H%M%S)"
-fi
-
+# Create DHCP4 Config
 jq -n \
   --argjson subnet "$subnet_json" \
   --arg iface "$interface" \
@@ -3349,24 +3342,41 @@ jq -n \
 
 chmod 640 "$KEA_DHCP4_CONF"
 chown root:kea "$KEA_DHCP4_CONF"
+restorecon "$KEA_DHCP4_CONF"
 
-if kea-dhcp4 -t "$KEA_DHCP4_CONF"; then
-  echo -e "[${GREEN}SUCCESS${TEXTRESET}] kea-dhcp4.conf validated successfully."
-else
-  echo -e "[${RED}ERROR${TEXTRESET}] Validation failed for kea-dhcp4.conf."
+# Create Reverse DNS Zone
+rev_zone=$(reverse_ip "${CIDR%/*}")
+zone_file="$ZONE_DIR/db.$rev_zone"
 
-  exit 1
+if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
+  echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
+  cat > "$zone_file" <<EOF
+\$TTL 86400
+@   IN  SOA   ${hostname}.${domain}. admin.${domain}. (
+    2024042501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    ${hostname}.${domain}.
+EOF
+  chown named:named "$zone_file"
+  chmod 640 "$zone_file"
+  restorecon "$zone_file"
 fi
 
-# Phase 2
+# ─── Continues to Phase 2 and Phase 3 exactly as discussed ───
 
+
+# ─── Phase 2: Add Additional Subnets ─────────────────────────────
 while true; do
   echo -n "Add another subnet? [y/N]: "; read -r more
   [[ "$more" =~ ^[Yy]$ ]] || break
   ((id++))
   gather_subnet_inputs $id
 
-  # Fix for hex value issue: escape IPs for advanced options requiring hex
+  # After gathering, fix hex for advanced options
   for i in "${!EXTRA_OPTIONS[@]}"; do
     if [[ ${EXTRA_OPTIONS[$i]} == *\"code\":* ]]; then
       hex_data=$(printf '%02x' $(echo "$router" | tr '.' ' '))
@@ -3376,29 +3386,70 @@ while true; do
 
   build_subnet_json $id > /tmp/subnet${id}.json
   subnet_json=$(< /tmp/subnet${id}.json)
-  echo "$subnet_json"
 
+  # Append new subnet to kea-dhcp4.conf
   jq --argjson newsubnet "$subnet_json" '.Dhcp4.subnet4 += [$newsubnet]' "$KEA_DHCP4_CONF" > /tmp/kea.tmp && mv /tmp/kea.tmp "$KEA_DHCP4_CONF"
+  chmod 640 "$KEA_DHCP4_CONF"
+  chown root:kea "$KEA_DHCP4_CONF"
+  restorecon "$KEA_DHCP4_CONF"
 
+  # Validate config
   if kea-dhcp4 -t "$KEA_DHCP4_CONF"; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Config with new subnet validated."
+    echo -e "[SUCCESS] New subnet validated and added."
   else
-    echo -e "[${RED}ERROR${TEXTRESET}] Validation failed after adding subnet ID $id. Reverting."
+    echo -e "[ERROR] Validation failed after adding new subnet. Exiting."
     exit 1
   fi
 
-  # Add reverse zone to DDNS file if not present
-  rev_zone=$(reverse_ip "${CIDR%/*}")
+  # Update DDNS reverse zone if needed
+  rev_zone="$(reverse_ip "${CIDR%/*}")"
   existing=$(jq --arg zone "$rev_zone.in-addr.arpa." '.DhcpDdns["reverse-ddns"]["ddns-domains"][]? | select(.name == $zone)' "$KEA_DHCP_DDNS_CONF")
   if [[ -z "$existing" ]]; then
-    jq --arg zone "$rev_zone.in-addr.arpa." '.DhcpDdns["reverse-ddns"]["ddns-domains"] += [{ "name": $zone, "key-name": "Kea-DDNS", "dns-servers": [ { "ip-address": "127.0.0.1", "port": 53 } ] }]' "$KEA_DHCP_DDNS_CONF" >/tmp/ddns.tmp && mv /tmp/ddns.tmp "$KEA_DHCP_DDNS_CONF"
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Added $rev_zone.in-addr.arpa. to kea-dhcp-ddns.conf"
+    jq --arg zone "$rev_zone.in-addr.arpa." '.DhcpDdns["reverse-ddns"]["ddns-domains"] += [
+      { "name": $zone, "key-name": "Kea-DDNS", "dns-servers": [ { "ip-address": "127.0.0.1", "port": 53 } ] }
+    ]' "$KEA_DHCP_DDNS_CONF" > /tmp/ddns.tmp && mv /tmp/ddns.tmp "$KEA_DHCP_DDNS_CONF"
+    chmod 640 "$KEA_DHCP_DDNS_CONF"
+    chown root:kea "$KEA_DHCP_DDNS_CONF"
+    restorecon "$KEA_DHCP_DDNS_CONF"
+    echo -e "[INFO] Added $rev_zone.in-addr.arpa. to kea-dhcp-ddns.conf."
   else
-    echo -e "[${YELLOW}INFO${TEXTRESET}] Reverse zone $rev_zone.in-addr.arpa. already exists in kea-dhcp-ddns.conf"
+    echo -e "[INFO] Reverse zone $rev_zone.in-addr.arpa. already exists in DDNS config."
   fi
+
+  # Create Reverse DNS Zone and zone file if needed
+  zone_file="$ZONE_DIR/db.$rev_zone"
+  if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
+    echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
+    cat > "$zone_file" <<EOF
+$TTL 86400
+@   IN  SOA   ${hostname}.${domain}. admin.${domain}. (
+    2024042501 ; serial
+    3600       ; refresh
+    1800       ; retry
+    604800     ; expire
+    86400      ; minimum
+)
+@   IN  NS    ${hostname}.${domain}.
+EOF
+
+# ➡ Add router PTR record (example: "1 IN PTR fw.test.int.")
+octet=$(echo "$router" | awk -F. '{print $4}')
+echo -e "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
+
+    chown named:named "$zone_file"
+    chmod 640 "$zone_file"
+    restorecon "$zone_file"
+    restorecon "$NAMED_CONF"
+    echo -e "[INFO] Created reverse zone file $zone_file and updated named.conf."
+  fi
+
 done
 
-# Gather interfaces ending in -inside and subinterfaces
+# ─── Phase 3: Interface Assignment ───────────────────────────────
+
+echo -e "\n==> Phase 3: Assign Interfaces to Subnets"
+
+# Gather available interfaces (-inside and VLAN subinterfaces)
 find_interfaces() {
   local suffix="$1"
   nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
@@ -3410,7 +3461,7 @@ INTERFACES=($INSIDE_INTERFACE $SUB_INTERFACES)
 
 CONFIG_FILE="${KEA_DHCP4_CONF:-/etc/kea/kea-dhcp4.conf}"
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo -e "[${RED}ERROR${TEXTRESET}] Configuration file not found: $CONFIG_FILE"
+  echo -e "[ERROR] Configuration file not found: $CONFIG_FILE"
   exit 1
 fi
 
@@ -3418,12 +3469,12 @@ fi
 mapfile -t SUBNETS < <(jq -r '.Dhcp4.subnet4[].subnet' "$CONFIG_FILE")
 
 if [ "${#SUBNETS[@]}" -eq 0 ]; then
-  echo -e "[${YELLOW}INFO${TEXTRESET}] No subnets found in configuration."
+  echo -e "[WARN] No subnets found in configuration."
   exit 0
 fi
 
-# Display interfaces with index
-echo -e "\n[${CYAN}INFO${TEXTRESET}] Available interfaces:"
+# Display interfaces
+echo -e "\n[INFO] Available Interfaces:"
 for i in "${!INTERFACES[@]}"; do
   ip=$(nmcli -g IP4.ADDRESS device show "${INTERFACES[$i]}" | head -n1)
   echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
@@ -3432,7 +3483,7 @@ done
 # Map each subnet to selected interface
 ASSIGNED=()
 for j in "${!SUBNETS[@]}"; do
-  echo -e "\n[${CYAN}INFO${TEXTRESET}] Subnet ${SUBNETS[$j]}"
+  echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
   read -p "Select interface index to bind to this subnet: " sel
   chosen_iface="${INTERFACES[$sel]}"
   ASSIGNED+=("$chosen_iface")
@@ -3440,11 +3491,11 @@ for j in "${!SUBNETS[@]}"; do
   jq --arg subnet "${SUBNETS[$j]}" --arg iface "$chosen_iface" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface.tmp && mv /tmp/kea_iface.tmp "$CONFIG_FILE"
 done
 
-# Check if any subnets remain unassigned (fallback to -inside interface)
+# Check if any subnets left unassigned (fallback)
 if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
   ip_fallback=$(nmcli -g IP4.ADDRESS device show "$INSIDE_INTERFACE" | head -n1 | cut -d/ -f1)
-  echo -e "\n[${YELLOW}WARN${TEXTRESET}] Some subnets were not assigned. Assigning remaining to ${GREEN}$INSIDE_INTERFACE${TEXTRESET} (${CYAN}$ip_fallback${TEXTRESET})"
-  sleep 4
+  echo -e "\n[WARN] Some subnets not assigned. Assigning to $INSIDE_INTERFACE ($ip_fallback)."
+  sleep 3
   for j in "${!SUBNETS[@]}"; do
     if ! grep -q "${SUBNETS[$j]}" <<< "${ASSIGNED[*]}"; then
       jq --arg subnet "${SUBNETS[$j]}" --arg iface "$INSIDE_INTERFACE" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface_fallback.tmp && mv /tmp/kea_iface_fallback.tmp "$CONFIG_FILE"
@@ -3453,14 +3504,14 @@ if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
 fi
 
 # Print mapping summary
-echo -e "\n[${CYAN}SUMMARY${TEXTRESET}] Subnet to Interface Mapping:"
+echo -e "\n[SUMMARY] Subnet to Interface Mapping:"
 for subnet in "${SUBNETS[@]}"; do
   iface=$(jq -r --arg subnet "$subnet" '.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface' "$CONFIG_FILE")
-  echo -e "  ${GREEN}$subnet${TEXTRESET}  →  ${CYAN}$iface${TEXTRESET}"
+  echo -e "  $subnet  →  $iface"
 done
 read -p $'\nPress [Enter] to continue...' _
 
-# Update interfaces array at top-level if needed
+# Update interfaces array
 current_list=$(jq -r '.Dhcp4."interfaces-config".interfaces[]' "$CONFIG_FILE")
 for chosen in "${INTERFACES[@]}"; do
   if ! grep -q "$chosen" <<< "$current_list"; then
@@ -3471,21 +3522,31 @@ done
 updated_list=$(echo "$current_list" | sort -u | jq -R . | jq -s .)
 jq --argjson updated "$updated_list" '.Dhcp4."interfaces-config".interfaces = $updated' "$CONFIG_FILE" > /tmp/kea_final_iface.tmp && mv /tmp/kea_final_iface.tmp "$CONFIG_FILE"
 
-echo -e "\n[${GREEN}SUCCESS${TEXTRESET}] Interfaces successfully assigned to subnets."
+# Final validation
+echo -e "\n==> Final Validation of Configs"
 if kea-dhcp4 -t "$CONFIG_FILE"; then
-  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Final config validated."
-  # Start services and verify
+  echo -e "[SUCCESS] Final config validated successfully."
+else
+  echo -e "[ERROR] Final validation failed!"
+  exit 1
+fi
+
+# Restart services
 for svc in kea-dhcp-ddns kea-dhcp4; do
-  echo -e "[${CYAN}INFO${TEXTRESET}] Starting service: ${svc}"
-  if systemctl start "$svc" && systemctl is-active --quiet "$svc"; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Service ${svc} is active."
+  echo -e "[INFO] Restarting service: $svc"
+  if systemctl restart "$svc" && systemctl is-active --quiet "$svc"; then
+    echo -e "[SUCCESS] $svc is running."
   else
-    echo -e "[${RED}ERROR${TEXTRESET}] Failed to start or activate ${svc}."
+    echo -e "[ERROR] Failed to restart or activate $svc."
   fi
 done
 
+# Reload named (optional, if reverse zones were updated)
+echo -e "[INFO] Reloading named.service to pick up new zones"
+if systemctl reload named; then
+  echo -e "[SUCCESS] named.service reloaded."
 else
-  echo -e "[${RED}ERROR${TEXTRESET}] Final config validation failed."
+  echo -e "[ERROR] Failed to reload named. Manual check recommended."
 fi
 
 # === Allow DHCP traffic on assigned interfaces ===
