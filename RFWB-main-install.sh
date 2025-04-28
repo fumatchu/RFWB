@@ -3553,6 +3553,7 @@ while true; do
     echo -e "[\e[31mERROR\e[0m] Invalid selection. Please choose a valid index."
   fi
 done
+done
 
   echo -e "\n[REVIEW] Subnet to Interface Selections:"
   for j in "${!SUBNETS[@]}"; do
