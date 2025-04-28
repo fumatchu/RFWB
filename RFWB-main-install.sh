@@ -3257,12 +3257,16 @@ fi
     echo "Incorrect advanced entries may cause KEA service validation to fail."
     echo
     echo -n "Code: "; read -r c
-    echo -n "Name: "; read -r n
-    echo -n "Data: "; read -r v
-    echo -n "Space (default: dhcp4): "; read -r s
-    s=${s:-dhcp4}
-    EXTRA_OPTIONS+=("{\"code\": $c, \"name\": \"$n\", \"space\": \"$s\", \"data\": \"$v\"}")
-    ;;
+  if ! [[ "$c" =~ ^[0-9]+$ ]]; then
+    echo -e "[\e[31mERROR\e[0m] Invalid code: $c. Code must be a number."
+    continue
+  fi
+  echo -n "Name: "; read -r n
+  echo -n "Data: "; read -r v
+  echo -n "Space (default: dhcp4): "; read -r s
+  s=${s:-dhcp4}
+  EXTRA_OPTIONS+=("{\"code\": $c, \"name\": \"$n\", \"space\": \"$s\", \"data\": \"$v\"}")
+  ;;
 
       esac
       echo -n "Do you want to add another DHCP option? [y/N]: "; read -r again
