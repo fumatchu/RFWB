@@ -1086,7 +1086,7 @@ install_selected_services() {
 #=== Drop to CLI ===
 
 drop_to_cli(){
-dialog --title "Service Configuration" --msgbox "Press OK to begin configuring services." 8 60
+dialog --title "Service Configuration" --msgbox "Ready to configure services." 8 60
 clear
 }
 
