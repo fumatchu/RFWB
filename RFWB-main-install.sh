@@ -3105,8 +3105,6 @@ fi
     echo -e "[${GREEN}DONE${TEXTRESET}]"
     sleep 3
 #Configure DHCP
-#!/usr/bin/env bash
-
 # ─────────────────────────────────────────────────────────────────
 # KEA DHCP4 + DDNS + Reverse DNS Zone Installer with PTR Record
 # ─────────────────────────────────────────────────────────────────
@@ -3548,7 +3546,6 @@ if systemctl reload named; then
 else
   echo -e "[ERROR] Failed to reload named. Manual check recommended."
 fi
-
 # === Allow DHCP traffic on assigned interfaces ===
 echo -e "\n[${CYAN}INFO${TEXTRESET}] Ensuring DHCP traffic is allowed on assigned interfaces..."
 
