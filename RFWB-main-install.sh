@@ -3543,13 +3543,17 @@ while true; do
   ASSIGNED=()
   for j in "${!SUBNETS[@]}"; do
     echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
-    read -p "Select interface index to bind to this subnet: " sel
+    while true; do
+  read -p "Select interface index to bind to this subnet: " sel
+  if [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -lt "${#INTERFACES[@]}" ]; then
+    chosen_iface="${INTERFACES[$sel]}"
+    ASSIGNED+=("$chosen_iface")
+    break
+  else
+    echo -e "[\e[31mERROR\e[0m] Invalid selection. Please choose a valid index."
+  fi
+done
 
-    if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ "$sel" -ge "${#INTERFACES[@]}" ]; then
-      echo -e "[ERROR] Invalid selection: $sel"
-      ((j--))  # Repeat this subnet prompt
-      continue
-    fi
 
     chosen_iface="${INTERFACES[$sel]}"
     ASSIGNED+=("$chosen_iface")
