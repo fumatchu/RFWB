@@ -3532,13 +3532,6 @@ if [ "${#SUBNETS[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# Display interfaces
-echo -e "\n[INFO] Available Interfaces:"
-for i in "${!INTERFACES[@]}"; do
-  ip=$(nmcli -g IP4.ADDRESS device show "${INTERFACES[$i]}" | head -n1)
-  echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
-done
-
 # ─── Interface Mapping with Confirmation, Validation, and Redisplay ──────────────
 while true; do
   echo -e "\n[INFO] Available Interfaces:"
