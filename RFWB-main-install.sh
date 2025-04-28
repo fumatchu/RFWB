@@ -3554,11 +3554,6 @@ while true; do
   fi
 done
 
-
-    chosen_iface="${INTERFACES[$sel]}"
-    ASSIGNED+=("$chosen_iface")
-  done
-
   echo -e "\n[REVIEW] Subnet to Interface Selections:"
   for j in "${!SUBNETS[@]}"; do
     echo "  ${SUBNETS[$j]} → ${ASSIGNED[$j]}"
