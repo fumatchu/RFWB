@@ -3539,15 +3539,41 @@ for i in "${!INTERFACES[@]}"; do
   echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
 done
 
-# Map each subnet to selected interface
-ASSIGNED=()
-for j in "${!SUBNETS[@]}"; do
-  echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
-  read -p "Select interface index to bind to this subnet: " sel
-  chosen_iface="${INTERFACES[$sel]}"
-  ASSIGNED+=("$chosen_iface")
+# ─── Interface Mapping with Confirmation and Validation ────────────────────────
+while true; do
+  ASSIGNED=()
+  for j in "${!SUBNETS[@]}"; do
+    echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
+    read -p "Select interface index to bind to this subnet: " sel
 
-  jq --arg subnet "${SUBNETS[$j]}" --arg iface "$chosen_iface" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface.tmp && mv /tmp/kea_iface.tmp "$CONFIG_FILE"
+    if ! [[ "$sel" =~ ^[0-9]+$ ]] || [ "$sel" -ge "${#INTERFACES[@]}" ]; then
+      echo -e "[ERROR] Invalid selection: $sel"
+      ((j--))  # Repeat this subnet prompt
+      continue
+    fi
+
+    chosen_iface="${INTERFACES[$sel]}"
+    ASSIGNED+=("$chosen_iface")
+  done
+
+  echo -e "\n[REVIEW] Subnet to Interface Selections:"
+  for j in "${!SUBNETS[@]}"; do
+    echo "  ${SUBNETS[$j]} → ${ASSIGNED[$j]}"
+  done
+
+  echo
+  read -p "Confirm these mappings? [y/N]: " confirm_mappings
+  if [[ "$confirm_mappings" =~ ^[Yy]$ ]]; then
+    break
+  else
+    echo -e "\n[INFO] Restarting interface selection..."
+  fi
+done
+
+
+# ─── Apply Confirmed Interface Mapping ───────────────────────────
+for j in "${!SUBNETS[@]}"; do
+  jq --arg subnet "${SUBNETS[$j]}" --arg iface "${ASSIGNED[$j]}" '(.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface) = $iface' "$CONFIG_FILE" > /tmp/kea_iface.tmp && mv /tmp/kea_iface.tmp "$CONFIG_FILE"
 done
 
 # Check if any subnets left unassigned (fallback)
@@ -3562,15 +3588,15 @@ if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
   done
 fi
 
-# Print mapping summary
-echo -e "\n[SUMMARY] Subnet to Interface Mapping:"
+# ─── Print Mapping Summary ──────────────────────────────────────
+echo -e "\n[SUMMARY] Final Subnet to Interface Mapping:"
 for subnet in "${SUBNETS[@]}"; do
   iface=$(jq -r --arg subnet "$subnet" '.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface' "$CONFIG_FILE")
   echo -e "  $subnet  →  $iface"
 done
 read -p $'\nPress [Enter] to continue...' _
 
-# Update interfaces array
+# ─── Update interfaces array at top level ────────────────────────
 current_list=$(jq -r '.Dhcp4."interfaces-config".interfaces[]' "$CONFIG_FILE")
 for chosen in "${INTERFACES[@]}"; do
   if ! grep -q "$chosen" <<< "$current_list"; then
@@ -3581,7 +3607,7 @@ done
 updated_list=$(echo "$current_list" | sort -u | jq -R . | jq -s .)
 jq --argjson updated "$updated_list" '.Dhcp4."interfaces-config".interfaces = $updated' "$CONFIG_FILE" > /tmp/kea_final_iface.tmp && mv /tmp/kea_final_iface.tmp "$CONFIG_FILE"
 
-# Final validation
+# ─── Final validation ────────────────────────────────────────────
 echo -e "\n==> Final Validation of Configs"
 if kea-dhcp4 -t "$CONFIG_FILE"; then
   echo -e "[SUCCESS] Final config validated successfully."
@@ -3589,6 +3615,7 @@ else
   echo -e "[ERROR] Final validation failed!"
   exit 1
 fi
+
 
 # Restart services
 for svc in kea-dhcp-ddns kea-dhcp4; do
