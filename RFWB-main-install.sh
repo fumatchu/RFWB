@@ -3603,12 +3603,12 @@ if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
 fi
 
 # ─── Print Mapping Summary ──────────────────────────────────────
-echo -e "\n[SUMMARY] Final Subnet to Interface Mapping:"
+echo -e "\n[${GREEN}SUCCESS${TEXTRESET}] Final Subnet to Interface Mapping:"
 for subnet in "${SUBNETS[@]}"; do
   iface=$(jq -r --arg subnet "$subnet" '.Dhcp4.subnet4[] | select(.subnet == $subnet) | .interface' "$CONFIG_FILE")
   echo -e "  $subnet  →  $iface"
 done
-read -p $'\nPress [Enter] to continue...' _
+read -p $'\nPress ${GREEN}Enter${TEXTRESET} to continue...' _
 
 # ─── Update interfaces array at top level ────────────────────────
 current_list=$(jq -r '.Dhcp4."interfaces-config".interfaces[]' "$CONFIG_FILE")
@@ -3624,16 +3624,16 @@ jq --argjson updated "$updated_list" '.Dhcp4."interfaces-config".interfaces = $u
 # ─── Final validation ────────────────────────────────────────────
 echo -e "\n==> Final Validation of Configs"
 if kea-dhcp4 -t "$CONFIG_FILE"; then
-  echo -e "[SUCCESS] Final config validated successfully."
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Final config validated successfully."
 else
-  echo -e "[ERROR] Final validation failed!"
+  echo -e "[${RED}ERROR${TEXTRESET}] Final validation failed!"
   exit 1
 fi
 
 
 # Restart services
 for svc in kea-dhcp-ddns kea-dhcp4; do
-  echo -e "[INFO] Restarting service: $svc"
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting service: $svc"
   if systemctl restart "$svc" && systemctl is-active --quiet "$svc"; then
     echo -e "[SUCCESS] $svc is running."
   else
@@ -3642,26 +3642,26 @@ for svc in kea-dhcp-ddns kea-dhcp4; do
 done
 
 # Reload named (only if running and config valid)
-echo -e "[INFO] Checking named configuration before reload..."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Checking named configuration before reload..."
 
 if named-checkconf; then
-  echo -e "[SUCCESS] named.conf validated."
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] named.conf validated."
   if systemctl is-active --quiet named; then
-    echo -e "[INFO] Reloading named.service to pick up new zones..."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Reloading named.service to pick up new zones..."
     if systemctl reload named; then
-      echo -e "[SUCCESS] named.service reloaded."
+      echo -e "[${GREEN}SUCCESS${TEXTRESET}] named.service reloaded."
     else
-      echo -e "[ERROR] Failed to reload named.service. Manual check recommended."
+      echo -e "[${RED}ERROR${TEXTRESET}] Failed to reload named.service. Manual check recommended."
     fi
   else
-    echo -e "[WARN] named.service not active. Skipping reload."
+    echo -e "[${RED}WARN${TEXTRESET}] named.service not active. Skipping reload."
   fi
 else
-  echo -e "[ERROR] named.conf validation failed. Please fix issues before starting/reloading named."
+  echo -e "[${RED}ERROR${TEXTRESET}] named.conf validation failed. Please fix issues before starting/reloading named."
 fi
 
 # === Allow DHCP traffic on assigned interfaces ===
-echo -e "\n[${CYAN}INFO${TEXTRESET}] Ensuring DHCP traffic is allowed on assigned interfaces..."
+echo -e "\n[${YELLOW}INFO${TEXTRESET}] Ensuring DHCP traffic is allowed on assigned interfaces..."
 
 sudo systemctl enable nftables >/dev/null 2>&1
 sudo systemctl start nftables >/dev/null 2>&1
