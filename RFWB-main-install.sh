@@ -3312,7 +3312,38 @@ build_subnet_json() {
 # ─── Phase 1: Initial Setup ────────────────────────────────────────
 id=1
 echo -e "\n==> Configuring ISC-KEA Phase 1"
-gather_subnet_inputs $id
+
+while true; do
+  gather_subnet_inputs $id
+
+  # Show the gathered data
+  echo -e "\n[${YELLOW}REVIEW SUBNET${TEXTRESET}]"
+  echo -e "Friendly Name : ${GREEN}$description${TEXTRESET}"
+  echo -e "CIDR          : ${GREEN}$CIDR${TEXTRESET}"
+  echo -e "Router IP     : ${GREEN}$router${TEXTRESET}"
+  echo -e "Pool Start    : ${GREEN}$pool_start${TEXTRESET}"
+  echo -e "Pool End      : ${GREEN}$pool_end${TEXTRESET}"
+  echo -e "Interface     : ${GREEN}$interface${TEXTRESET}"
+  echo -e "Domain Suffix : ${GREEN}$domain_suffix${TEXTRESET}"
+  echo -e "Extra Options :"
+  for opt in "${EXTRA_OPTIONS[@]}"; do
+    if [[ "$opt" =~ \"name\": ]]; then
+      name=$(echo "$opt" | jq -r '.name')
+      data=$(echo "$opt" | jq -r '.data')
+      echo -e "  - ${YELLOW}$name${TEXTRESET} → ${GREEN}$data${TEXTRESET}"
+    elif [[ "$opt" =~ \"code\": ]]; then
+      code=$(echo "$opt" | jq -r '.code')
+      name=$(echo "$opt" | jq -r '.name')
+      data=$(echo "$opt" | jq -r '.data')
+      echo -e "  - ${YELLOW}code $code${TEXTRESET} (${name}) → ${GREEN}$data${TEXTRESET}"
+    fi
+  done
+
+  echo
+  read -p "Is this subnet configuration OK? [y/N]: " confirm
+  [[ "$confirm" =~ ^[Yy]$ ]] && break
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Re-entering subnet configuration..."
+done
 
 # After gathering EXTRA_OPTIONS, fix for hex value issue
 for i in "${!EXTRA_OPTIONS[@]}"; do
@@ -3433,7 +3464,39 @@ while true; do
   echo -n "Add another subnet? [y/N]: "; read -r more
   [[ "$more" =~ ^[Yy]$ ]] || break
   ((id++))
-  gather_subnet_inputs $id
+
+  # Repeat gathering + review loop
+  while true; do
+    gather_subnet_inputs $id
+
+    # Show the gathered data
+    echo -e "\n[${YELLOW}REVIEW SUBNET${TEXTRESET}]"
+    echo -e "Friendly Name : ${GREEN}$description${TEXTRESET}"
+    echo -e "CIDR          : ${GREEN}$CIDR${TEXTRESET}"
+    echo -e "Router IP     : ${GREEN}$router${TEXTRESET}"
+    echo -e "Pool Start    : ${GREEN}$pool_start${TEXTRESET}"
+    echo -e "Pool End      : ${GREEN}$pool_end${TEXTRESET}"
+    echo -e "Interface     : ${GREEN}$interface${TEXTRESET}"
+    echo -e "Domain Suffix : ${GREEN}$domain_suffix${TEXTRESET}"
+    echo -e "Extra Options :"
+    for opt in "${EXTRA_OPTIONS[@]}"; do
+      if [[ "$opt" =~ \"name\": ]]; then
+        name=$(echo "$opt" | jq -r '.name')
+        data=$(echo "$opt" | jq -r '.data')
+        echo -e "  - ${YELLOW}$name${TEXTRESET} → ${GREEN}$data${TEXTRESET}"
+      elif [[ "$opt" =~ \"code\": ]]; then
+        code=$(echo "$opt" | jq -r '.code')
+        name=$(echo "$opt" | jq -r '.name')
+        data=$(echo "$opt" | jq -r '.data')
+        echo -e "  - ${YELLOW}code $code${TEXTRESET} (${name}) → ${GREEN}$data${TEXTRESET}"
+      fi
+    done
+
+    echo
+    read -p "Is this subnet configuration OK? [y/N]: " confirm
+    [[ "$confirm" =~ ^[Yy]$ ]] && break
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Re-entering subnet information..."
+  done
 
   # After gathering, fix hex for advanced options
   for i in "${!EXTRA_OPTIONS[@]}"; do
@@ -3475,20 +3538,16 @@ while true; do
     echo -e "[${YELLOW}INFO${TEXTRESET}] Reverse zone $rev_zone.in-addr.arpa. already exists in DDNS config."
   fi
 
-  # ─── Phase 2: Additional Subnet Handling ─────────────────────────
+  # Create Reverse DNS Zone and zone file if needed
+  zone_file="$ZONE_DIR/db.$rev_zone"
 
-# Create Reverse DNS Zone and zone file if needed
-zone_file="$ZONE_DIR/db.$rev_zone"
+  if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
+    echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
+    restorecon "$NAMED_CONF"
+  fi
 
-# Add named.conf entry if missing
-if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
-  echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
-  restorecon "$NAMED_CONF"
-fi
-
-# Ensure zone file exists (create headers if missing)
-if [ ! -f "$zone_file" ]; then
-  cat > "$zone_file" <<EOF
+  if [ ! -f "$zone_file" ]; then
+    cat > "$zone_file" <<EOF
 \$TTL 86400
 @   IN  SOA   ${hostname}.${domain}. admin.${domain}. (
     2024042501 ; serial
@@ -3499,21 +3558,21 @@ if [ ! -f "$zone_file" ]; then
 )
 @   IN  NS    ${hostname}.${domain}.
 EOF
+    chown named:named "$zone_file"
+    chmod 640 "$zone_file"
+    restorecon "$zone_file"
+  fi
+
+  # Always append the router PTR record
+  octet=$(echo "$router" | awk -F. '{print $4}')
+  echo "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
+
   chown named:named "$zone_file"
   chmod 640 "$zone_file"
   restorecon "$zone_file"
-fi
+  restorecon "$NAMED_CONF"
 
-# Always append the router PTR record
-octet=$(echo "$router" | awk -F. '{print $4}')
-echo "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
-
-chown named:named "$zone_file"
-chmod 640 "$zone_file"
-restorecon "$zone_file"
-restorecon "$NAMED_CONF"
-
-echo -e "[${YELLOW}INFO${TEXTRESET}] Created reverse zone file $zone_file and updated named.conf."
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Created reverse zone file $zone_file and updated named.conf."
 done
 
 
