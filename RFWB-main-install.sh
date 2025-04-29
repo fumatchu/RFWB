@@ -3694,9 +3694,9 @@ fi
 for svc in kea-dhcp-ddns kea-dhcp4; do
   echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting service: $svc"
   if systemctl restart "$svc" && systemctl is-active --quiet "$svc"; then
-    echo -e "[SUCCESS] $svc is running."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $svc is running."
   else
-    echo -e "[ERROR] Failed to restart or activate $svc."
+    echo -e "[${RED}ERROR${TEXTRESET}] Failed to restart or activate $svc."
   fi
 done
 
