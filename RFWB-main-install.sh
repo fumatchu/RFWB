@@ -3475,7 +3475,9 @@ while true; do
     echo -e "[INFO] Reverse zone $rev_zone.in-addr.arpa. already exists in DDNS config."
   fi
 
-  # Create Reverse DNS Zone and zone file if needed
+  # ─── Phase 2: Additional Subnet Handling ─────────────────────────
+
+# Create Reverse DNS Zone and zone file if needed
 zone_file="$ZONE_DIR/db.$rev_zone"
 
 # Add named.conf entry if missing
@@ -3502,18 +3504,17 @@ EOF
   restorecon "$zone_file"
 fi
 
-# Always append the router PTR
+# Always append the router PTR record
 octet=$(echo "$router" | awk -F. '{print $4}')
 echo "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
 
-    chown named:named "$zone_file"
-    chmod 640 "$zone_file"
-    restorecon "$zone_file"
-    restorecon "$NAMED_CONF"
-    echo -e "[INFO] Created reverse zone file $zone_file and updated named.conf."
-  fi
+chown named:named "$zone_file"
+chmod 640 "$zone_file"
+restorecon "$zone_file"
+restorecon "$NAMED_CONF"
 
-done
+echo -e "[INFO] Created reverse zone file $zone_file and updated named.conf."
+
 
 # ─── Phase 3: Interface Assignment ───────────────────────────────
 
