@@ -3476,12 +3476,18 @@ while true; do
   fi
 
   # Create Reverse DNS Zone and zone file if needed
-  zone_file="$ZONE_DIR/db.$rev_zone"
-  if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
-    echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
-    cat > "$zone_file" <<EOF
-$TTL 86400
-$ORIGIN $rev_zone.in-addr.arpa.
+zone_file="$ZONE_DIR/db.$rev_zone"
+
+# Add named.conf entry if missing
+if ! grep -q "zone \"$rev_zone.in-addr.arpa\"" "$NAMED_CONF"; then
+  echo -e "\nzone \"$rev_zone.in-addr.arpa\" {\n  type master;\n  file \"$zone_file\";\n  allow-update { key \"Kea-DDNS\"; };\n};\n" >> "$NAMED_CONF"
+  restorecon "$NAMED_CONF"
+fi
+
+# Ensure zone file exists (create headers if missing)
+if [ ! -f "$zone_file" ]; then
+  cat > "$zone_file" <<EOF
+\$TTL 86400
 @   IN  SOA   ${hostname}.${domain}. admin.${domain}. (
     2024042501 ; serial
     3600       ; refresh
@@ -3491,10 +3497,14 @@ $ORIGIN $rev_zone.in-addr.arpa.
 )
 @   IN  NS    ${hostname}.${domain}.
 EOF
+  chown named:named "$zone_file"
+  chmod 640 "$zone_file"
+  restorecon "$zone_file"
+fi
 
-# ➡ Add router PTR record (example: "1 IN PTR fw.test.int.")
+# Always append the router PTR
 octet=$(echo "$router" | awk -F. '{print $4}')
-echo -e "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
+echo "${octet}   IN PTR   ${hostname}.${domain}." >> "$zone_file"
 
     chown named:named "$zone_file"
     chmod 640 "$zone_file"
