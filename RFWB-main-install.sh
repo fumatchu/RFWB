@@ -3155,7 +3155,7 @@ is_valid_standard_option() {
 # ─── Gather Subnet Info ───────────────────────────────────────────
 gather_subnet_inputs() {
   local id="$1"
-  echo -e "\n==> Gathering DHCP Scope Information"
+  echo -e "\n${CYAN}==> Gathering DHCP Scope Information${TEXTRESET}"
   echo -n "Provide a Friendly name (description) for the subnet: "; read -r description
 
   while true; do
@@ -3198,9 +3198,9 @@ if [[ "$opt_type" == "0" ]]; then
   break
 elif [[ "$opt_type" == "?" ]]; then
   echo ""
-  echo "Supported DHCP Options:"
+  echo -e "${CYAN}Supported DHCP Options...${TEXTRESET}"
   echo ""
-  echo "Standard (Common) Options (by name):"
+  echo -e "${YELLOW}Standard${TEXTRESET} (Common) Options (by name):"
   echo "  - routers"
   echo "  - domain-name-servers"
   echo "  - domain-search"
@@ -3214,14 +3214,14 @@ elif [[ "$opt_type" == "?" ]]; then
   echo "  - netbios-name-servers"
   echo "  - netbios-node-type"
   echo ""
-  echo "Advanced (Common) Options (by code):"
+  echo -e "${YELLOW}Advanced${TEXTRESET} (Common) Options (by code):"
   echo "  - code 66 → tftp-server-name"
   echo "  - code 67 → boot-file-name"
   echo "  - code 150 → tftp-server address for VoIP phones"
   echo "  - code 43 → vendor-specific information"
   echo ""
-  echo "[INFO] Use Standard (Common) for simple options (by name)."
-  echo "[INFO] Use Advanced (Common) for custom numeric codes (VoIP, PXE boot, etc)."
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Use Standard (Common) for simple options (by name)."
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Use Advanced (Common) for custom numeric codes (VoIP, PXE boot, etc)."
   echo ""
   continue
 fi
@@ -3230,7 +3230,7 @@ fi
            1)
   echo -n "Option name: "; read -r n
   if ! is_valid_standard_option "$n"; then
-    echo "[ERROR] Invalid standard option name: $n"
+    echo -e "[${RED}ERROR${TEXTRESET}] Invalid standard option name: $n"
     echo -e "\nSupported Standard (Common) Options:"
     echo " - routers"
     echo " - domain-name-servers"
@@ -3252,13 +3252,13 @@ fi
 
 
         2)
-    echo -e "\n[INFO] You selected Advanced (Common) Option."
+    echo -e "\n[${YELLOW}INFO${TEXTRESET}] You selected Advanced (Common) Option."
     echo "Reminder: Use advanced options (e.g., codes 66, 67, 150) only if you know the required format."
     echo "Incorrect advanced entries may cause KEA service validation to fail."
     echo
     echo -n "Code: "; read -r c
   if ! [[ "$c" =~ ^[0-9]+$ ]]; then
-    echo -e "[\e[31mERROR\e[0m] Invalid code: $c. Code must be a number."
+    echo -e "[${RED}ERROR${TEXTRESET}] Invalid code: $c. Code must be a number."
     continue
   fi
   echo -n "Name: "; read -r n
@@ -3454,9 +3454,9 @@ while true; do
 
   # Validate config
   if kea-dhcp4 -t "$KEA_DHCP4_CONF"; then
-    echo -e "[SUCCESS] New subnet validated and added."
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] New subnet validated and added."
   else
-    echo -e "[ERROR] Validation failed after adding new subnet. Exiting."
+    echo -e "[${RED}ERROR${TEXTRESET}] Validation failed after adding new subnet. Exiting."
     exit 1
   fi
 
@@ -3470,9 +3470,9 @@ while true; do
     chmod 640 "$KEA_DHCP_DDNS_CONF"
     chown root:kea "$KEA_DHCP_DDNS_CONF"
     restorecon "$KEA_DHCP_DDNS_CONF"
-    echo -e "[INFO] Added $rev_zone.in-addr.arpa. to kea-dhcp-ddns.conf."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Added ${GREEN}$rev_zone.in-addr.arpa.${TEXTRESET} to kea-dhcp-ddns.conf."
   else
-    echo -e "[INFO] Reverse zone $rev_zone.in-addr.arpa. already exists in DDNS config."
+    echo -e "[${YELLOW}INFO${TEXTRESET}] Reverse zone $rev_zone.in-addr.arpa. already exists in DDNS config."
   fi
 
   # ─── Phase 2: Additional Subnet Handling ─────────────────────────
@@ -3513,7 +3513,7 @@ chmod 640 "$zone_file"
 restorecon "$zone_file"
 restorecon "$NAMED_CONF"
 
-echo -e "[INFO] Created reverse zone file $zone_file and updated named.conf."
+echo -e "[${YELLOW}INFO${TEXTRESET}] Created reverse zone file $zone_file and updated named.conf."
 done
 
 
@@ -3533,7 +3533,7 @@ INTERFACES=($INSIDE_INTERFACE $SUB_INTERFACES)
 
 CONFIG_FILE="${KEA_DHCP4_CONF:-/etc/kea/kea-dhcp4.conf}"
 if [ ! -f "$CONFIG_FILE" ]; then
-  echo -e "[ERROR] Configuration file not found: $CONFIG_FILE"
+  echo -e "[${RED}ERROR${TEXTRESET}] Configuration file not found: $CONFIG_FILE"
   exit 1
 fi
 
@@ -3541,13 +3541,13 @@ fi
 mapfile -t SUBNETS < <(jq -r '.Dhcp4.subnet4[].subnet' "$CONFIG_FILE")
 
 if [ "${#SUBNETS[@]}" -eq 0 ]; then
-  echo -e "[WARN] No subnets found in configuration."
+  echo -e "[${RED}WARN${TEXTRESET}] No subnets found in configuration."
   exit 0
 fi
 
 # ─── Interface Mapping with Confirmation, Validation, and Redisplay ──────────────
 while true; do
-  echo -e "\n[INFO] Available Interfaces:"
+  echo -e "\n[${YELLOW}INFO${TEXTRESET}] Available Interfaces:"
   for i in "${!INTERFACES[@]}"; do
     ip=$(nmcli -g IP4.ADDRESS device show "${INTERFACES[$i]}" | head -n1)
     echo "  [$i] ${INTERFACES[$i]} (${ip%%/*})"
@@ -3555,7 +3555,7 @@ while true; do
 
   ASSIGNED=()
   for j in "${!SUBNETS[@]}"; do
-    echo -e "\n[INFO] Subnet ${SUBNETS[$j]}"
+    echo -e "\n[${YELLOW}INFO${TEXTRESET}] Subnet ${SUBNETS[$j]}"
     while true; do
   read -p "Select interface index to bind to this subnet: " sel
   if [[ "$sel" =~ ^[0-9]+$ ]] && [ "$sel" -lt "${#INTERFACES[@]}" ]; then
@@ -3563,12 +3563,12 @@ while true; do
     ASSIGNED+=("$chosen_iface")
     break
   else
-    echo -e "[\e[31mERROR\e[0m] Invalid selection. Please choose a valid index."
+    echo -e "[${RED}ERROR${TEXTRESET}] Invalid selection. Please choose a valid index."
   fi
 done
 done
 
-  echo -e "\n[REVIEW] Subnet to Interface Selections:"
+  echo -e "\n[${GREEN}REVIEW${TEXTRESET}] Subnet to Interface Selections:"
   for j in "${!SUBNETS[@]}"; do
     echo "  ${SUBNETS[$j]} → ${ASSIGNED[$j]}"
   done
@@ -3578,7 +3578,7 @@ done
   if [[ "$confirm_mappings" =~ ^[Yy]$ ]]; then
     break
   else
-    echo -e "\n[INFO] Restarting interface selection..."
+    echo -e "\n[${YELLOW}INFO${TEXTRESET}] Restarting interface selection..."
     sleep 2
   fi
 done
@@ -3593,7 +3593,7 @@ done
 # Check if any subnets left unassigned (fallback)
 if [ ${#SUBNETS[@]} -gt ${#ASSIGNED[@]} ]; then
   ip_fallback=$(nmcli -g IP4.ADDRESS device show "$INSIDE_INTERFACE" | head -n1 | cut -d/ -f1)
-  echo -e "\n[WARN] Some subnets not assigned. Assigning to $INSIDE_INTERFACE ($ip_fallback)."
+  echo -e "\n[WARN] Some subnets not assigned. Assigning to ${GREEN}$INSIDE_INTERFACE${TEXTRESET} ($ip_fallback)."
   sleep 3
   for j in "${!SUBNETS[@]}"; do
     if ! grep -q "${SUBNETS[$j]}" <<< "${ASSIGNED[*]}"; then
