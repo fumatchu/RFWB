@@ -3514,6 +3514,7 @@ restorecon "$zone_file"
 restorecon "$NAMED_CONF"
 
 echo -e "[INFO] Created reverse zone file $zone_file and updated named.conf."
+done
 
 
 # ─── Phase 3: Interface Assignment ───────────────────────────────
