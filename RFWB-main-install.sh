@@ -4333,6 +4333,17 @@ reposition_drop_rules() {
     echo "[INFO] DROP rule repositioned in chain $chain"
   done
   }
+  save_nftables_ruleset() {
+  echo "[INFO] Saving nftables ruleset to /etc/sysconfig/nftables.conf..."
+  if nft list ruleset > /etc/sysconfig/nftables.conf; then
+    echo "[SUCCESS] Ruleset saved."
+  else
+    echo "[ERROR] Failed to save ruleset."
+    return 1
+  fi
+}
+
+
 install_rfwb_admin () {
 echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
 
@@ -4497,6 +4508,7 @@ update_login_console
 setup_kea_startup_script
 manage_inside_gw
 reposition_drop_rules
+save_nftables_ruleset
 remove_rtp
 install_rfwb_admin
 clear_bash_profile
