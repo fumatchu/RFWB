@@ -784,6 +784,15 @@ setup_outside_interface() {
     sleep 4
   fi
 }
+enable_ip_forwarding() {
+  echo "[INFO] Enabling IPv4 forwarding..."
+  sysctl -w net.ipv4.ip_forward=1
+  if ! grep -q '^net.ipv4.ip_forward *= *1' /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+  fi
+  sysctl -p
+  echo "[INFO] IP forwarding enabled and made persistent."
+}
 FILTER_TABLE="inet filter"
 NAT_TABLE="inet nat"
 LOG_FILE="/root/nft-interface-access.log"
@@ -4466,6 +4475,7 @@ vlan_main
 setup_outside_interface
 config_fw_service
 
+enable_ip_forwarding
 initialize_nftables_base
 configure_interface_access_rules
 configure_logging_for_drops
