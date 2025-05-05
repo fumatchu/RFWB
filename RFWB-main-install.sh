@@ -788,56 +788,54 @@ FILTER_TABLE="inet filter"
 NAT_TABLE="inet nat"
 LOG_FILE="/root/nft-interface-access.log"
 
-# ========== Function: Initialize nftables Base Ruleset ==========
 initialize_nftables_base() {
   echo "[INFO] Flushing existing nftables rules..."
   nft flush ruleset
 
   echo "[INFO] Creating base tables..."
-  nft add table $FILTER_TABLE
-  nft add table $NAT_TABLE
+  nft add table inet filter
+  nft add table inet nat
 
   echo "[INFO] Creating sets..."
-  nft add set $FILTER_TABLE threat_block '{ type ipv4_addr; flags timeout; }'
-  nft add set $FILTER_TABLE trusted_subnets '{ type ipv4_addr; flags interval; }'
+  nft add set inet filter threat_block '{ type ipv4_addr; flags timeout; }'
+  nft add set inet filter trusted_subnets '{ type ipv4_addr; flags interval; }'
 
   echo "[INFO] Populating trusted_subnets from active interfaces..."
-OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
+  OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
 
-for iface in $(nmcli -t -f DEVICE connection show --active | cut -d: -f1); do
-  [[ "$iface" == "$OUT_IF" ]] && {
-    echo "[DEBUG] Skipping external interface $iface for trusted_subnets"
-    continue
-  }
-  cidrs=$(nmcli -g IP4.ADDRESS device show "$iface" | grep '/' | cut -d' ' -f1)
-  for cidr in $cidrs; do
-    nft add element $FILTER_TABLE trusted_subnets "{ $cidr }"
-    echo "[DEBUG] Added $cidr to trusted_subnets (via $iface)"
+  for iface in $(nmcli -t -f DEVICE connection show --active | cut -d: -f1); do
+    [[ "$iface" == "$OUT_IF" ]] && {
+      echo "[DEBUG] Skipping external interface $iface for trusted_subnets"
+      continue
+    }
+    cidrs=$(nmcli -g IP4.ADDRESS device show "$iface" | grep '/' | cut -d' ' -f1)
+    for cidr in $cidrs; do
+      nft add element inet filter trusted_subnets "{ $cidr }"
+      echo "[DEBUG] Added $cidr to trusted_subnets (via $iface)"
+    done
   done
-done
-
-  echo "[INFO] Creating INPUT chain..."
-  nft add chain $FILTER_TABLE input '{ type filter hook input priority filter; policy drop; }'
-  nft add rule $FILTER_TABLE input ip saddr @threat_block drop
-  nft add rule $FILTER_TABLE input iifname lo accept
-  nft add rule $FILTER_TABLE input ct state established,related accept
-
-  echo "[INFO] Creating FORWARD chain..."
-  nft add chain $FILTER_TABLE forward '{ type filter hook forward priority filter; policy drop; }'
-  nft add rule $FILTER_TABLE forward ct state established,related accept
-
-  echo "[INFO] Creating OUTPUT chain..."
-  nft add chain $FILTER_TABLE output '{ type filter hook output priority filter; policy accept; }'
 
   echo "[INFO] Creating FORWARD_INTERNET chain..."
-  nft add chain $FILTER_TABLE forward_internet '{ type filter hook forward priority filter + 10; policy accept; }'
-  nft add rule $FILTER_TABLE forward_internet ct state established,related accept
+  nft add chain inet filter forward_internet
+
+  echo "[INFO] Creating INPUT chain..."
+  nft add chain inet filter input '{ type filter hook input priority filter; policy drop; }'
+  nft add rule inet filter input ip saddr @threat_block drop
+  nft add rule inet filter input iifname lo accept
+  nft add rule inet filter input ct state established,related accept
+
+  echo "[INFO] Creating FORWARD chain..."
+  nft add chain inet filter forward '{ type filter hook forward priority filter; policy drop; }'
+  nft add rule inet filter forward ct state established,related accept
+  nft add rule inet filter forward jump forward_internet
+
+  echo "[INFO] Creating OUTPUT chain..."
+  nft add chain inet filter output '{ type filter hook output priority filter; policy accept; }'
 
   echo "[INFO] Creating NAT postrouting chain..."
-  nft add chain $NAT_TABLE postrouting '{ type nat hook postrouting priority srcnat; policy accept; }'
-  OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
+  nft add chain inet nat postrouting '{ type nat hook postrouting priority srcnat; policy accept; }'
   if [[ -n "$OUT_IF" ]]; then
-    nft add rule $NAT_TABLE postrouting oifname "$OUT_IF" masquerade
+    nft add rule inet nat postrouting oifname "$OUT_IF" masquerade
     echo "[INFO] NAT masquerade rule applied on $OUT_IF"
   else
     echo "[WARN] Could not detect outside interface for NAT masquerade"
@@ -851,7 +849,6 @@ configure_logging_for_drops() {
   nft add rule $FILTER_TABLE forward log prefix \"FORWARD DROP: \" drop
   echo "[INFO] Logging rules applied."
 }
-
 # ========== Function: Configure Interface Access ==========
 configure_interface_access_rules() {
   echo "[INFO] Configuring interface access policies..." | tee "$LOG_FILE"
@@ -920,18 +917,24 @@ configure_interface_access_rules() {
     src_cidr="${iface_cidrs[$src]}"
     dst_cidr="${iface_cidrs[$dst]}"
     echo "[INFO] Allowing $src ($src_cidr) → $dst ($dst_cidr)" | tee -a "$LOG_FILE"
-    nft add rule $FILTER_TABLE forward ip saddr "$src_cidr" ip daddr "$dst_cidr" iifname "$src" oifname "$dst" accept
+    # Insert before the jump to forward_internet
+jump_line=$(nft --handle list chain $FILTER_TABLE forward | grep 'jump forward_internet' | tail -n1)
+jump_handle=$(awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}' <<< "$jump_line")
+
+nft insert rule $FILTER_TABLE forward handle "$jump_handle" \
+  ip saddr "$src_cidr" ip daddr "$dst_cidr" iifname "$src" oifname "$dst" accept
+
+#    nft add rule $FILTER_TABLE forward ip saddr "$src_cidr" ip daddr "$dst_cidr" iifname "$src" oifname "$dst" accept
   done
 
-  # ─── SSH Access ──────────────────────────────────────────
+# ─── SSH Access ──────────────────────────────────────────
   ssh_allowed=()
   menu_items=( "None" "Skip SSH access" off )
   for iface in "${interfaces[@]}"; do
     [[ "$iface" == "lo" ]] && continue
-    cidr="${iface_cidrs[$iface]}"
-    [[ -n "$cidr" ]] || continue
     label="${iface_names[$iface]}"
-    menu_items+=("$iface" "$label" off)
+    ip="${iface_cidrs[$iface]}"
+    menu_items+=("$iface" "$label ($ip)" off)
   done
 
   exec 3>&1
@@ -939,19 +942,51 @@ configure_interface_access_rules() {
   exec 3>&-
   IFS=' ' read -r -a ssh_allowed <<< "$selected"
 
-  # Find handle of the ct rule to insert after
-  handle_line=$(nft --handle list chain $FILTER_TABLE input | grep 'ct state established,related accept' | tail -n1)
-  insert_handle=$(awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}' <<< "$handle_line")
+# Find handle of the ct rule to insert after
+handle_line=$(nft --handle list chain $FILTER_TABLE input | grep 'ct state established,related accept' | tail -n1)
+insert_handle=$(awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}' <<< "$handle_line")
+
+
+  OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
 
   for iface in "${ssh_allowed[@]}"; do
     [[ "$iface" == "None" ]] && continue
-    cidr="${iface_cidrs[$iface]}"
-    echo "[INFO] Adding SSH rule for $iface ($cidr)" | tee -a "$LOG_FILE"
-    nft insert rule $FILTER_TABLE input handle "$insert_handle" ip saddr "$cidr" iifname "$iface" tcp dport 22 accept
+    ip="${iface_cidrs[$iface]}"
+    [[ -z "$ip" ]] && ip="0.0.0.0/0"
+
+    if [[ "$iface" == "$OUT_IF" ]]; then
+      src_cidr="0.0.0.0/0"
+    else
+      src_cidr="$ip"
+    fi
+
+    echo "[INFO] Adding SSH rule for $iface ($src_cidr)" | tee -a "$LOG_FILE"
+    nft insert rule $FILTER_TABLE input handle "$insert_handle" ip saddr "$src_cidr" iifname "$iface" tcp dport 22 accept
   done
 
   echo "[INFO] Interface access rules applied." | tee -a "$LOG_FILE"
 }
+reposition_ct_rule_input() {
+  echo "[INFO] Reordering ct state rule in INPUT chain..."
+
+  # Get line number of the ct rule
+  ct_rule_line=$(nft list chain $FILTER_TABLE input | grep -n 'ct state established,related accept' | cut -d: -f1)
+  lo_rule_line=$(nft list chain $FILTER_TABLE input | grep -n 'iifname "lo" accept' | cut -d: -f1)
+
+  if [[ -z "$ct_rule_line" || -z "$lo_rule_line" ]]; then
+    echo "[WARN] Could not find ct or lo rule to reorder."
+    return
+  fi
+
+  # Delete the ct rule
+  nft delete rule $FILTER_TABLE input handle $(nft --handle list chain $FILTER_TABLE input | grep 'ct state established,related accept' | awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}')
+
+  # Insert it right after the lo rule (adjust for index shift)
+  new_pos=$((lo_rule_line + 1))
+  nft insert rule $FILTER_TABLE input position $new_pos ct state established,related accept
+  echo "[INFO] ct state rule moved to position $new_pos (after lo)"
+}
+
 # ========= Install the threatlist update script and download NFT rulesets apply them to the tables ==========
 configure_nftables_threatlists() {
   LOG_TAG="nft-threat-list"
@@ -4409,6 +4444,7 @@ config_fw_service
 initialize_nftables_base
 configure_interface_access_rules
 configure_logging_for_drops
+reposition_ct_rule_input
 configure_nftables_threatlists
 
 collect_service_choices
