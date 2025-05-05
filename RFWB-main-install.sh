@@ -832,6 +832,7 @@ initialize_nftables_base() {
   nft add rule inet filter input ip saddr @threat_block drop
   nft add rule inet filter input iifname lo accept
   nft add rule inet filter input ct state established,related accept
+  nft add rule inet filter input ip saddr @trusted_subnets icmp type echo-request accept
 
   echo "[INFO] Creating FORWARD chain..."
   nft add chain inet filter forward '{ type filter hook forward priority filter; policy drop; }'
