@@ -784,7 +784,277 @@ setup_outside_interface() {
     sleep 4
   fi
 }
+FILTER_TABLE="inet filter"
+NAT_TABLE="inet nat"
+LOG_FILE="/root/nft-interface-access.log"
 
+# ========== Function: Initialize nftables Base Ruleset ==========
+initialize_nftables_base() {
+  echo "[INFO] Flushing existing nftables rules..."
+  nft flush ruleset
+
+  echo "[INFO] Creating base tables..."
+  nft add table $FILTER_TABLE
+  nft add table $NAT_TABLE
+
+  echo "[INFO] Creating sets..."
+  nft add set $FILTER_TABLE threat_block '{ type ipv4_addr; flags timeout; }'
+  nft add set $FILTER_TABLE trusted_subnets '{ type ipv4_addr; flags interval; }'
+
+  echo "[INFO] Populating trusted_subnets from active interfaces..."
+OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
+
+for iface in $(nmcli -t -f DEVICE connection show --active | cut -d: -f1); do
+  [[ "$iface" == "$OUT_IF" ]] && {
+    echo "[DEBUG] Skipping external interface $iface for trusted_subnets"
+    continue
+  }
+  cidrs=$(nmcli -g IP4.ADDRESS device show "$iface" | grep '/' | cut -d' ' -f1)
+  for cidr in $cidrs; do
+    nft add element $FILTER_TABLE trusted_subnets "{ $cidr }"
+    echo "[DEBUG] Added $cidr to trusted_subnets (via $iface)"
+  done
+done
+
+  echo "[INFO] Creating INPUT chain..."
+  nft add chain $FILTER_TABLE input '{ type filter hook input priority filter; policy drop; }'
+  nft add rule $FILTER_TABLE input ip saddr @threat_block drop
+  nft add rule $FILTER_TABLE input iifname lo accept
+  nft add rule $FILTER_TABLE input ct state established,related accept
+
+  echo "[INFO] Creating FORWARD chain..."
+  nft add chain $FILTER_TABLE forward '{ type filter hook forward priority filter; policy drop; }'
+  nft add rule $FILTER_TABLE forward ct state established,related accept
+
+  echo "[INFO] Creating OUTPUT chain..."
+  nft add chain $FILTER_TABLE output '{ type filter hook output priority filter; policy accept; }'
+
+  echo "[INFO] Creating FORWARD_INTERNET chain..."
+  nft add chain $FILTER_TABLE forward_internet '{ type filter hook forward priority filter + 10; policy accept; }'
+  nft add rule $FILTER_TABLE forward_internet ct state established,related accept
+
+  echo "[INFO] Creating NAT postrouting chain..."
+  nft add chain $NAT_TABLE postrouting '{ type nat hook postrouting priority srcnat; policy accept; }'
+  OUT_IF=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
+  if [[ -n "$OUT_IF" ]]; then
+    nft add rule $NAT_TABLE postrouting oifname "$OUT_IF" masquerade
+    echo "[INFO] NAT masquerade rule applied on $OUT_IF"
+  else
+    echo "[WARN] Could not detect outside interface for NAT masquerade"
+  fi
+}
+
+# ========== Function: Configure Logging for Dropped Packets ==========
+configure_logging_for_drops() {
+  echo "[INFO] Configuring logging for dropped packets..."
+  nft add rule $FILTER_TABLE input log prefix \"INPUT DROP: \" drop
+  nft add rule $FILTER_TABLE forward log prefix \"FORWARD DROP: \" drop
+  echo "[INFO] Logging rules applied."
+}
+
+# ========== Function: Configure Interface Access ==========
+configure_interface_access_rules() {
+  echo "[INFO] Configuring interface access policies..." | tee "$LOG_FILE"
+  declare -A iface_names iface_cidrs
+  mapfile -t interfaces < <(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '!/lo/ && NF==2 {print $1}')
+
+  internet_iface=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1}' | head -n1)
+  internet_ip=$(nmcli -g IP4.ADDRESS device show "$internet_iface" | grep '/' | cut -d' ' -f1 | head -n1)
+
+  for iface in "${interfaces[@]}"; do
+    [[ "$iface" == "lo" ]] && continue
+    cidr=$(nmcli -g IP4.ADDRESS device show "$iface" | grep '/' | cut -d' ' -f1)
+    if [[ -n "$cidr" ]]; then
+      iface_names["$iface"]="$iface ($cidr)"
+      iface_cidrs["$iface"]="$cidr"
+    fi
+  done
+
+  filtered_ifaces=()
+  for i in "${!iface_cidrs[@]}"; do
+    [[ "$i" != "$internet_iface" ]] && filtered_ifaces+=("$i")
+  done
+
+  # ─── Internet Access ─────────────────────────────────────
+  internet_allowed=()
+  menu_items=( "None" "Skip Internet access" off )
+  for iface in "${filtered_ifaces[@]}"; do
+    label="${iface_names[$iface]} → $internet_iface ($internet_ip)"
+    menu_items+=("$iface" "$label" off)
+  done
+
+  exec 3>&1
+  selected=$(dialog --checklist "Allow access to Internet via $internet_iface ($internet_ip):" 20 100 10 "${menu_items[@]}" 2>&1 1>&3)
+  exec 3>&-
+  IFS=' ' read -r -a internet_allowed <<< "$selected"
+
+  for iface in "${internet_allowed[@]}"; do
+    [[ "$iface" == "None" ]] && continue
+    cidr="${iface_cidrs[$iface]}"
+    echo "[INFO] Allowing $iface to Internet ($cidr)" | tee -a "$LOG_FILE"
+    nft add rule $FILTER_TABLE forward_internet ip saddr "$cidr" iifname "$iface" oifname "$internet_iface" accept
+  done
+
+  # ─── Inter-Interface Access ──────────────────────────────
+  interflow_rules=()
+  for src_iface in "${filtered_ifaces[@]}"; do
+    menu_items=( "None" "Skip Inter-Access" off )
+    for dst_iface in "${filtered_ifaces[@]}"; do
+      [[ "$src_iface" == "$dst_iface" ]] && continue
+      label="${iface_names[$dst_iface]}"
+      menu_items+=("$dst_iface" "$label" off)
+    done
+    exec 3>&1
+    selected=$(dialog --checklist "Allow ${iface_names[$src_iface]} → ..." 20 100 10 "${menu_items[@]}" 2>&1 1>&3)
+    exec 3>&-
+    IFS=' ' read -r -a selected_ifaces <<< "$selected"
+    for dst in "${selected_ifaces[@]}"; do
+      [[ "$dst" == "None" ]] && continue
+      interflow_rules+=("$src_iface|$dst")
+    done
+  done
+
+  for rule in "${interflow_rules[@]}"; do
+    src="${rule%%|*}"
+    dst="${rule##*|}"
+    src_cidr="${iface_cidrs[$src]}"
+    dst_cidr="${iface_cidrs[$dst]}"
+    echo "[INFO] Allowing $src ($src_cidr) → $dst ($dst_cidr)" | tee -a "$LOG_FILE"
+    nft add rule $FILTER_TABLE forward ip saddr "$src_cidr" ip daddr "$dst_cidr" iifname "$src" oifname "$dst" accept
+  done
+
+  # ─── SSH Access ──────────────────────────────────────────
+  ssh_allowed=()
+  menu_items=( "None" "Skip SSH access" off )
+  for iface in "${interfaces[@]}"; do
+    [[ "$iface" == "lo" ]] && continue
+    cidr="${iface_cidrs[$iface]}"
+    [[ -n "$cidr" ]] || continue
+    label="${iface_names[$iface]}"
+    menu_items+=("$iface" "$label" off)
+  done
+
+  exec 3>&1
+  selected=$(dialog --checklist "Allow SSH (port 22) from:" 20 100 10 "${menu_items[@]}" 2>&1 1>&3)
+  exec 3>&-
+  IFS=' ' read -r -a ssh_allowed <<< "$selected"
+
+  # Find handle of the ct rule to insert after
+  handle_line=$(nft --handle list chain $FILTER_TABLE input | grep 'ct state established,related accept' | tail -n1)
+  insert_handle=$(awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}' <<< "$handle_line")
+
+  for iface in "${ssh_allowed[@]}"; do
+    [[ "$iface" == "None" ]] && continue
+    cidr="${iface_cidrs[$iface]}"
+    echo "[INFO] Adding SSH rule for $iface ($cidr)" | tee -a "$LOG_FILE"
+    nft insert rule $FILTER_TABLE input handle "$insert_handle" ip saddr "$cidr" iifname "$iface" tcp dport 22 accept
+  done
+
+  echo "[INFO] Interface access rules applied." | tee -a "$LOG_FILE"
+}
+# ========= Install the threatlist update script and download NFT rulesets apply them to the tables ==========
+configure_nftables_threatlists() {
+  LOG_TAG="nft-threat-list"
+  BLOCK_SET="threat_block"
+
+  THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
+  MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
+  COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
+  TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
+  UPDATE_SCRIPT="/usr/local/bin/update_nft_threatlist.sh"
+  CRON_JOB="/etc/cron.d/nft-threat-list"
+  LOG_FILE="/var/log/nft-threat-list.log"
+
+  dialog --title "NFTables Setup" --infobox "Installing NFTables Threat List Updater..." 5 60
+  sleep 2
+
+  mkdir -p /etc/nft-threat-list
+  touch "$THREAT_LIST_FILE" "$TMP_FILE" "$LOG_FILE"
+
+  # Manual block list with a clear marker
+  cat <<EOF > "$MANUAL_BLOCK_LIST"
+# Manual Block List for NFTables
+# Add IP addresses below the marker to be blocked
+######### Place IP Addresses under this line to be compiled #########
+EOF
+
+  chmod 644 "$MANUAL_BLOCK_LIST"
+
+  # ─── Create Threat List Update Script ─────────────────────────────
+  cat <<'EOF' > "$UPDATE_SCRIPT"
+#!/bin/bash
+LOG_TAG="nft-threat-list"
+THREAT_LISTS=(
+  "https://iplists.firehol.org/files/firehol_level1.netset"
+  "https://www.abuseipdb.com/blacklist.csv"
+  "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+)
+THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
+MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
+COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
+TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
+LOG_FILE="/var/log/nft-threat-list.log"
+
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE" | logger -t $LOG_TAG
+}
+
+log "Starting NFTables threat list update..."
+> "$TMP_FILE"
+
+for URL in "${THREAT_LISTS[@]}"; do
+  for i in {1..3}; do
+    log "Downloading $URL (Attempt $i)..."
+    curl -s --retry 3 "$URL" >> "$TMP_FILE" && break
+    sleep 2
+  done
+done
+
+grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$TMP_FILE" | sort -u > "$THREAT_LIST_FILE"
+awk '/#########/{found=1; next} found && /^[0-9]+\./' "$MANUAL_BLOCK_LIST" > "$TMP_FILE"
+cat "$THREAT_LIST_FILE" "$TMP_FILE" | sort -u > "$COMBINED_BLOCK_LIST"
+
+if nft list set inet filter threat_block &>/dev/null; then
+  nft flush set inet filter threat_block
+else
+  nft add set inet filter threat_block '{ type ipv4_addr; flags timeout; }'
+fi
+
+while IFS= read -r ip; do
+  nft add element inet filter threat_block "{ $ip }"
+done < "$COMBINED_BLOCK_LIST"
+
+IP_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
+log "Threat list update completed with $IP_COUNT IPs."
+EOF
+
+  chmod +x "$UPDATE_SCRIPT"
+
+  # ─── Cron Job for Daily Updates ──────────────────────────────────
+  cat <<EOF > "$CRON_JOB"
+SHELL=/bin/bash
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+0 4 * * * root $UPDATE_SCRIPT
+EOF
+  chmod 644 "$CRON_JOB"
+  systemctl enable --now crond
+
+  # ─── Trigger Initial Update ─────────────────────────────────────
+  dialog --title "Threat List Update" --gauge "Downloading and applying threat list..." 10 60 0 < <(
+    echo 10; sleep 1
+    echo 40; bash "$UPDATE_SCRIPT" >/dev/null 2>&1
+    echo 90; sleep 1
+    echo 100
+  )
+
+  BLOCKED_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
+  dialog --title "Setup Complete" --infobox "Threat list applied successfully.\nBlocked IPs: $BLOCKED_COUNT" 7 60
+  sleep 4
+
+  # Save active ruleset
+  nft list ruleset > /etc/sysconfig/nftables.conf
+  systemctl enable --now nftables
+}
 
 #Application menu
 # Track installed services configuration
@@ -4135,8 +4405,12 @@ set_inside_interface
 vlan_main
 setup_outside_interface
 config_fw_service
-setup_nftables_inside
+
+initialize_nftables_base
+configure_interface_access_rules
+configure_logging_for_drops
 configure_nftables_threatlists
+
 collect_service_choices
 update_and_install_packages
 vm_detection
@@ -4151,7 +4425,6 @@ manage_inside_dns
 update_login_console
 setup_kea_startup_script
 manage_inside_gw
-
 remove_rtp
 install_rfwb_admin
 clear_bash_profile
