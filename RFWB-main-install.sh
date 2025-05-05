@@ -4299,6 +4299,31 @@ fi
 echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
+reposition_drop_rules() {
+  echo "[INFO] Reordering DROP rules in INPUT and FORWARD chains..."
+
+  for chain in input forward; do
+    # Get handle and rule text for the DROP rule
+    drop_line=$(nft --handle list chain inet filter "$chain" | grep 'log prefix' | grep 'drop' | head -n1)
+    drop_handle=$(awk '{for (i=1;i<=NF;i++) if ($i=="handle") print $(i+1)}' <<< "$drop_line")
+
+    if [[ -z "$drop_handle" ]]; then
+      echo "[WARN] No DROP rule found in chain $chain"
+      continue
+    fi
+
+    # Extract the rule body (everything before "handle")
+    drop_rule=$(sed -E 's/.*(log prefix.* drop).*/\1/' <<< "$drop_line")
+
+    echo "[DEBUG] Removing DROP rule from $chain (handle $drop_handle)..."
+    nft delete rule inet filter "$chain" handle "$drop_handle"
+
+    echo "[DEBUG] Appending DROP rule back to bottom of $chain..."
+    nft add rule inet filter "$chain" $drop_rule
+
+    echo "[INFO] DROP rule repositioned in chain $chain"
+  done
+  }
 install_rfwb_admin () {
 echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
 
@@ -4461,6 +4486,7 @@ manage_inside_dns
 update_login_console
 setup_kea_startup_script
 manage_inside_gw
+reposition_drop_rules
 remove_rtp
 install_rfwb_admin
 clear_bash_profile
