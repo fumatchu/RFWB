@@ -4355,6 +4355,9 @@ reposition_drop_rules() {
   fi
 }
 
+clear_bash_profile() {
+  sed -i '/## Run RFWB installer on every interactive login ##/,/^fi$/d' /root/.bash_profile
+}
 
 install_rfwb_admin() {
   echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
