@@ -3783,15 +3783,26 @@ else
 fi
 
 
-# Restart services
-for svc in kea-dhcp-ddns kea-dhcp4; do
-  echo -e "[${YELLOW}INFO${TEXTRESET}] Restarting service: $svc"
-  if systemctl restart "$svc" && systemctl is-active --quiet "$svc"; then
-    echo -e "[${GREEN}SUCCESS${TEXTRESET}] $svc is running."
+#Enable Services
+
+SERVICES=("kea-dhcp4" "kea-dhcp-ddns")
+
+echo "[INFO] Enabling and starting KEA DHCP services..."
+
+for svc in "${SERVICES[@]}"; do
+  echo "[INFO] Enabling $svc..."
+  systemctl enable "$svc" >/dev/null 2>&1
+
+  echo "[INFO] Starting $svc..."
+  systemctl start "$svc"
+
+  if systemctl is-active --quiet "$svc"; then
+    echo "[SUCCESS] $svc is running."
   else
-    echo -e "[${RED}ERROR${TEXTRESET}] Failed to restart or activate $svc."
+    echo "[ERROR] $svc failed to start. Check logs with: journalctl -u $svc"
   fi
 done
+
 
 # Reload named (only if running and config valid)
 echo -e "[${YELLOW}INFO${TEXTRESET}] Checking named configuration before reload..."
