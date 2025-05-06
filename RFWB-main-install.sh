@@ -4356,32 +4356,31 @@ reposition_drop_rules() {
 }
 
 
-install_rfwb_admin () {
-echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
+install_rfwb_admin() {
+  echo -e "${CYAN}==> Retrieving and Installing RFWB-Admin...${TEXTRESET}"
 
-spinner() {
-  # $1 = PID of background process
-  local pid=$1
-  local delay=0.1
-  local spinstr='|/-\'
-  printf " "
-  while ps -p "$pid" &>/dev/null; do
-    for (( i=0; i<${#spinstr}; i++ )); do
-      printf "\b${spinstr:i:1}"
-      sleep $delay
+  spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    printf " "
+    while ps -p "$pid" &>/dev/null; do
+      for (( i=0; i<${#spinstr}; i++ )); do
+        printf "\b${spinstr:i:1}"
+        sleep $delay
+      done
     done
-  done
-  printf "\b"  # clear spinner
-  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Done."
-}
+    printf "\b"
+    echo -e "[${GREEN}SUCCESS${TEXTRESET}] Done."
+  }
 
-  # 1) must be root
+  # Root check
   if [[ $EUID -ne 0 ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] This installer must be run as root."
     return 1
   fi
 
-
+  # OS check
   if [[ ! -f /etc/redhat-release ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /etc/redhat-release not found. Cannot detect OS."
     return 1
@@ -4389,23 +4388,22 @@ spinner() {
   local major
   major=$(grep -oP '\d+' /etc/redhat-release | head -1)
   if (( major < 9 )); then
-    echo -e "[${RED}ERROR${TEXTRESET}] Rocky 9.x or later is required (found $major)."
+    echo -e "[${RED}ERROR${TEXTRESET}] Rocky 9.x or later is required (found $major)."
     return 1
   fi
 
-
+  # Cleanup old directory
   if [[ -d /root/.rfwb-admin ]]; then
-    echo -e "[${RED}WARN${TEXTRESET}] /root/.rfwb-admin already exists. Removing old directory."
+    echo -e "[${YELLOW}WARN${TEXTRESET}] /root/.rfwb-admin already exists. Removing old directory."
     rm -rf /root/.rfwb-admin
   fi
+
   echo -e "[${YELLOW}INFO${TEXTRESET}] Creating /root/.rfwb-admin…"
   mkdir -p /root/.rfwb-admin
-
 
   echo -e "[${YELLOW}INFO${TEXTRESET}] Installing git & wget…"
   dnf install -y git wget &>/dev/null &
   spinner $!
-
 
   echo -e "[${YELLOW}INFO${TEXTRESET}] Cloning RFWB-SM.git into /root/.rfwb-admin…"
   if ! git clone https://github.com/fumatchu/RFWB-SM.git /root/.rfwb-admin &>/dev/null; then
@@ -4415,58 +4413,42 @@ spinner() {
 
   chmod 700 /root/.rfwb-admin/*
 
-  # Directory to check
-DIR="/root/.rfwb-admin"
+  # Verify permissions
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Verifying permissions under /root/.rfwb-admin…"
+  shopt -s nullglob
+  local good=true
+  for item in /root/.rfwb-admin/*; do
+    mode=$(stat -c '%a' "$item")
+    if [[ "$mode" != "700" ]]; then
+      echo -e "[${RED}FAIL${TEXTRESET}] $item has permissions $mode"
+      good=false
+    else
+      echo -e "[${GREEN}OK${TEXTRESET}] $item has correct permissions ($mode)"
+    fi
+  done
+  shopt -u nullglob
 
-# Colored prefixes (optional)
-INFO="INFO"
-SUCCESS="SUCCESS"
-FAIL="FAIL"
-
-# Ensure the directory exists
-if [[ ! -d "$DIR" ]]; then
-  echo "$FAIL Directory not found: $DIR" >&2
-  return 1
-fi
-
-echo -e "[${YELLOW}$INFO${TEXTRESET}] Checking permissions under $DIR (should be 700)..."
-
-good=true
-shopt -s nullglob
-for item in "$DIR"/*; do
-  mode=$(stat -c '%a' "$item")
-  if [[ "$mode" != "700" ]]; then
-    echo "$FAIL $item has permissions $mode"
-    good=false
-  else
-    echo -e "[${GREEN}$SUCCESS${TEXTRESET}] $item has correct permissions (${GREEN}$mode${TEXTRESET})"
+  if ! $good; then
+    echo -e "[${YELLOW}WARN${TEXTRESET}] You can fix with: chmod 700 /root/.rfwb-admin/*"
   fi
-done
-
-if $good; then
-  echo -e "[${GREEN}$SUCCESS${TEXTRESET}] All items have correct permissions (${GREEN}700${TEXTRESET})."
-  return 0
-else
-  echo -e "[${YELLOW}$INFO${TEXTRESET}] You can correct permissions with: ${CYAN}chmod 700 $DIR/*${TEXTRESET}"
-  return 1
-fi
-
-
 
   if [[ ! -d /root/.rfwb-admin/.git ]]; then
     echo -e "[${RED}ERROR${TEXTRESET}] /root/.rfwb-admin doesn’t look like a Git repo."
     return 1
   fi
 
-  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Repository bootstrapped in /root/.rfwb-admin."
-  return 0
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] RFWB-SM installed in /root/.rfwb-admin"
 
-echo -e "[${GREEN}DONE${TEXTRESET}]"
-sleep 3
-}
-
-clear_bash_profile () {
-sed -i '/## Run RFWB installer on every interactive login ##/,/^fi$/d' /root/.bash_profile
+  # ─── Auto-launch menu.sh for interactive root logins ─────────────
+  echo -e "[${YELLOW}INFO${TEXTRESET}] Setting up root shell menu launcher..."
+  cat << 'EOF' > /etc/profile.d/rfwb.sh
+# Auto-launch RFWB admin menu for interactive root shells
+if [[ $EUID -eq 0 && -t 1 && -f /root/.rfwb/menu.sh ]]; then
+  /root/.rfwb/menu.sh
+fi
+EOF
+  chmod 755 /etc/profile.d/rfwb.sh
+  echo -e "[${GREEN}SUCCESS${TEXTRESET}] Hook installed: /etc/profile.d/rfwb.sh"
 }
 
 prompt_firewall_restart () {
