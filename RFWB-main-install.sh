@@ -997,67 +997,117 @@ reposition_ct_rule_input() {
   echo "[INFO] ct state rule moved to position $new_pos (after lo)"
 }
 
-# ========= Install the threatlist update script and download NFT rulesets apply them to the tables ==========
-configure_nftables_threatlists() {
-  LOG_TAG="nft-threat-list"
-  BLOCK_SET="threat_block"
+# Updated NFTables Threat List Updater with IPv6 support and strict filtering
 
-  THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
-  MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
-  COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
-  TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
-  UPDATE_SCRIPT="/usr/local/bin/update_nft_threatlist.sh"
-  CRON_JOB="/etc/cron.d/nft-threat-list"
-  LOG_FILE="/var/log/nft-threat-list.log"
+configure_nftables_threatlists (){
+LOG_TAG="nft-threat-list"
+THREAT_LISTS_FILE_V4="/etc/nft-threat-list/feeds-v4.list"
+THREAT_LISTS_FILE_V6="/etc/nft-threat-list/feeds-v6.list"
 
-  dialog --title "NFTables Setup" --infobox "Installing NFTables Threat List Updater..." 5 60
-  sleep 2
+THREAT_DIR="/etc/nft-threat-list"
+THREAT_LIST_FILE="$THREAT_DIR/threat_list.txt"
+THREAT_LIST_FILE_V6="$THREAT_DIR/threat_list_v6.txt"
+MANUAL_BLOCK_LIST="$THREAT_DIR/manual_block_list.txt"
+MANUAL_BLOCK_LIST_V6="$THREAT_DIR/manual_block_list_v6.txt"
+COMBINED_BLOCK_LIST="$THREAT_DIR/combined_block_list.txt"
+COMBINED_BLOCK_LIST_V6="$THREAT_DIR/combined_block_list_v6.txt"
+TMP_FILE="$THREAT_DIR/threat_list.tmp"
+TMP_FILE_V6="$THREAT_DIR/threat_list_v6.tmp"
+LOG_FILE="/var/log/nft-threat-list.log"
+UPDATE_SCRIPT="/usr/local/bin/update_nft_threatlist.sh"
+CRON_FILE="/etc/cron.d/nft-threatlist"
 
-  mkdir -p /etc/nft-threat-list
-  touch "$THREAT_LIST_FILE" "$TMP_FILE" "$LOG_FILE"
+log() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE" | logger -t $LOG_TAG
+}
 
-  # Manual block list with a clear marker
-  cat <<EOF > "$MANUAL_BLOCK_LIST"
-# Manual Block List for NFTables
-# Add IP addresses below the marker to be blocked
-######### Place IP Addresses under this line to be compiled #########
+validate_ipv6() {
+  local ip="$1"
+  [[ "$ip" =~ ^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$ ]] && return 0 || return 1
+}
+
+mkdir -p "$THREAT_DIR"
+
+[[ -f "$MANUAL_BLOCK_LIST" ]] || cat > "$MANUAL_BLOCK_LIST" <<EOF
+# This is your manual block list
+# Add all permanent IPv4 IPs to be blocked under this line
+
+#########
 EOF
 
-  chmod 644 "$MANUAL_BLOCK_LIST"
+[[ -f "$MANUAL_BLOCK_LIST_V6" ]] || cat > "$MANUAL_BLOCK_LIST_V6" <<EOF
+# This is your manual IPv6 block list
+# Add all permanent IPv6 addresses to be blocked under this line
 
-  # ─── Create Threat List Update Script ─────────────────────────────
-  cat <<'EOF' > "$UPDATE_SCRIPT"
+#########
+EOF
+
+touch "$LOG_FILE"
+
+[[ ! -s "$THREAT_LISTS_FILE_V4" ]] && cat > "$THREAT_LISTS_FILE_V4" <<EOF
+https://iplists.firehol.org/files/firehol_level1.netset
+https://www.abuseipdb.com/blacklist.csv
+https://rules.emergingthreats.net/blockrules/compromised-ips.txt
+EOF
+
+[[ ! -s "$THREAT_LISTS_FILE_V6" ]] && cat > "$THREAT_LISTS_FILE_V6" <<EOF
+https://www.stopforumspam.com/downloads/listed_ip_30_ipv6.gz
+EOF
+
+# ─── Write Update Script ──────────────────────────────────────────────
+cat > "$UPDATE_SCRIPT" <<'EOF'
 #!/bin/bash
+set -euo pipefail
+
 LOG_TAG="nft-threat-list"
-THREAT_LISTS=(
-  "https://iplists.firehol.org/files/firehol_level1.netset"
-  "https://www.abuseipdb.com/blacklist.csv"
-  "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
-)
-THREAT_LIST_FILE="/etc/nft-threat-list/threat_list.txt"
-MANUAL_BLOCK_LIST="/etc/nft-threat-list/manual_block_list.txt"
-COMBINED_BLOCK_LIST="/etc/nft-threat-list/combined_block_list.txt"
-TMP_FILE="/etc/nft-threat-list/threat_list.tmp"
+THREAT_DIR="/etc/nft-threat-list"
+THREAT_LISTS_FILE_V4="$THREAT_DIR/feeds-v4.list"
+THREAT_LISTS_FILE_V6="$THREAT_DIR/feeds-v6.list"
+TMP_FILE="$THREAT_DIR/threat_list.tmp"
+TMP_FILE_V6="$THREAT_DIR/threat_list_v6.tmp"
+THREAT_LIST_FILE="$THREAT_DIR/threat_list.txt"
+THREAT_LIST_FILE_V6="$THREAT_DIR/threat_list_v6.txt"
+MANUAL_BLOCK_LIST="$THREAT_DIR/manual_block_list.txt"
+MANUAL_BLOCK_LIST_V6="$THREAT_DIR/manual_block_list_v6.txt"
+COMBINED_BLOCK_LIST="$THREAT_DIR/combined_block_list.txt"
+COMBINED_BLOCK_LIST_V6="$THREAT_DIR/combined_block_list_v6.txt"
 LOG_FILE="/var/log/nft-threat-list.log"
 
 log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE" | logger -t $LOG_TAG
 }
 
-log "Starting NFTables threat list update..."
-> "$TMP_FILE"
+validate_ipv6() {
+  local ip="$1"
+  [[ "$ip" =~ ^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$ ]] && return 0 || return 1
+}
 
-for URL in "${THREAT_LISTS[@]}"; do
-  for i in {1..3}; do
-    log "Downloading $URL (Attempt $i)..."
-    curl -s --retry 3 "$URL" >> "$TMP_FILE" && break
-    sleep 2
-  done
-done
+log "Starting threat list update..."
+> "$TMP_FILE"
+> "$TMP_FILE_V6"
+
+while IFS= read -r url; do
+  [[ -z "$url" || "$url" == \#* ]] && continue
+  log "Downloading IPv4: $url"
+  curl -s --fail "$url" >> "$TMP_FILE" || log "[WARN] Failed to download $url"
+done < "$THREAT_LISTS_FILE_V4"
 
 grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$TMP_FILE" | sort -u > "$THREAT_LIST_FILE"
-awk '/#########/{found=1; next} found && /^[0-9]+\./' "$MANUAL_BLOCK_LIST" > "$TMP_FILE"
-cat "$THREAT_LIST_FILE" "$TMP_FILE" | sort -u > "$COMBINED_BLOCK_LIST"
+awk '/#########/{found=1; next} found && /^[0-9]+\./' "$MANUAL_BLOCK_LIST" >> "$THREAT_LIST_FILE"
+sort -u "$THREAT_LIST_FILE" > "$COMBINED_BLOCK_LIST"
+
+while IFS= read -r url; do
+  [[ -z "$url" || "$url" == \#* ]] && continue
+  log "Downloading IPv6: $url"
+  curl -s --fail "$url" | gunzip -c >> "$TMP_FILE_V6" || log "[WARN] Failed to fetch $url"
+done < "$THREAT_LISTS_FILE_V6"
+
+grep -Eio '([0-9a-fA-F:]{2,39})' "$TMP_FILE_V6" | grep ':' | sort -u | while read -r ip6; do
+  validate_ipv6 "$ip6" && echo "$ip6"
+done > "$THREAT_LIST_FILE_V6"
+
+awk '/#########/{found=1; next} found && /:/' "$MANUAL_BLOCK_LIST_V6" >> "$THREAT_LIST_FILE_V6"
+sort -u "$THREAT_LIST_FILE_V6" > "$COMBINED_BLOCK_LIST_V6"
 
 if nft list set inet filter threat_block &>/dev/null; then
   nft flush set inet filter threat_block
@@ -1066,39 +1116,72 @@ else
 fi
 
 while IFS= read -r ip; do
-  nft add element inet filter threat_block "{ $ip }"
+  [[ -n "$ip" ]] && nft add element inet filter threat_block "{ $ip }" 2>/dev/null || true
 done < "$COMBINED_BLOCK_LIST"
 
-IP_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
-log "Threat list update completed with $IP_COUNT IPs."
+if nft list set inet filter threat_block_v6 &>/dev/null; then
+  nft flush set inet filter threat_block_v6
+else
+  nft add set inet filter threat_block_v6 '{ type ipv6_addr; flags timeout; }'
+fi
+
+while IFS= read -r ip6; do
+  [[ -n "$ip6" ]] && validate_ipv6 "$ip6" && nft add element inet filter threat_block_v6 "{ $ip6 }" 2>/dev/null || true
+done < "$COMBINED_BLOCK_LIST_V6"
+
+ensure_rule_at_top() {
+  local chain="$1"
+  local rule="$2"
+
+  mapfile -t HANDLES < <(nft --handle list chain inet filter "$chain" | grep -F "$rule" | awk '{print $NF}')
+  for h in "${HANDLES[@]}"; do
+    [[ "$h" =~ ^[0-9]+$ ]] && nft delete rule inet filter "$chain" handle "$h" 2>/dev/null || true
+  done
+
+  nft insert rule inet filter "$chain" position 0 $rule
+  log "[INFO] Reinserted top rule into $chain: $rule"
+}
+
+ensure_rule_at_top input 'ip saddr @threat_block drop'
+ensure_rule_at_top input 'ip6 saddr @threat_block_v6 drop'
+ensure_rule_at_top forward_internet 'ip saddr @threat_block drop'
+ensure_rule_at_top forward_internet 'ip6 saddr @threat_block_v6 drop'
+
+IP_COUNT_V4=$(wc -l < "$COMBINED_BLOCK_LIST")
+IP_COUNT_V6=$(wc -l < "$COMBINED_BLOCK_LIST_V6")
+log "[INFO] IPv4 threat list update complete: $IP_COUNT_V4 IPs"
+log "[INFO] IPv6 threat list update complete: $IP_COUNT_V6 IPs"
 EOF
 
-  chmod +x "$UPDATE_SCRIPT"
+chmod +x "$UPDATE_SCRIPT"
 
-  # ─── Cron Job for Daily Updates ──────────────────────────────────
-  cat <<EOF > "$CRON_JOB"
+# ─── Run Initial Update with Dialog ──────────────────────────────────
+dialog --title "Threat List Update" --gauge "Downloading and applying threat list..." 10 60 0 < <(
+  echo 10; sleep 1
+  echo 40; bash "$UPDATE_SCRIPT" >/dev/null 2>&1
+  echo 90; sleep 1
+  echo 100
+)
+
+IP_COUNT_V4=$(wc -l < "$COMBINED_BLOCK_LIST")
+IP_COUNT_V6=$(wc -l < "$COMBINED_BLOCK_LIST_V6")
+dialog --title "Setup Complete" --infobox "Threat list applied successfully.\nIPv4 blocked: $IP_COUNT_V4\nIPv6 blocked: $IP_COUNT_V6" 8 60
+sleep 4
+
+# ─── Save Final Ruleset and Enable ──────────────────────────────────
+nft list ruleset > /etc/sysconfig/nftables.conf
+systemctl enable --now nftables
+
+# ─── Cron Job for Daily and Boot-time Updates ───────────────────────
+cat > "$CRON_FILE" <<EOF
 SHELL=/bin/bash
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-0 4 * * * root $UPDATE_SCRIPT
+
+30 3 * * * root /usr/local/bin/update_nft_threatlist.sh >/dev/null 2>&1
+@reboot root /usr/local/bin/update_nft_threatlist.sh >/dev/null 2>&1
 EOF
-  chmod 644 "$CRON_JOB"
-  systemctl enable --now crond
 
-  # ─── Trigger Initial Update ─────────────────────────────────────
-  dialog --title "Threat List Update" --gauge "Downloading and applying threat list..." 10 60 0 < <(
-    echo 10; sleep 1
-    echo 40; bash "$UPDATE_SCRIPT" >/dev/null 2>&1
-    echo 90; sleep 1
-    echo 100
-  )
-
-  BLOCKED_COUNT=$(wc -l < "$COMBINED_BLOCK_LIST")
-  dialog --title "Setup Complete" --infobox "Threat list applied successfully.\nBlocked IPs: $BLOCKED_COUNT" 7 60
-  sleep 4
-
-  # Save active ruleset
-  nft list ruleset > /etc/sysconfig/nftables.conf
-  systemctl enable --now nftables
+chmod 644 "$CRON_FILE"
 }
 
 #Application menu
