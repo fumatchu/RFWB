@@ -2404,28 +2404,28 @@ $NFT list set "$TABLE" dynamic_block >/dev/null 2>&1 || \
 $NFT list set "$TABLE" dynamic_block_v6 >/dev/null 2>&1 || \
   $NFT add set "$TABLE" dynamic_block_v6 '{ type ipv6_addr; flags timeout; }'
 
-# Remove old rules
+# Clean up dynamic_block rules
 mapfile -t HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep -E 'dynamic_block|Port Scan Detected:' | awk '{print $NF}')
 for h in "${HANDLES[@]}"; do
-  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+  [[ "$h" =~ ^[0-9]+$ ]] && $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
 done
 
 mapfile -t PORT_HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep 'Ignore from scan detection' | awk '{print $NF}')
 for h in "${PORT_HANDLES[@]}"; do
-  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+  [[ "$h" =~ ^[0-9]+$ ]] && $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
 done
 
-# Add drop rules for existing sets
+# Re-add dynamic block drop rules
 $NFT insert rule "$TABLE" "$INPUT_CHAIN" position 0 ip saddr @dynamic_block drop
 $NFT insert rule "$TABLE" "$INPUT_CHAIN" position 0 ip6 saddr @dynamic_block_v6 drop
 
-# Add ignore rules for safe ports
+# Safe ports
 if [[ -n "$IGNORED_PORTS" ]]; then
   $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip daddr "$EXTERNAL_IPV4" tcp dport { $IGNORED_PORTS } counter comment "\"Ignore from scan detection\""
   $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip6 daddr "$EXTERNAL_IPV6" tcp dport { $IGNORED_PORTS } counter comment "\"Ignore from scan detection\""
 fi
 
-# Add scan detection rules
+# Detection rules
 $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip saddr != { $COMBINED_V4 } ip daddr "$EXTERNAL_IPV4" \
   tcp flags syn tcp dport { $MONITORED_PORTS } \
   limit rate 5/second burst 10 packets log prefix "\"Port Scan Detected:\"" \
@@ -2436,7 +2436,7 @@ $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip6 saddr != { $COMBINED_V6 } ip6 daddr
   limit rate 5/second burst 10 packets log prefix "\"Port Scan Detected:\"" \
   add @dynamic_block_v6 { ip6 saddr timeout ${BLOCK_TIMEOUT} } counter
 
-# Log currently blocked IPs and flush
+# Log and flush sets
 TMP_NEW_BLOCKS=$(mktemp)
 
 $NFT list set "$TABLE" dynamic_block | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' >> "$TMP_NEW_BLOCKS" || true
@@ -2455,6 +2455,26 @@ $NFT flush set "$TABLE" dynamic_block || true
 $NFT flush set "$TABLE" dynamic_block_v6 || true
 
 rm -f "$TMP_NEW_BLOCKS"
+
+
+ensure_threat_drop_top() {
+  local chain="$1"
+  local rule="$2"
+
+  mapfile -t HANDLES < <(nft --handle list chain inet filter "$chain" | grep -F "$rule" | awk '{print $NF}')
+  for h in "${HANDLES[@]}"; do
+    [[ "$h" =~ ^[0-9]+$ ]] && nft delete rule inet filter "$chain" handle "$h" 2>/dev/null || true
+  done
+
+  nft insert rule inet filter "$chain" position 0 $rule
+  echo "[INFO] Reinforced rule at top of $chain: $rule"
+}
+
+# Always reassert threat block drops as highest priority
+ensure_threat_drop_top input 'ip saddr @threat_block drop'
+ensure_threat_drop_top input 'ip6 saddr @threat_block_v6 drop'
+ensure_threat_drop_top forward_internet 'ip saddr @threat_block drop'
+ensure_threat_drop_top forward_internet 'ip6 saddr @threat_block_v6 drop'
 EOF
 chmod +x "$INSTALL_BIN"
 
@@ -2467,14 +2487,16 @@ NFT=nft
 TABLE="inet filter"
 INPUT_CHAIN="input"
 
+# Remove dynamic port scan rules
 mapfile -t HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep -E 'dynamic_block|Port Scan Detected:' | awk '{print $NF}')
 for h in "${HANDLES[@]}"; do
-  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+  [[ "$h" =~ ^[0-9]+$ ]] && $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
 done
 
-mapfile -t PORT_HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep 'Allow ignore_ports' | awk '{print $NF}')
+# Remove static exclusion rules with the scan detection comment
+mapfile -t PORT_HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep 'Ignore from scan detection' | awk '{print $NF}')
 for h in "${PORT_HANDLES[@]}"; do
-  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+  [[ "$h" =~ ^[0-9]+$ ]] && $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
 done
 EOF
 
