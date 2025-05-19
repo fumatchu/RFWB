@@ -2321,221 +2321,193 @@ echo
 }
 
 install_portscan() {
-    INSTALLED_SERVICES[portscan]=1
-    log "Installing RFWB Portscan detection..."
+INSTALLED_SERVICES[portscan]=1
+#!/usr/bin/env bash
+# RFWB Portscan Detection Installer with History Logging and Port Rule Deduplication
 
-    dialog --title "RFWB Portscan" --infobox "Installing RFWB-Portscan Detection engine..." 5 60
-    sleep 2
+set -euo pipefail
 
-    if [[ $EUID -ne 0 ]]; then
-        dialog --msgbox "This script must be run as root." 6 40
-        return 1
-    fi
+dialog --title "RFWB Portscan" --infobox "Installing RFWB-Portscan Detection engine..." 5 60
+sleep 2
 
-    CONFIG_FILE="/etc/rfwb-portscan.conf"
-    if [ ! -f "$CONFIG_FILE" ]; then
-        cat <<EOF >"$CONFIG_FILE"
+INSTALL_BIN="/usr/local/bin/rfwb-portscan.sh"
+STOP_BIN="/usr/local/bin/rfwb-portscan-stop.sh"
+SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
+CONFIG_FILE="/etc/rfwb/portscan.conf"
+IGNORE_DIR="/etc/nftables"
+LOG_FILE="/var/log/rfwb-portscan.log"
+BLOCK_LIST="/etc/nftables/hosts.blocked"
+HISTORY_FILE="/etc/nftables/hosts.blocked.history"
+
+mkdir -p /etc/rfwb
+mkdir -p "$IGNORE_DIR"
+
+# ========== Write Config ==========
+cat > "$CONFIG_FILE" <<EOF
 MAX_RETRIES=10
 INITIAL_DELAY=10
 RETRY_MULTIPLIER=2
-MONITORED_PORTS="20,21,23,25,53,67,68,69,110,111,119,135,137,138,139,143,161,162,179,389,445,465,514,515,587,631,636,993,995"
-BLOCK_TIMEOUT="30m"
+MONITORED_PORTS=20,21,23,25,53,67,68,69,110,111,119,135,137,138,139,143,161,162,179,389,445,465,514,515,587,631,636,993,995
+BLOCK_TIMEOUT=30m
 EOF
-    fi
-    source "$CONFIG_FILE"
 
-    mkdir -p /etc/nftables
-    touch /etc/nftables/hosts.blocked
+# ========== Write Ignore Lists ==========
+echo -e "192.168.0.0/16\n10.0.0.0/8\n172.16.0.0/12" > "$IGNORE_DIR/ignore_networks.conf"
+echo -e "::1/128\nfe80::/10" >> "$IGNORE_DIR/ignore_networks.conf"
+echo "22,80,443" > "$IGNORE_DIR/ignore_ports.conf"
+echo -e "0.0.0.0/32\n::1/128" > "$IGNORE_DIR/ignore_hosts.conf"
+touch "$BLOCK_LIST"
+touch "$HISTORY_FILE"
 
-    IGNORE_NETWORKS_FILE="/etc/nftables/ignore_networks.conf"
-    if [ ! -f "$IGNORE_NETWORKS_FILE" ]; then
-        cat <<EOF >"$IGNORE_NETWORKS_FILE"
-192.168.0.0/16
-10.0.0.0/8
-172.16.0.0/12
-EOF
-    fi
+# ========== Detection Script ==========
+cat > "$INSTALL_BIN" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
 
-    IGNORE_PORTS_FILE="/etc/nftables/ignore_ports.conf"
-    if [ ! -f "$IGNORE_PORTS_FILE" ]; then
-        echo "22,80,443" > "$IGNORE_PORTS_FILE"
-    fi
-
-    find_interface() {
-        local suffix="$1"
-        nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="$suffix" '$2 ~ suffix {print $1}'
-    }
-
-    OUTSIDE_INTERFACE=$(find_interface "-outside")
-    if [[ -z "$OUTSIDE_INTERFACE" ]]; then
-        dialog --msgbox "Could not determine the outside interface." 6 50
-        return 1
-    fi
-
-    attempt=1
-    delay=$INITIAL_DELAY
-    while :; do
-        EXTERNAL_IP=$(ip -4 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
-        [[ -n "$EXTERNAL_IP" ]] && break
-        if [[ $MAX_RETRIES -ne 0 && $attempt -gt $MAX_RETRIES ]]; then
-            dialog --msgbox "Failed to determine the external IP address after $MAX_RETRIES attempts." 6 60
-            return 1
-        fi
-        sleep "$delay"
-        ((attempt++))
-        delay=$((delay * RETRY_MULTIPLIER))
-    done
-
-    PRE_START_SCRIPT="/usr/local/bin/rfwb-portscan-prestart.sh"
-    cat <<EOF >"$PRE_START_SCRIPT"
-#!/bin/bash
-MAX_RETRIES=10
-INITIAL_DELAY=5
-RETRY_MULTIPLIER=2
+CONFIG="/etc/rfwb/portscan.conf"
+IGNORE_NETS="/etc/nftables/ignore_networks.conf"
+IGNORE_PORTS="/etc/nftables/ignore_ports.conf"
+IGNORE_HOSTS="/etc/nftables/ignore_hosts.conf"
+BLOCK_FILE="/etc/nftables/hosts.blocked"
+HISTORY_FILE="/etc/nftables/hosts.blocked.history"
 LOG_FILE="/var/log/rfwb-portscan.log"
 
-attempt=1
-delay=\$INITIAL_DELAY
-while :; do
-    OUTSIDE_INTERFACE=\$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '\$2 ~ suffix {print \$1}')
-    EXTERNAL_IP=\$(ip -4 addr show "\$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
-    if [[ -n "\$EXTERNAL_IP" ]]; then
-        echo "\$(date): Interface: \$OUTSIDE_INTERFACE IP: \$EXTERNAL_IP" >> "\$LOG_FILE"
-        break
-    fi
-    [[ \$attempt -ge \$MAX_RETRIES ]] && exit 1
-    sleep "\$delay"
-    ((attempt++))
-    delay=\$((delay * RETRY_MULTIPLIER))
+NFT=nft
+TABLE="inet filter"
+INPUT_CHAIN="input"
+
+source "$CONFIG"
+
+OUTSIDE_INTERFACE=$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: '$2 ~ /-outside$/ {print $1; exit}')
+EXTERNAL_IPV4=$(ip -4 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+EXTERNAL_IPV6=$(ip -6 addr show "$OUTSIDE_INTERFACE" | grep -oP '(?<=inet6\s)[0-9a-f:]+(?=/)' | head -n 1)
+
+IGNORED_PORTS=$(grep -v '^#' "$IGNORE_PORTS" | tr -d '[:space:]' | tr ',' ',')
+
+TMP_IGNORED_SUBNETS_V4=$(grep -v '^#' "$IGNORE_NETS" | grep -v ':' | sed 's/[[:space:]]//g' | sort -u | paste -sd, -)
+TMP_IGNORED_SUBNETS_V6=$(grep -v '^#' "$IGNORE_NETS" | grep ':' | sed 's/[[:space:]]//g' | sort -u | paste -sd, -)
+TMP_IGNORED_HOSTS_V4=$(grep -v '^#' "$IGNORE_HOSTS" | grep -v ':' | sed 's/[[:space:]]//g' | sort -u | paste -sd, -)
+TMP_IGNORED_HOSTS_V6=$(grep -v '^#' "$IGNORE_HOSTS" | grep ':' | sed 's/[[:space:]]//g' | sort -u | paste -sd, -)
+
+IGNORED_SUBNETS_V4="${TMP_IGNORED_SUBNETS_V4:-}"
+IGNORED_SUBNETS_V6="${TMP_IGNORED_SUBNETS_V6:-}"
+IGNORED_HOSTS_V4="${TMP_IGNORED_HOSTS_V4:-0.0.0.0/32}"
+IGNORED_HOSTS_V6="${TMP_IGNORED_HOSTS_V6:-::1/128}"
+
+COMBINED_V4=$(echo "$IGNORED_SUBNETS_V4,$IGNORED_HOSTS_V4" | sed 's/,,*/,/g')
+COMBINED_V6=$(echo "$IGNORED_SUBNETS_V6,$IGNORED_HOSTS_V6" | sed 's/,,*/,/g')
+
+# Ensure sets exist
+$NFT list set "$TABLE" dynamic_block >/dev/null 2>&1 || \
+  $NFT add set "$TABLE" dynamic_block '{ type ipv4_addr; flags timeout; }'
+
+$NFT list set "$TABLE" dynamic_block_v6 >/dev/null 2>&1 || \
+  $NFT add set "$TABLE" dynamic_block_v6 '{ type ipv6_addr; flags timeout; }'
+
+# Remove old rules
+mapfile -t HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep -E 'dynamic_block|Port Scan Detected:' | awk '{print $NF}')
+for h in "${HANDLES[@]}"; do
+  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+done
+
+mapfile -t PORT_HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep 'Ignore from scan detection' | awk '{print $NF}')
+for h in "${PORT_HANDLES[@]}"; do
+  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+done
+
+# Add drop rules for existing sets
+$NFT insert rule "$TABLE" "$INPUT_CHAIN" position 0 ip saddr @dynamic_block drop
+$NFT insert rule "$TABLE" "$INPUT_CHAIN" position 0 ip6 saddr @dynamic_block_v6 drop
+
+# Add ignore rules for safe ports
+if [[ -n "$IGNORED_PORTS" ]]; then
+  $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip daddr "$EXTERNAL_IPV4" tcp dport { $IGNORED_PORTS } counter comment "\"Ignore from scan detection\""
+  $NFT insert rule "$TABLE" "$INPUT_CHAIN" ip6 daddr "$EXTERNAL_IPV6" tcp dport { $IGNORED_PORTS } counter comment "\"Ignore from scan detection\""
+fi
+
+# Add scan detection rules
+$NFT insert rule "$TABLE" "$INPUT_CHAIN" ip saddr != { $COMBINED_V4 } ip daddr "$EXTERNAL_IPV4" \
+  tcp flags syn tcp dport { $MONITORED_PORTS } \
+  limit rate 5/second burst 10 packets log prefix "\"Port Scan Detected:\"" \
+  add @dynamic_block { ip saddr timeout ${BLOCK_TIMEOUT} } counter
+
+$NFT insert rule "$TABLE" "$INPUT_CHAIN" ip6 saddr != { $COMBINED_V6 } ip6 daddr "$EXTERNAL_IPV6" \
+  tcp flags syn tcp dport { $MONITORED_PORTS } \
+  limit rate 5/second burst 10 packets log prefix "\"Port Scan Detected:\"" \
+  add @dynamic_block_v6 { ip6 saddr timeout ${BLOCK_TIMEOUT} } counter
+
+# Log currently blocked IPs and flush
+TMP_NEW_BLOCKS=$(mktemp)
+
+$NFT list set "$TABLE" dynamic_block | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' >> "$TMP_NEW_BLOCKS" || true
+$NFT list set "$TABLE" dynamic_block_v6 | grep -oE '([0-9a-f:]+:+)+[0-9a-f]+' >> "$TMP_NEW_BLOCKS" || true
+
+touch "$HISTORY_FILE"
+while IFS= read -r ip; do
+  if [[ $ip == *:* ]]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [dynamic_block_v6] $ip" >> "$HISTORY_FILE"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [dynamic_block] $ip" >> "$HISTORY_FILE"
+  fi
+done < "$TMP_NEW_BLOCKS"
+
+$NFT flush set "$TABLE" dynamic_block || true
+$NFT flush set "$TABLE" dynamic_block_v6 || true
+
+rm -f "$TMP_NEW_BLOCKS"
+EOF
+chmod +x "$INSTALL_BIN"
+
+# ========== Stop Script ==========
+cat > "$STOP_BIN" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+NFT=nft
+TABLE="inet filter"
+INPUT_CHAIN="input"
+
+mapfile -t HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep -E 'dynamic_block|Port Scan Detected:' | awk '{print $NF}')
+for h in "${HANDLES[@]}"; do
+  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
+done
+
+mapfile -t PORT_HANDLES < <($NFT --handle list chain "$TABLE" "$INPUT_CHAIN" | grep 'Allow ignore_ports' | awk '{print $NF}')
+for h in "${PORT_HANDLES[@]}"; do
+  $NFT delete rule "$TABLE" "$INPUT_CHAIN" handle "$h" 2>/dev/null || true
 done
 EOF
-    chmod +x "$PRE_START_SCRIPT"
 
-    STOP_SCRIPT="/usr/local/bin/rfwb-portscan-stop.sh"
-    cat <<'EOF' >"$STOP_SCRIPT"
-#!/bin/bash
-nft flush chain inet portscan input
-nft delete set inet portscan dynamic_block
-nft delete table inet portscan
-truncate -s 0 /etc/nftables/hosts.blocked
-EOF
-    chmod +x "$STOP_SCRIPT"
-
-    HANDLER_SCRIPT="/usr/local/bin/rfwb-portscan-handler.sh"
-    cat <<EOF >"$HANDLER_SCRIPT"
-#!/bin/bash
-source /etc/rfwb-portscan.conf
-OUTSIDE_INTERFACE=\$(nmcli -t -f DEVICE,CONNECTION device status | awk -F: -v suffix="-outside" '\$2 ~ suffix {print \$1}')
-EXTERNAL_IP=\$(ip -4 addr show "\$OUTSIDE_INTERFACE" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
-IGNORED_PORTS=\$(grep -v '^#' "/etc/nftables/ignore_ports.conf" | tr -d '[:space:]' | tr ',' ', ')
-
-cat <<EOL >"/etc/nftables/portscan.conf"
-table inet portscan {
-  set dynamic_block {
-    type ipv4_addr
-    flags timeout
-    timeout \$BLOCK_TIMEOUT
-  }
-  chain input {
-    type filter hook input priority filter; policy accept;
-    ct state established,related accept
-    ip saddr @dynamic_block drop
-    ip daddr \$EXTERNAL_IP tcp dport == { \$IGNORED_PORTS } accept
-    ip daddr \$EXTERNAL_IP tcp flags syn tcp dport { \$MONITORED_PORTS } limit rate 5/second burst 10 packets log prefix "Port Scan Detected: " counter
-  }
-}
-EOL
-
-nft -f /etc/nftables/portscan.conf
-EOF
-    chmod +x "$HANDLER_SCRIPT"
-
-    SYSTEMD_SERVICE_FILE="/etc/systemd/system/rfwb-portscan.service"
-    cat <<EOL >"$SYSTEMD_SERVICE_FILE"
+chmod +x "$STOP_BIN"
+# ========== Systemd Service ==========
+cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Port Scan Detection Service
+Description=RFWB Portscan Detection with IPv6
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStartPre=$PRE_START_SCRIPT
-ExecStart=$HANDLER_SCRIPT start
-ExecStop=$STOP_SCRIPT
-Type=oneshot
-RemainAfterExit=yes
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-    systemctl daemon-reload
-    systemctl enable rfwb-portscan.service
-    systemctl start rfwb-portscan.service
-
-    SCRIPT_PATH="/usr/local/bin/rfwb-ps-mon.sh"
-    SERVICE_PATH="/etc/systemd/system/rfwb-ps-mon.service"
-
-    cat << 'EOF' > "$SCRIPT_PATH"
-#!/bin/bash
-IGNORE_NETWORKS=$(cat /etc/nftables/ignore_networks.conf)
-BLOCKED_FILE="/etc/nftables/hosts.blocked"
-
-append_blocked_ip() {
-    local ip="$1"
-    for ignore_network in $IGNORE_NETWORKS; do
-        if ipcalc -c "$ip" "$ignore_network" >/dev/null 2>&1; then
-            return
-        fi
-    done
-    if ! grep -q "^$ip$" "$BLOCKED_FILE"; then
-        echo "$ip" >>"$BLOCKED_FILE"
-        if nft list tables | grep -q "inet portscan"; then
-            nft add element inet portscan dynamic_block { $ip }
-        fi
-    fi
-}
-
-journalctl -k -f | while read -r line; do
-    if [[ "$line" == *"Port Scan Detected:"* ]]; then
-        ip=$(echo "$line" | grep -oP 'SRC=\d+\.\d+\.\d+\.\d+' | cut -d '=' -f 2)
-        [[ -n "$ip" ]] && append_blocked_ip "$ip"
-    fi
-
-done
-EOF
-    chmod +x "$SCRIPT_PATH"
-
-    cat << EOF > "$SERVICE_PATH"
-[Unit]
-Description=RFWB Port Scan Monitor
-After=rfwb-portscan.service
-Requires=rfwb-portscan.service
-
-[Service]
-Type=simple
-ExecStart=$SCRIPT_PATH
-ExecStop=/usr/bin/kill \$MAINPID
+ExecStart=$INSTALL_BIN
+ExecStop=$STOP_BIN
 Restart=on-failure
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=rfwb-ps-mon
+Type=simple
+RemainAfterExit=yes
+SyslogIdentifier=rfwb-portscan
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
-    systemctl enable rfwb-ps-mon.service
-    systemctl start rfwb-ps-mon.service
+# ========== Reload and Enable ==========
+dialog --infobox "Enabling and starting rfwb-portscan.service..." 5 70
+sleep 2
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable --now rfwb-portscan.service
 
-    dialog --infobox "RFWB Portscan and Monitoring Services Installed and Activated." 5 70
-    sleep 3
-
-
-    log "RFWB Portscan detection installation complete."
+dialog --infobox "RFWB Portscan and Monitoring Services Installed and Activated." 5 70
+sleep 2
 }
 install_snmpd() {
     INSTALLED_SERVICES[snmpd]=1
