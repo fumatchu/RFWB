@@ -2325,7 +2325,7 @@ INSTALLED_SERVICES[portscan]=1
 #!/usr/bin/env bash
 # RFWB Portscan Detection Installer with History Logging and Port Rule Deduplication
 
-set -euo pipefail
+#set -euo pipefail
 
 dialog --title "RFWB Portscan" --infobox "Installing RFWB-Portscan Detection engine..." 5 60
 sleep 2
