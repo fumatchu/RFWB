@@ -347,14 +347,14 @@ update_and_install_packages() {
     rm -f "$PIPE" "$TEMP_FILE"
   fi
 
-  dialog --title "Package Installation" --infobox "Installing required packages..." 5 50
+  dialog --title "Package Installation" --infobox "Installing Required Packages..." 5 50
   sleep 2
-  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
+  PACKAGE_LIST=("ntsysv" "iptraf" "fail2ban" "tuned" "conntrack" "net-tools" "dmidecode" "ipcalc" "bind-utils" "expect" "jq" "bc" "iproute-tc" "iw" "hostapd" "iotop" "zip" "yum-utils" "nano" "curl" "wget" "policycoreutils-python-utils" "dnf-automatic")
   TOTAL_PACKAGES=${#PACKAGE_LIST[@]}
 
   PIPE=$(mktemp -u)
   mkfifo "$PIPE"
-  dialog --title "Installing Dependency Packages" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
+  dialog --title "Installing Required Packages" --gauge "Preparing to install packages..." 10 70 0 < "$PIPE" &
   exec 3>"$PIPE"
   COUNT=0
   for PACKAGE in "${PACKAGE_LIST[@]}"; do
