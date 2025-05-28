@@ -1200,7 +1200,7 @@ declare -A INSTALLED_SERVICES
 collect_service_choices() {
     cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
     options=(
-        1 "Install BIND and ISC KEA DHCP" off
+        0 "Install BIND and ISC KEA DHCP [REQUIRED]" on
         2 "Install Cockpit" off
         3 "Install ntopng" off
         4 "Install DDNS Client" off
@@ -1215,10 +1215,11 @@ collect_service_choices() {
     )
     choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
     clear
-
+    # Force installation of BIND + KEA
+    INSTALLED_SERVICES[net_services]=1
+    
     for choice in $choices; do
         case $choice in
-        1) INSTALLED_SERVICES[net_services]=1 ;;
         2) INSTALLED_SERVICES[cockpit]=1 ;;
         3) INSTALLED_SERVICES[ntopng]=1 ;;
         4) INSTALLED_SERVICES[ddclient]=1 ;;
