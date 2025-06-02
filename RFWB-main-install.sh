@@ -4227,6 +4227,49 @@ echo -e "[${GREEN}DONE${TEXTRESET}]"
 sleep 3
 }
 
+
+configure_kea_permissions () {
+
+CONFIG_FILE="/etc/kea/kea-dhcp-ddns.conf"
+REQUIRED_SOCKET="/var/run/kea/kea-ddns-ctrl-socket"
+
+# Ensure /etc/kea has correct permissions
+echo "[*] Ensuring /etc/kea is chmod 0755..."
+chmod 0755 /etc/kea || {
+  echo "[!] Failed to chmod /etc/kea"
+  exit 1
+}
+
+# Ensure /var/run/kea exists with correct perms
+echo "[*] Creating /var/run/kea with correct ownership..."
+mkdir -p /var/run/kea
+chown kea:kea /var/run/kea
+chmod 0755 /var/run/kea
+
+# Validate and fix control-socket path in config
+echo "[*] Validating control-socket path in ${CONFIG_FILE}..."
+if grep -q '"control-socket"' "$CONFIG_FILE"; then
+  # Replace any incorrect socket-name
+  sed -i -E "s|(\"socket-name\"[[:space:]]*:[[:space:]]*\")[^\"]+\"|\1${REQUIRED_SOCKET}\"|" "$CONFIG_FILE"
+  echo "[+] Updated socket-name to ${REQUIRED_SOCKET}"
+else
+  echo "[!] control-socket section not found in ${CONFIG_FILE}. Please verify the config structure."
+  exit 2
+fi
+
+# Restart the service
+echo "[*] Restarting kea-dhcp-ddns service..."
+systemctl restart kea-dhcp-ddns
+
+# Final status check
+systemctl status kea-dhcp-ddns --no-pager
+
+echo -e "[${YELLOW}INFO${TEXTRESET}] kea permissions updated."
+echo -e "[${GREEN}DONE${TEXTRESET}]"
+sleep 3
+}
+
+
 update_login_console () {
 # Update /etc/issue for login information
 echo -e "${CYAN}==>Updating Login Console with Hostname and IP address...${TEXTRESET}"
@@ -4576,6 +4619,7 @@ install_speedtest_cli
 install_selected_services
 drop_to_cli
 configure_services
+configure_kea_permissions
 # ========= POST INSTALLATION/CLEANUP =========
 configure_dnf_automatic
 manage_inside_dns
