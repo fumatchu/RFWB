@@ -1940,6 +1940,20 @@ install_net_services() {
     } | dialog --gauge "Installing BIND and ISC KEA..." 10 60 0
     log "BIND and ISC KEA installation complete."
 }
+install_freeradius() {
+    INSTALLED_SERVICES[freeradius]=1
+    log "Installing FreeRADIUS..."
+
+    {
+        echo "50"
+        dnf -y install freeradius freeradius-utils >> "$LOG_FILE" 2>&1
+        sleep 0.5
+        echo "100"
+        sleep 0.5
+    } | dialog --gauge "Installing FreeRADIUS..." 10 60 0
+
+    log "FreeRADIUS installation complete."
+}
 
 install_ntopng() {
     INSTALLED_SERVICES[ntopng]=1
