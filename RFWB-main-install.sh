@@ -1242,6 +1242,7 @@ install_selected_services() {
     for service in "${!INSTALLED_SERVICES[@]}"; do
         case "$service" in
             net_services) install_net_services ;;
+            freeradius) install_freeradius ;;
             cockpit) install_cockpit ;;
             ntopng) install_ntopng ;;
             ddclient) install_ddclient ;;
