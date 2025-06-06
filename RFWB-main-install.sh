@@ -1201,6 +1201,7 @@ collect_service_choices() {
     cmd=(dialog --separate-output --checklist "Select services to install:" 22 90 16)
     options=(
         0 "Install BIND and ISC KEA DHCP [REQUIRED]" on
+        1 "Install FreeRADIUS Server [REQUIRED]" on
         2 "Install Cockpit" off
         3 "Install ntopng" off
         4 "Install DDNS Client" off
@@ -1215,8 +1216,9 @@ collect_service_choices() {
     )
     choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
     clear
-    # Force installation of BIND + KEA
+    # Force installation of BIND + KEA, Radius
     INSTALLED_SERVICES[net_services]=1
+    INSTALLED_SERVICES[freeradius]=1
     
     for choice in $choices; do
         case $choice in
